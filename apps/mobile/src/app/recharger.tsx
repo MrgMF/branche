@@ -9,7 +9,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TariffLines } from '../components/Pricing';
 import { Button, Notice, Tag } from '../components/ui';
 import { getCommunity, preauthText, type Community } from '../lib/community';
-import { operatorLabel, payOptions, startReaderCharge, openOperatorPayment, type PayOption } from '../lib/connectors';
+import { operatorLabel, payOptions, runPlan, type PayOption } from '../lib/connectors';
+import { AVAIL_LABEL, getAvailability, type AvailItem } from '../lib/availability';
+import { clearPrepared, loadPrepared, savePrepared, type Prepared } from '../lib/prepared';
 import { durationLabel, estimateCharge, isDc } from '../lib/estimate';
 import { findStation, pointById, pointsOf, type ChargePoint } from '../lib/evse';
 import { euros, kw, PLUG_LABEL } from '../lib/format';
@@ -26,7 +28,7 @@ const SOC_FRESH_MS = 3 * 3600_000;
 
 export default function Recharger() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ evse?: string; station?: string; step?: string; method?: string; noLink?: string }>();
+  const params = useLocalSearchParams<{ evse?: string; station?: string; step?: string; method?: string; noLink?: string; prepare?: string }>();
   const [station, setStation] = useState<Station | null | undefined>(undefined);
   const [pointId, setPointId] = useState<string | null>(null);
   const [choosing, setChoosing] = useState(params.step === 'point');
@@ -37,6 +39,10 @@ export default function Recharger() {
   const [soc, setSoc] = useState<number | null>(null);
   const [method, setMethod] = useState<MethodId | null>((params.method as MethodId) || null);
   const [showIncompatible, setShowIncompatible] = useState(false);
+  const [avail, setAvail] = useState<Record<string, AvailItem>>({});
+  const [prepared, setPrepared] = useState<Prepared | null>(null);
+  const [savedPrep, setSavedPrep] = useState(false);
+  const preparing = params.prepare === '1';
 
   // Station et point depuis le lien, la sélection courante ou l'index EVSE
   useEffect(() => {
@@ -51,7 +57,14 @@ export default function Recharger() {
       setStation(found?.station ?? null);
       if (found) {
         store.setCurrent(found.station);
-        const pdc = params.evse ? found.pdcId : store.plan()?.stationId === found.station.id ? store.plan()?.pdcId ?? null : null;
+        // Recharge préparée pour cette borne : point et méthode repris d'office
+        const prep = await loadPrepared();
+        const mine = prep?.station.id === found.station.id ? prep : null;
+        if (mine && alive) {
+          setPrepared(mine);
+          setMethod((m) => m ?? mine.plan.method);
+        }
+        const pdc = params.evse ? found.pdcId : store.plan()?.stationId === found.station.id ? store.plan()?.pdcId ?? null : mine?.plan.pdcId ?? null;
         if (pdc && pointById(found.station, pdc)) {
           setPointId(pointById(found.station, pdc)!.id);
           setChoosing(params.step === 'point');
@@ -75,7 +88,9 @@ export default function Recharger() {
   }, []);
 
   useEffect(() => {
-    if (station) getCommunity(station.id).then(setCommunity);
+    if (!station) return;
+    getCommunity(station.id).then(setCommunity);
+    getAvailability(pointsOf(station).map((p) => p.id)).then(setAvail);
   }, [station]);
 
   const points = useMemo(() => (station ? pointsOf(station) : []), [station]);
@@ -141,9 +156,14 @@ export default function Recharger() {
       tariffRaw: station.prix,
       free: station.free,
     });
-    if (o.id === 'reader') startReaderCharge(station, opName);
-    else if (o.id === 'operator-link' && o.url) openOperatorPayment(o.url, station, opName);
-    else if (o.id === 'scan') router.push({ pathname: '/payer', params: { from: 'recharger' } });
+    const plan = store.plan()!;
+    if (preparing) {
+      savePrepared({ station, plan, operatorName: opName, url: o.url, estimatedCost: est?.cost ?? null, createdAt: Date.now() });
+      setSavedPrep(true);
+      return;
+    }
+    if (prepared) clearPrepared();
+    runPlan(station, plan, opName, o.url);
   }
 
   if (station === undefined) {
@@ -168,6 +188,19 @@ export default function Recharger() {
   }
 
   // Proposé au 1er passage (au choix du point, ou directement s'il n'y a qu'un point) ; jamais bloquant
+  if (savedPrep) {
+    return (
+      <View style={[styles.root, styles.center, { paddingTop: insets.top + 24 }]}>
+        <Text style={styles.h1} accessibilityRole="header">Tout est prêt</Text>
+        <Text style={[styles.p, { textAlign: 'center' }]}>
+          À votre arrivée à {displayName(station)}, Branché affichera « Payer maintenant » : un seul geste pour {chosen?.id === 'reader' ? 'le mode d’emploi du lecteur de carte' : 'ouvrir la bonne page de paiement'}.
+        </Text>
+        <Notice>Rien n’est débité maintenant : vous payez à la borne, directement à {opName}. Le prépaiement et la réservation demandent un partenariat avec les opérateurs, pas encore en place.</Notice>
+        <Button label="Retour à la carte" onPress={() => router.replace('/')} style={{ alignSelf: 'stretch' }} />
+      </View>
+    );
+  }
+
   const vehiclePrompt = vehicle === null && !skipped && (step === 'point' || usable.length < 2);
 
   return (
@@ -175,7 +208,7 @@ export default function Recharger() {
       <View style={styles.head}>
         <Button label="Retour" variant="ghost" onPress={back} style={styles.back} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.kicker}>{step === 'point' ? 'Étape 1 sur 2' : points.length > 1 || autoPoint === null ? 'Étape 2 sur 2' : 'Recharger ici'}</Text>
+          <Text style={styles.kicker}>{preparing ? 'Préparer ma recharge · ' : ''}{step === 'point' ? 'Étape 1 sur 2' : points.length > 1 || autoPoint === null ? 'Étape 2 sur 2' : 'Recharger ici'}</Text>
           <Text style={styles.title} numberOfLines={2} accessibilityRole="header">
             {displayName(station)}
           </Text>
@@ -201,7 +234,7 @@ export default function Recharger() {
           <Text style={styles.h2} accessibilityRole="header">Choisissez votre point de charge</Text>
           <Text style={styles.p}>Les 4 derniers caractères sont inscrits sur l’étiquette de la borne ou de la prise.</Text>
           {usable.map((p) => (
-            <PointRow key={p.id} p={p} onPress={() => pick(p)} selected={p.id === pointId} />
+            <PointRow key={p.id} p={p} onPress={() => pick(p)} selected={p.id === pointId} status={avail[p.id]} />
           ))}
           {!usable.length ? <Notice tone="demo">Aucun point compatible avec {vehicle?.name ?? 'votre véhicule'} dans la base nationale. Vérifiez sur place.</Notice> : null}
           {incompatible.length ? (
@@ -288,6 +321,7 @@ export default function Recharger() {
             ) : null}
           </View>
 
+          {prepared && !preparing ? <Notice>Recharge préparée : point et méthode repris. Il ne reste qu’à payer.</Notice> : null}
           {params.noLink ? <Notice>Borne et point identifiés par le QR code. Il ne contient pas de lien de paiement : {fallback ? 'utilisez la méthode ci-dessous.' : 'cherchez un autre QR code ou le lecteur de carte sur la borne.'}</Notice> : null}
           {/* Méthode recommandée + mode d'emploi */}
           {chosen ? (
@@ -309,7 +343,8 @@ export default function Recharger() {
                 </View>
               ))}
               <Text style={styles.small}>Si l’écran de la borne indique un autre ordre, suivez la borne.</Text>
-              <Button label={chosen.cta} onPress={() => go(chosen)} disabled={!chosen.available} hint={chosen.id === 'reader' ? 'Ouvre le suivi de la recharge' : 'Branché vérifie le QR code avant d’ouvrir la page de l’opérateur'} />
+              {preparing ? <Text style={styles.small}>Préparation : rien n’est payé maintenant. À l’arrivée, un geste suffira.</Text> : null}
+              <Button label={preparing ? 'Enregistrer pour mon arrivée' : chosen.cta} onPress={() => go(chosen)} disabled={!chosen.available} hint={chosen.id === 'reader' ? 'Ouvre le suivi de la recharge' : 'Branché vérifie le QR code avant d’ouvrir la page de l’opérateur'} />
             </View>
           ) : null}
 
@@ -347,7 +382,7 @@ export default function Recharger() {
   );
 }
 
-function PointRow({ p, onPress, selected, disabled }: { p: ChargePoint; onPress?: () => void; selected?: boolean; disabled?: boolean }) {
+function PointRow({ p, onPress, selected, disabled, status }: { p: ChargePoint; onPress?: () => void; selected?: boolean; disabled?: boolean; status?: AvailItem }) {
   const dc = isDc(p.kw, p.plugs);
   return (
     <Pressable
@@ -371,6 +406,11 @@ function PointRow({ p, onPress, selected, disabled }: { p: ChargePoint; onPress?
           {p.exact ? '' : ' (prises de la station)'} · {p.id}
         </Text>
       </View>
+      {status && status.status !== 'inconnu' ? (
+        <View style={[styles.pill, status.status === 'libre' ? styles.pillFree : status.status === 'occupe' ? styles.pillBusy : styles.pillDown]}>
+          <Text style={[styles.pillText, status.status === 'libre' ? { color: colors.accentPressed } : status.status === 'occupe' ? { color: '#7A3E06' } : { color: colors.danger }]}>{AVAIL_LABEL[status.status]}</Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -412,6 +452,11 @@ const styles = StyleSheet.create({
   label: { minWidth: 82, paddingVertical: 6, paddingHorizontal: 8, borderRadius: radius.sm, backgroundColor: colors.ink, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
   labelSmall: { fontFamily: fonts.medium, fontSize: 14, color: colors.nightMuted },
   labelBig: { fontFamily: fonts.display, fontSize: 24, letterSpacing: 1, color: '#FFFFFF' },
+  pill: { borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 8 },
+  pillFree: { backgroundColor: colors.accentSoft },
+  pillBusy: { backgroundColor: colors.warnSoft },
+  pillDown: { backgroundColor: '#FDECEC' },
+  pillText: { fontFamily: fonts.bold, fontSize: 12 },
   pointChip: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
   pointShort: { fontFamily: fonts.display, fontSize: 20, color: colors.ink, letterSpacing: 1 },
   estimate: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 12, gap: 8 },
