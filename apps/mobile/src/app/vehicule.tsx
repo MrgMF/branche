@@ -3,19 +3,54 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button } from '../components/ui';
+import { Button, Notice } from '../components/ui';
+import { detectBrandApps } from '../lib/detectBrand';
+import { getFeatures } from '../lib/features';
+import { photoIdentify } from '../lib/identifyPhoto';
+import { modelsOfBrand } from '../lib/vehicleApps';
+import { searchVehicles } from '../lib/vehicleSearch';
 import { PLUG_LABEL } from '../lib/format';
 import { loadVehicle, saveVehicle, VEHICLE_SOURCE_NOTE, VEHICLES, type VehicleModel } from '../lib/vehicle';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 
 const PRESETS = [10, 20, 30, 50, 70];
-const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 export default function VehiculeScreen() {
   const insets = useSafeAreaInsets();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<VehicleModel | null>(null);
   const [soc, setSoc] = useState(20);
+  const [brands, setBrands] = useState<{ brand: string; prefix: string }[]>([]);
+  const [brandOnly, setBrandOnly] = useState<string | null>(null);
+  const [canPhoto, setCanPhoto] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoMsg, setPhotoMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    detectBrandApps().then(setBrands);
+    getFeatures().then((f) => setCanPhoto(f.vehicleIdentify));
+  }, []);
+
+  async function photo() {
+    setPhotoMsg(null);
+    setPhotoBusy(true);
+    try {
+      const r = await photoIdentify();
+      if (!r) return;
+      if ('error' in r) setPhotoMsg(r.error);
+      else if (!r.vehicleId) setPhotoMsg('Modèle non reconnu : cherchez-le dans la liste.');
+      else {
+        const m = VEHICLES.find((x) => x.id === r.vehicleId);
+        if (m) {
+          setSel(m);
+          setQ('');
+          setPhotoMsg(`Reconnu : ${m.name}. Vérifiez puis enregistrez.`);
+        }
+      }
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
 
   useEffect(() => {
     loadVehicle().then((v) => {
@@ -26,9 +61,10 @@ export default function VehiculeScreen() {
   }, []);
 
   const list = useMemo(() => {
-    const f = fold(q.trim());
-    return f ? VEHICLES.filter((m) => fold(m.name).includes(f)) : VEHICLES;
-  }, [q]);
+    const found = searchVehicles(q, brandOnly ? modelsOfBrand(brandOnly) : VEHICLES);
+    // Le modèle choisi (photo, profil enregistré) reste visible en tête
+    return sel && !q && !found.some((m) => m.id === sel.id) ? [sel, ...found] : found;
+  }, [q, brandOnly, sel]);
 
   const done = () => (router.canGoBack() ? router.back() : router.replace('/'));
   async function save() {
@@ -43,7 +79,23 @@ export default function VehiculeScreen() {
         <Button label="Passer" variant="ghost" onPress={done} style={styles.skip} hint="Continuer sans véhicule : estimation pour un véhicule moyen" />
       </View>
       <Text style={styles.p}>Pour afficher les prises compatibles et estimer durée et prix. Facultatif, gardé sur ce téléphone.</Text>
-      <TextInput value={q} onChangeText={setQ} placeholder="Rechercher un modèle (ex. Mégane)" placeholderTextColor="#6B7773" aria-label="Rechercher un modèle" style={styles.input} autoCorrect={false} />
+      {brands.length && !sel ? (
+        <View style={styles.brand}>
+          <Text style={styles.brandText}>Nous avons vu l’appli {brands.map((b) => b.brand).join(', ')} sur ce téléphone : est-ce votre voiture ?</Text>
+          <View style={styles.brandRow}>
+            {brands.map((b) => (
+              <Button key={b.prefix} label={b.brand} variant="secondary" onPress={() => setBrandOnly(b.prefix)} style={styles.brandBtn} />
+            ))}
+            {brandOnly ? <Button label="Toutes les marques" variant="ghost" onPress={() => setBrandOnly(null)} style={styles.brandBtn} /> : null}
+          </View>
+          <Text style={styles.small}>Vérifié uniquement sur ce téléphone, jamais envoyé.</Text>
+        </View>
+      ) : null}
+      {canPhoto ? (
+        <Button label="Prendre en photo" variant="secondary" onPress={photo} loading={photoBusy} hint="La photo est envoyée pour reconnaître le modèle puis oubliée, jamais conservée" />
+      ) : null}
+      {photoMsg ? <Notice>{photoMsg}</Notice> : null}
+      <TextInput value={q} onChangeText={setQ} placeholder="Modèle : megane, model 3, zoe…" placeholderTextColor="#6B7773" aria-label="Rechercher un modèle" style={styles.input} autoCorrect={false} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 8, paddingBottom: 12 }} keyboardShouldPersistTaps="handled">
         {list.map((m) => (
           <Pressable
@@ -95,6 +147,10 @@ const styles = StyleSheet.create({
   p: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.inkMuted },
   small: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17, color: colors.inkMuted },
   input: { minHeight: 50, borderRadius: radius.md, borderWidth: 1, borderColor: '#C9D3D0', paddingHorizontal: 14, fontFamily: fonts.medium, fontSize: 16, color: colors.ink },
+  brand: { backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: 12, gap: 8 },
+  brandText: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20, color: colors.ink },
+  brandRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  brandBtn: { minHeight: MIN_TOUCH, paddingHorizontal: 12, flexGrow: 1 },
   item: { minHeight: 60, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: 12, gap: 2, justifyContent: 'center' },
   itemOn: { borderColor: colors.accent, borderWidth: 2, backgroundColor: colors.accentSoft },
   itemTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },

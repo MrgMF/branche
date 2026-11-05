@@ -116,41 +116,34 @@ export function ManeuverIcon(props: { maneuver: Maneuver; exit?: number; angle?:
   );
 }
 
-const LANE_SHAPE: Record<LaneDir, Maneuver> = {
-  straight: 'straight',
-  'slight-left': 'slight-left',
-  left: 'turn-left',
-  'sharp-left': 'sharp-left',
-  'uturn-left': 'uturn',
-  'slight-right': 'slight-right',
-  right: 'turn-right',
-  'sharp-right': 'sharp-right',
-  'uturn-right': 'uturn',
-  'merge-left': 'slight-left',
-  'merge-right': 'slight-right',
+/** Branches d'une flèche de voie, depuis un tronc commun (50,92)→(50,56) : [tracé, fin, direction]. */
+const LANE_BRANCH: Record<LaneDir, [string, Pt, Pt]> = {
+  straight: ['M50 56 V30', [50, 30], [0, -1]],
+  'slight-left': ['M50 60 L32 36', [32, 36], [-18, -24]],
+  'slight-right': ['M50 60 L68 36', [68, 36], [18, -24]],
+  left: ['M50 60 Q50 44 36 44 H28', [28, 44], [-1, 0]],
+  right: ['M50 60 Q50 44 64 44 H72', [72, 44], [1, 0]],
+  'sharp-left': ['M50 50 L30 68', [30, 68], [-20, 18]],
+  'sharp-right': ['M50 50 L70 68', [70, 68], [20, 18]],
+  'uturn-left': ['M50 56 V44 A13 13 0 0 0 24 44 V58', [24, 58], [0, 1]],
+  'uturn-right': ['M50 56 V44 A13 13 0 0 1 76 44 V58', [76, 58], [0, 1]],
+  'merge-left': ['M50 60 L32 36', [32, 36], [-18, -24]],
+  'merge-right': ['M50 60 L68 36', [68, 36], [18, -24]],
 };
 
-/** Flèche d'une voie (plusieurs directions superposées). */
+/** Flèche d'une voie : tronc commun et une branche par direction peinte. */
 export function LaneArrow({ dirs, active, size = 34 }: { dirs: LaneDir[]; active: boolean; size?: number }) {
   const color = active ? '#FFFFFF' : 'rgba(255,255,255,0.38)';
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100">
+      <Path d="M50 92 V56" stroke={color} strokeWidth={SW + 1} strokeLinecap="round" fill="none" />
       {dirs.map((d) => {
-        const m = LANE_SHAPE[d];
-        const key = MIRROR[m] ?? m;
-        const s = SHAPES[key] ?? SHAPES.straight;
-        const g = (
-          <>
-            <Path d={s.path} stroke={color} strokeWidth={SW + 2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            {head(s.end, s.dir, color, 1.1)}
-          </>
-        );
-        return MIRROR[m] ? (
-          <G key={d} transform="translate(100,0) scale(-1,1)">
-            {g}
+        const [path, end, dir] = LANE_BRANCH[d];
+        return (
+          <G key={d}>
+            <Path d={path} stroke={color} strokeWidth={SW + 1} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            {head(end, dir, color, 0.95)}
           </G>
-        ) : (
-          <G key={d}>{g}</G>
         );
       })}
     </Svg>

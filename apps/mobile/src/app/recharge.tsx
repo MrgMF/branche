@@ -1,6 +1,7 @@
 // Suivi d'une recharge payée directement chez l'opérateur (lecteur de carte, QR vérifié, lien opérateur) :
 // démarrage confirmé en un geste (sinon dépannage), estimation en direct, alertes, fin, reçu → historique.
 // L'état est persisté : l'app peut être fermée et rouverte à tout moment.
+import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useState } from 'react';
@@ -11,6 +12,7 @@ import { apiEnabled } from '../lib/api';
 import { sendCheckin } from '../lib/community';
 import { durationLabel, estimateCharge, progressAt, type EstimateInput } from '../lib/estimate';
 import { euros } from '../lib/format';
+import { autoFinish, departed, distanceToStation, recordOf, AUTO_END_M } from '../lib/autoEnd';
 import { addRecord, METHOD_LABEL, type ChargeRecord } from '../lib/history';
 import { postReport } from '../lib/navigation';
 import { cancelAlerts, scheduleAlerts, type Alert } from '../lib/notify';
@@ -58,13 +60,60 @@ export default function Recharge() {
     if (d === undefined) store.loadDirect().then(setD);
   }, [d]);
 
-  // Retour dans l'app (page de l'opérateur fermée, téléphone déverrouillé) : état rafraîchi immédiatement
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (s) => s === 'active' && setNow(Date.now()));
-    return () => sub.remove();
-  }, []);
-
   const charging = !!d?.chargeStartedAt && !d.endedAt;
+
+  // Fin automatique : départ de la borne pendant la charge (position suivie sur l'appareil uniquement)
+  useEffect(() => {
+    if (!charging || !d) return;
+    let cur = d;
+    let stop = false;
+    let sub: Location.LocationSubscription | null = null;
+    const onFix = async (lat: number, lon: number, speed: number | null, resume: boolean) => {
+      if (stop || cur.endedAt) return;
+      const fix = { lat, lon, speed, at: Date.now() };
+      const m = distanceToStation(cur, fix);
+      if (m != null && m <= AUTO_END_M) {
+        if (!cur.lastNearAt || fix.at - cur.lastNearAt > 60_000) {
+          cur = { ...cur, lastNearAt: fix.at };
+          store.setDirect(cur);
+        }
+        return;
+      }
+      if (departed(cur, fix, resume)) {
+        stop = true;
+        const next = await autoFinish(cur);
+        store.setDirect(next);
+        setD(next);
+      }
+    };
+    (async () => {
+      try {
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (!perm.granted || stop) return;
+        sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 25, timeInterval: 15_000 }, (p) =>
+          onFix(p.coords.latitude, p.coords.longitude, p.coords.speed ?? null, false),
+        );
+      } catch {
+        /* position indisponible : fin manuelle seulement */
+      }
+    })();
+    // Retour dans l'app : état rafraîchi, et départ constaté si l'utilisateur est loin de la borne
+    const app = AppState.addEventListener('change', async (st) => {
+      if (st !== 'active') return;
+      setNow(Date.now());
+      try {
+        const p = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        onFix(p.coords.latitude, p.coords.longitude, p.coords.speed ?? null, true);
+      } catch {
+        /* rien */
+      }
+    });
+    return () => {
+      stop = true;
+      sub?.remove();
+      app.remove();
+    };
+  }, [charging, d?.chargeStartedAt]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!charging) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -128,30 +177,12 @@ export default function Recharge() {
 
   async function save() {
     if (!d || !est) return;
-    const started = d.chargeStartedAt ?? d.openedAt;
     const ended = d.endedAt ?? Date.now();
-    const p = progressAt(input!, (ended - started) / 60_000);
     const kWh = parseEuros(kwhIn);
     const pricePaid = parseEuros(paid);
     const preauth = parseEuros(preauthIn);
-    const r: ChargeRecord = {
-      id: `${started}-${d.station.id}`,
-      startedAt: started,
-      endedAt: ended,
-      stationId: d.station.id,
-      stationName: d.station.name,
-      operatorName: d.operatorName,
-      pdcId: d.plan?.pdcId,
-      method: d.plan?.method ?? (d.url ? 'scan' : 'reader'),
-      kWh: kWh ?? p.kWhBilled,
-      kWhEstimated: kWh == null,
-      pricePaid,
-      estimatedCost: p.cost,
-      ok,
-      vehicleName: d.plan?.vehicle?.name,
-      startSoc: est.fromSoc,
-      endSoc: p.soc,
-    };
+    const base = recordOf(d, ended);
+    const r: ChargeRecord = { ...base, kWh: kWh ?? base.kWh, kWhEstimated: kWh == null, pricePaid, ok };
     await addRecord(r);
     if (ok != null && d.station.id !== 'inconnue') {
       sendCheckin({ stationId: d.station.id, ok, ...(pricePaid != null ? { pricePaid } : {}), ...(kWh != null ? { kWh } : {}), ...(preauth != null ? { preauth } : {}) });
@@ -297,6 +328,7 @@ export default function Recharge() {
         <>
           <View style={styles.card}>
             <Text style={styles.cardTitle} accessibilityRole="header">Recharge terminée</Text>
+            {d.autoEnded ? <Text style={styles.mutedLeft}>Départ de la borne détecté : recharge terminée automatiquement à {clock(d.endedAt)}. Le reçu est déjà dans votre historique ; ajoutez le prix si vous le souhaitez.</Text> : null}
             <Row k="Durée" v={fmt(elapsedMs)} />
             <Row k="Énergie estimée" v={`${prog.kWhBilled.toLocaleString('fr-FR')} kWh`} />
             <Row k="Coût estimé" v={prog.cost != null ? euros(Math.round(prog.cost * 100)) : 'Prix inconnu'} />
@@ -346,7 +378,7 @@ export default function Recharge() {
             ) : null}
           </View>
           <Button label="Enregistrer le reçu" onPress={save} hint="Ajoute la recharge à votre historique, sur ce téléphone" />
-          <Button label="Reprendre la recharge" variant="ghost" onPress={() => update({ endedAt: null })} />
+          <Button label="Reprendre la recharge" variant="ghost" onPress={() => update({ endedAt: null, autoEnded: false })} />
         </>
       ) : null}
     </ScrollView>

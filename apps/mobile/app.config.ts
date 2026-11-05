@@ -1,4 +1,5 @@
 import type { ExpoConfig } from 'expo/config';
+import vehicleApps from './src/lib/vehicle-apps.json';
 
 // Variables injectées au build (CI GitHub Actions ou EAS) :
 // BASE_URL : sous-chemin web (ex. /branche/app) · DATA_URL : base des tuiles IRVE · API_URL : API de paiement (vide = paiement in-app désactivé)
@@ -36,6 +37,9 @@ const config: ExpoConfig = {
     'expo-web-browser',
     // Rappels locaux de fin de charge et avant pénalité d'occupation (aucune notification distante)
     ['expo-notifications', { color: '#0B7A55' }],
+    // Véhicule : photo facultative (envoyée pour identification, jamais conservée) et marques des applis constructeur (<queries>)
+    ['expo-image-picker', { cameraPermission: 'Branché peut reconnaître votre véhicule sur une photo. Elle est envoyée pour l’identification puis oubliée, jamais conservée.', photosPermission: false, microphonePermission: false }],
+    ['./plugins/withVehicleAppQueries', { packages: (vehicleApps.android as { package: string }[]).map((a) => a.package) }],
     ['expo-splash-screen', { image: './assets/splash-icon.png', imageWidth: 160, resizeMode: 'contain', backgroundColor: '#FFFFFF' }],
     ['expo-camera', { cameraPermission: 'Branché utilise l’appareil photo pour lire le QR code de la borne. L’image est analysée sur votre téléphone, jamais enregistrée ni envoyée.', recordAudioAndroid: false }],
     [

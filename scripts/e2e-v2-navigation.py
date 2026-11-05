@@ -219,7 +219,44 @@ with sync_playwright() as p:
     page.on('pageerror', lambda e: log.append(f'ERREUR page : {e}'))
     page.clock.install()
 
-    search_and_preview(page)
+    # ---------------------------------------------------------------- Carte : commandes, point bleu, marqueurs
+    page.goto(f'{BASE}/app/', wait_until='networkidle')
+    page.wait_for_selector('text=Bornes les plus proches', timeout=20000)
+    page.wait_for_timeout(2500)
+    mapf = page.frames[1]
+    z0 = mapf.evaluate('window.__map.getZoom()')
+    page.get_by_role('button', name='Zoomer', exact=True).click()
+    page.wait_for_timeout(700)
+    z1 = mapf.evaluate('window.__map.getZoom()')
+    assert z1 > z0 + 0.9, (z0, z1)
+    page.get_by_role('button', name='Dézoomer').click()
+    page.wait_for_timeout(700)
+    mapf.evaluate('window.__map.setBearing(40)')
+    page.wait_for_timeout(300)
+    page.get_by_role('button', name='Remettre le nord en haut').click()
+    page.wait_for_timeout(800)
+    assert abs(mapf.evaluate('window.__map.getBearing()')) < 1
+    me = mapf.evaluate("window.__map.getSource('me').serialize().data")
+    assert me['features'] and abs(me['features'][0]['geometry']['coordinates'][1] - START[0]) < 1e-4, me
+    page.get_by_role('button', name='Ma position').click()
+    page.wait_for_timeout(900)
+    expect(page.get_by_test_id('locate')).to_have_attribute('aria-label', re.compile('suivi activé'))
+    page.get_by_test_id('locate').click()
+    page.wait_for_timeout(600)
+    expect(page.get_by_test_id('locate')).to_have_attribute('aria-label', re.compile('orientée selon votre direction'))
+    page.get_by_test_id('locate').click()
+    page.wait_for_timeout(600)
+    mapf.evaluate('window.__map.setZoom(15)')
+    page.wait_for_timeout(1200)
+    shot(page, 'n0-carte-commandes-point-bleu')
+    wheel_ok = mapf.evaluate('window.__map.scrollZoom.isEnabled() && window.__map.doubleClickZoom.isEnabled() && window.__map.touchZoomRotate.isEnabled()')
+    assert wheel_ok
+    log.append(f'carte : zoom +/− ({z0:.1f} → {z1:.1f}), boussole remet le nord, point bleu à la position, « Ma position » suivi puis cap, molette/double-tap/pinch actifs : OK')
+
+    box = page.get_by_label('Rechercher une adresse ou un lieu')
+    box.click()
+    box.fill('hay les roses')
+    page.wait_for_selector("text=Station L'Haÿ-les-Roses", timeout=8000)
     assert 'q' in state['search'] and state['search']['q'] == 'hay les roses'
     shot(page, 'n1-recherche')
     page.get_by_role('button', name="Station L'Haÿ-les-Roses, Avenue Larroumès, 94240 L'Haÿ-les-Roses").click()
@@ -236,7 +273,8 @@ with sync_playwright() as p:
     # Choix d'une alternative puis retour au plus rapide
     radios.nth(1).click()
     page.wait_for_timeout(500)
-    assert radios.nth(1).get_attribute('aria-checked') == 'true'
+    sel = [radios.nth(i).evaluate("e => e.getAttribute('aria-checked') || e.getAttribute('aria-selected')") for i in range(3)]
+    assert sel[1] == 'true' and sel[0] != 'true', sel
     shot(page, 'n3-alternative-choisie')
     radios.nth(0).click()
     page.wait_for_timeout(300)
@@ -391,6 +429,11 @@ with sync_playwright() as p:
     page.get_by_role('button', name="L'Haÿ-les-Roses, 94240 Île-de-France").click()
     page.wait_for_selector('text=Position inconnue', timeout=8000)
     shot(page, 'n14-sans-gps')
+    page.get_by_role('button', name='Fermer l’itinéraire').click()
+    page.wait_for_timeout(400)
+    page.get_by_role('button', name='Ma position').click()
+    page.wait_for_selector('text=Localisation refusée', timeout=5000)
+    shot(page, 'n15-localisation-refusee')
     log.append('pas de GPS → « Position inconnue : activez la localisation… » + liens Waze / Google : OK')
     ctx.close()
     b.close()

@@ -71,6 +71,7 @@ export function TripPanel({ nav }: { nav: TripApi }) {
                   key={x.id}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: on, checked: on }}
+                  aria-checked={on}
                   accessibilityLabel={label}
                   onPress={() => nav.selectRoute(i)}
                   style={[styles.card, on && styles.cardOn]}

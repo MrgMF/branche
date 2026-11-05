@@ -9,6 +9,7 @@ const ZONES = [
   { s: -21.6, n: -20.7, w: 55.0, e: 56.0 },
   { s: -13.2, n: -12.4, w: 44.8, e: 45.5 },
 ];
+const COUNTRIES = ['FR', 'GP', 'MQ', 'GF', 'RE', 'YT'];
 const inZone = (p: { lat: number; lon: number }) => ZONES.find((z) => p.lat >= z.s && p.lat <= z.n && p.lon >= z.w && p.lon <= z.e);
 const txt = (x: unknown) => (typeof x === 'string' ? x.replace(/\s+/g, ' ').trim().slice(0, 120) : '');
 const join = (...a: string[]) => a.filter(Boolean).join(' ');
@@ -25,7 +26,8 @@ export function parsePhotonClient(body: unknown): Place[] {
     const lon = Array.isArray(c) && typeof c[0] === 'number' ? c[0] : null;
     const lat = Array.isArray(c) && typeof c[1] === 'number' ? c[1] : null;
     const pr = f.properties ?? {};
-    if (lat === null || lon === null || !inZone({ lat, lon })) continue;
+    const cc = txt(pr.countrycode).toUpperCase();
+    if (lat === null || lon === null || !inZone({ lat, lon }) || (cc && !COUNTRIES.includes(cc))) continue;
     const name = txt(pr.name);
     const street = txt(pr.street);
     const hn = txt(pr.housenumber);

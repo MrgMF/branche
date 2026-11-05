@@ -2,6 +2,7 @@
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import { watchGeo } from './geoWatch';
 
 export type LocStatus = 'pending' | 'granted' | 'denied' | 'unavailable';
 export interface UserFix {
@@ -28,7 +29,7 @@ export function useUserLocation() {
   /** Position « stable » : ne change qu'après 30 m (évite de relancer chargements et recentrages). */
   const [coarse, setCoarse] = useState<{ lat: number; lon: number } | null>(null);
   const [compass, setCompass] = useState<number | null>(null);
-  const sub = useRef<Location.LocationSubscription | null>(null);
+  const sub = useRef<{ remove: () => void } | null>(null);
   const headSub = useRef<{ remove: () => void } | null>(null);
   const lastCompass = useRef<number | null>(null);
 
@@ -49,19 +50,16 @@ export function useUserLocation() {
       if (st !== 'granted') return setStatus('denied');
       const last = await Location.getLastKnownPositionAsync().catch(() => null);
       if (last) setCoarse({ lat: last.coords.latitude, lon: last.coords.longitude });
-      sub.current = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 3, timeInterval: 2000 }, (p) => {
-        setStatus('granted');
-        const f: UserFix = {
-          lat: p.coords.latitude,
-          lon: p.coords.longitude,
-          accuracy: p.coords.accuracy ?? null,
-          heading: p.coords.heading !== null && p.coords.heading !== undefined && p.coords.heading >= 0 && (p.coords.speed ?? 0) > 1 ? p.coords.heading : null,
-          speed: p.coords.speed ?? null,
-          t: p.timestamp || Date.now(),
-        };
-        setFix(f);
-        setCoarse((c) => (!c || dist(c, f) > 30 ? { lat: f.lat, lon: f.lon } : c));
-      });
+      sub.current = await watchGeo(
+        (p) => {
+          setStatus('granted');
+          const f: UserFix = { ...p, heading: p.heading !== null && p.heading >= 0 && (p.speed ?? 0) > 1 ? p.heading : null };
+          setFix(f);
+          setCoarse((c) => (!c || dist(c, f) > 30 ? { lat: f.lat, lon: f.lon } : c));
+        },
+        (code) => setStatus((s) => (s === 'granted' && code === 'unavailable' ? s : code)),
+        false,
+      );
       if (Platform.OS !== 'web' && !headSub.current) {
         headSub.current = await Location.watchHeadingAsync((h) => onCompass(h.trueHeading >= 0 ? h.trueHeading : h.magHeading)).catch(() => null);
       }

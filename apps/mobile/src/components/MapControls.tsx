@@ -15,25 +15,33 @@ export function useMapControls(map: React.RefObject<MapHandle | null>, loc: User
   const [mode, setMode] = useState<FollowMode>('none');
   const [bearing, setBearing] = useState(0);
   const [note, setNote] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
   const modeRef = useRef(mode);
   modeRef.current = mode;
 
   // Point bleu, halo de précision, cône de direction ; suivi de la caméra.
   useEffect(() => {
     const f = loc.fix;
-    if (!f || opts.guiding) return;
+    if (!f || opts.guiding || !ready) return;
     map.current?.post({ type: 'user', lat: f.lat, lon: f.lon, accuracy: f.accuracy, heading: loc.heading });
     if (modeRef.current !== 'none') {
       map.current?.post({ type: 'follow', lat: f.lat, lon: f.lon, bearing: modeRef.current === 'heading' ? loc.heading ?? undefined : 0, pitch: 0, offsetY: opts.offsetY, duration: 600 });
     }
-  }, [loc.fix, loc.heading, opts.guiding]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loc.fix, loc.heading, opts.guiding, ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (loc.status === 'granted') setNote(null);
-  }, [loc.status]);
+    if (loc.status === 'granted' && note !== MAP_T.compassUnavailable) setNote(null);
+  }, [loc.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Messages éphémères (sauf refus : il reste tant que la position n'est pas autorisée).
+  useEffect(() => {
+    if (!note || note === MAP_T.locDenied) return;
+    const t = setTimeout(() => setNote(null), 5000);
+    return () => clearTimeout(t);
+  }, [note]);
 
   const onMapMessage = useCallback((m: MapOut) => {
-    if (m.type === 'camera') setBearing(m.bearing);
+    if (m.type === 'ready') setReady(true);
+    else if (m.type === 'camera') setBearing(m.bearing);
     else if (m.type === 'moveend' && m.user) setMode('none');
   }, []);
 
@@ -134,7 +142,7 @@ export function MapControls({ api, bottom, onLocate, status }: { api: MapControl
 
 const shadow = { shadowColor: '#0F1A17', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 };
 const styles = StyleSheet.create({
-  col: { position: 'absolute', right: 12, left: 12, alignItems: 'flex-end', gap: 10 },
+  col: { position: 'absolute', right: 12, left: 12, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-end', gap: 10 },
   stack: { alignItems: 'center', gap: 10 },
   btn: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
   single: { borderRadius: 26, ...shadow },
@@ -142,7 +150,7 @@ const styles = StyleSheet.create({
   sep: { height: 1, backgroundColor: colors.border, marginHorizontal: 10 },
   pm: { fontFamily: fonts.display, fontSize: 26, lineHeight: 30, color: colors.ink },
   on: { backgroundColor: '#1D4ED8' },
-  note: { maxWidth: 360, backgroundColor: colors.surface, borderRadius: radius.md, padding: 12, gap: 8, borderWidth: 2, borderColor: colors.busy, ...shadow },
+  note: { flex: 1, maxWidth: 360, backgroundColor: colors.surface, borderRadius: radius.md, padding: 12, gap: 8, borderWidth: 2, borderColor: colors.busy, ...shadow },
   noteText: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20, color: colors.ink },
   noteBtn: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 22, backgroundColor: colors.ink },
   noteBtnText: { fontFamily: fonts.bold, fontSize: 14, color: '#FFFFFF' },

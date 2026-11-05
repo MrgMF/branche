@@ -77,6 +77,8 @@ export const MAP_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf
     map.on('click','cl',function(e){var f=e.features[0];map.getSource('st').getClusterExpansionZoom(f.properties.cluster_id).then(function(z){map.easeTo({center:f.geometry.coordinates,zoom:z})})});
     ['pt','cl'].forEach(function(l){map.on('mouseenter',l,function(){map.getCanvas().style.cursor='pointer'});map.on('mouseleave',l,function(){map.getCanvas().style.cursor=''})});
     map.on('moveend',function(e){var c=map.getCenter();send({type:'moveend',lat:c.lat,lon:c.lng,zoom:map.getZoom(),user:!!e.originalEvent})});
+    // Itinéraire et perturbations au-dessus des bornes (sinon les grappes masquent le tracé).
+    ['zones-f','zones-l','alts-casing','alts','alts-hit','alts-l','route-casing','route','traffic','inc','inc-l'].forEach(function(l){if(map.getLayer(l))map.moveLayer(l,'pins')});
     ready=true;pending.forEach(handle);pending=[];send({type:'ready'});
   });
   function line(c){return c&&c.length?{type:'Feature',geometry:{type:'LineString',coordinates:c},properties:{}}:empty}
@@ -101,6 +103,7 @@ export const MAP_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf
     else if(m.type==='unfollow'){map.easeTo({pitch:0,bearing:0,duration:600})}
     else if(m.type==='select'){selected=m.id;var f=['==',['get','id'],m.id||'__none__'];map.setFilter('sel',f);map.setFilter('sel-halo',f)}
   }
+  window.__map=map;
   window.__recv=function(m){try{handle(typeof m==='string'?JSON.parse(m):m)}catch(e){}};
   window.addEventListener('message',function(e){if(typeof e.data==='string'&&e.data.charAt(0)==='{'){window.__recv(e.data)}});
 })();

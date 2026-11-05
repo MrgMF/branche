@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { displayName, type Station } from './stations';
-import { store } from './store';
+import { store, type ChargePlan } from './store';
 
 export { directPayUrl, operatorLabel, operatorOf, payOptions, type PayOption } from './methods';
 
@@ -51,4 +51,13 @@ export async function openOperatorPayment(url: string, station: Station | null, 
     });
   }
   router.push('/recharge');
+}
+
+/** Exécute un plan choisi (parcours « Recharger » ou recharge préparée) : un seul geste à la borne. */
+export function runPlan(station: Station, plan: ChargePlan, operatorName: string, url?: string) {
+  store.setCurrent(station);
+  store.setPlan(plan);
+  if (plan.method === 'reader') startReaderCharge(station, operatorName);
+  else if (plan.method === 'operator-link' && url) openOperatorPayment(url, station, operatorName);
+  else router.push({ pathname: '/payer', params: { from: 'recharger' } });
 }

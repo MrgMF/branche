@@ -30,6 +30,10 @@ export interface DirectCharge {
   plan?: ChargePlan;
   /** Notifications locales programmées (fin à 80 %, avant pénalité). */
   alertIds?: string[];
+  /** Dernière position connue à la borne (heure de départ estimée en cas de fin automatique). */
+  lastNearAt?: number;
+  /** Fin détectée automatiquement (départ de la borne). */
+  autoEnded?: boolean;
 }
 
 const KEY = 'branche.direct.v1';

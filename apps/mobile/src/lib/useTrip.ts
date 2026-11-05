@@ -21,6 +21,7 @@ import {
   trafficSegments,
   type ChargerSuggestion,
 } from './guidance';
+import { watchGeo } from './geoWatch';
 import { keepScreenOn } from './keepAwake';
 import {
   alongRoute,
@@ -150,7 +151,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
   const lastReroute = useRef(0);
   const inFlight = useRef(false);
   const offCount = useRef(0);
-  const watch = useRef<Location.LocationSubscription | null>(null);
+  const watch = useRef<{ remove: () => void } | null>(null);
   const [fix, setFix] = useState<Fix | null>(null);
   const prevFix = useRef<Fix | null>(null);
   const lastBearing = useRef<number | undefined>(undefined);
@@ -353,9 +354,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
         const asked = await Location.requestForegroundPermissionsAsync();
         if (asked.status !== 'granted') throw new Error('refusé');
       }
-      watch.current = await Location.watchPositionAsync({ accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 3, timeInterval: 1000 }, (p) =>
-        setFix({ lat: p.coords.latitude, lon: p.coords.longitude, t: p.timestamp || Date.now(), speed: p.coords.speed ?? null, heading: p.coords.heading ?? null, accuracy: p.coords.accuracy ?? null }),
-      );
+      watch.current = await watchGeo(setFix, (code) => code === 'denied' && setTrip((t) => (t ? { ...t, gps: 'unavailable' } : t)));
     } catch {
       setTrip((t) => (t ? { ...t, gps: 'unavailable' } : t));
     }

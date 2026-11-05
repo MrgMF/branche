@@ -18,7 +18,10 @@ import { navigationRoutes } from './routes/navigation.js';
 import { searchRoutes } from './routes/search.js';
 import { buildSearch, type SearchProvider } from './search/service.js';
 import { checkinRoutes } from './routes/checkins.js';
+import { availabilityRoutes } from './routes/availability.js';
 import { CheckinStore } from './checkins/store.js';
+import { featureRoutes, vehicleRoutes } from './routes/vehicle.js';
+import { AnthropicVehicleIdentifier, type VehicleIdentifier } from './vehicles/identify.js';
 import { IncidentService, ReportStore } from './incidents/service.js';
 import { TomTomRouteProvider, ValhallaRouteProvider, type RouteProvider } from './navigation/route.js';
 import { reqSerializer } from './lib/logRedact.js';
@@ -39,6 +42,8 @@ export interface AppDeps {
   fetch?: FetchLike;
   router?: RouteProvider;
   search?: SearchProvider | null;
+  /** Identification du véhicule sur photo (tests : client simulé). */
+  vehicleIdentifier?: VehicleIdentifier | null;
 }
 
 function buildRouter(config: Config, fetchFn: FetchLike): RouteProvider | null {
@@ -167,6 +172,17 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
   // Retours de recharge anonymes (fiabilité et prix constatés par la communauté) — docs/api-contract-v2.md
   const checkins = new CheckinStore(now);
   await app.register(async (scope) => checkinRoutes(scope, { checkins }));
+  // Disponibilité temps réel (IRVE dynamique consolidée) — docs/api-contract-v2-availability.md
+  await app.register(async (scope) => availabilityRoutes(scope, { fetchFn, now, log: app.log }));
+  // Véhicule sur photo (API Anthropic, clé serveur) ; GET /v1/meta expose features.vehicleIdentify
+  const identifier =
+    deps.vehicleIdentifier !== undefined
+      ? deps.vehicleIdentifier
+      : config.anthropicApiKey
+        ? new AnthropicVehicleIdentifier(config.anthropicApiKey, config.anthropicModel, fetchFn)
+        : null;
+  await app.register(async (scope) => vehicleRoutes(scope, { identifier }));
+  await app.register(async (scope) => featureRoutes(scope, { identifier }));
 
   return app;
 }

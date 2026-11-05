@@ -1,0 +1,17 @@
+id_pdc_itinerance,etat_pdc,occupation_pdc,horodatage,etat_prise_type_2,etat_prise_type_combo_ccs,etat_prise_type_chademo,etat_prise_type_ef
+FRS01E0001,en_service,libre,2026-11-05T12:55:00+01:00,fonctionnel,,,
+FRS01E0002,en_service,occupe,2026-11-05T12:55:00+01:00,fonctionnel,fonctionnel,,
+FRS01E0003,hors_service,inconnu,2026-11-05T12:50:00+01:00,hors_service,,,
+FRS01E0004,en_service,reserve,2026-11-05T12:56:00+01:00,fonctionnel,,,
+FRS01E0005,inconnu,inconnu,2026-11-05T12:56:00+01:00,inconnu,,,
+fr*abc*e0006*1,en_service,libre,2026-11-05T12:57:00+01:00,,fonctionnel,inconnu,
+FRS01E0007,en_service,libre,2026-11-05T11:00:00+01:00,fonctionnel,,,
+FRS01E0008,en_service,occupe,2026-11-05T12:50:00+01:00,fonctionnel,,,
+FRS01E0008,en_service,libre,2026-11-05T12:58:00+01:00,fonctionnel,,,
+FRS01E0008,hors_service,inconnu,2026-11-05T12:40:00+01:00,hors_service,,,
+X1,en_service,libre,2026-11-05T12:55:00+01:00,fonctionnel,,,
+FRS01E0099,en_service,libre,2026-11-05T12:55:00,fonctionnel,,,
+FRS01E0009,en_service,libre,2026-11-05T11:58:00Z,,,,
+FRS01E0010,en_service,occupe,2026-11-05T12:59:30.250+0100,,,,fonctionnel
+"FRS01E0011","en_service","libre","2026-11-05T12:55:00+01:00","fonctionnel","","",""
+FRS01E0012,en_service,libre,2026-11-05T14:30:00+01:00,fonctionnel,,,
