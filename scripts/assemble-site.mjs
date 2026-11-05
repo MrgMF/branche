@@ -28,12 +28,20 @@ for (const f of ['maplibre-gl.js', 'maplibre-gl.css']) await cp(resolve(root, 'n
 // Identité de l'éditeur (variables du dépôt EDITEUR_NOM, CONTACT_EMAIL) dans la landing et les pages légales.
 const tokens = { EDITEUR_NOM: process.env.EDITEUR_NOM, CONTACT_EMAIL: process.env.CONTACT_EMAIL };
 const missing = Object.entries(tokens).filter(([, v]) => !v?.trim()).map(([k]) => k);
-if (missing.length && process.env.CI) throw new Error(`Variables manquantes pour les mentions légales : ${missing.join(', ')}`);
+// Sans identité publiée : éditeur non professionnel anonyme (LCEN art. 6, III, 2 — identité tenue par l'hébergeur),
+// contact par le suivi public du dépôt GitHub (GITHUB_REPOSITORY fourni par Actions).
+const repo = process.env.GITHUB_REPOSITORY ?? 'MrgMF/branche';
+const contactUrl = `https://github.com/${repo}/issues`;
+const fallback = {
+  EDITEUR_NOM: 'un particulier (éditeur non professionnel ; identité communiquée à l’hébergeur, LCEN art. 6, III, 2)',
+  CONTACT_EMAIL: 'le suivi public du projet sur GitHub (messages visibles de tous)',
+};
 const pages = ['index.html', ...(await readdir(resolve(out, 'legal'))).map((f) => `legal/${f}`)].filter((f) => f.endsWith('.html'));
 for (const f of pages) {
   const path = resolve(out, f);
   let html = await readFile(path, 'utf8');
-  for (const [k, v] of Object.entries(tokens)) html = html.replaceAll(`{{${k}}}`, (v ?? `[${k}]`).replace(/[<>"&]/g, ''));
+  if (!tokens.CONTACT_EMAIL?.trim()) html = html.replace(/mailto:\{\{CONTACT_EMAIL\}\}(\?[^"]*)?/g, contactUrl);
+  for (const [k, v] of Object.entries(tokens)) html = html.replaceAll(`{{${k}}}`, (v?.trim() ? v : fallback[k]).replace(/[<>"&]/g, ''));
   await writeFile(path, html);
 }
 if (missing.length) console.warn(`Attention : ${missing.join(', ')} non renseigné(s) — à définir avant publication.`);
