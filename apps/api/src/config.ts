@@ -71,7 +71,7 @@ export function parseReportsDisabled(raw: string | undefined): ReportsDisabledZo
 }
 
 /** Modèle vision par défaut ; à ajuster avec ANTHROPIC_MODEL selon les modèles ouverts sur le compte. */
-export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-5';
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-5-5';
 export const DEFAULT_VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
 export const DEFAULT_INCIDENTS_URL = 'https://www.data.gouv.fr/api/1/datasets/r/d16c8cb6-0123-44e7-b8b1-f99fc6a59497';
 /** Recherche d'adresse sans clé (données OSM). Usage raisonnable toléré par komoot ; « off » désactive. */

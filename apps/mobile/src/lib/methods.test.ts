@@ -60,3 +60,23 @@ describe('payOptions — sans compte d’abord', () => {
     expect(appOnly(o)).toBe(true);
   });
 });
+
+describe('payOptions — portails réels (pipeline/data/operator-portals.json)', () => {
+  const real: Portals = {
+    izivia: { name: 'IZIVIA', webPortal: 'https://client.izivia.com/account/', webStart: { status: 'yes', url: 'https://paynow.izivia.com/' }, adhocWeb: 'https://paynow.izivia.com/' },
+    freshmile: { name: 'Freshmile', webPortal: 'https://charge.freshmile.com/login', adhocWeb: 'https://xfm.fr/{code} (lien court imprimé sur l’autocollant de la borne) ou QR code -> autorisation CB' },
+  };
+  const iz: Station = { ...base, ok: 'izivia', pay: ['badge'], pdc: [['FR*IZI*E00123', 22, ['t2']]] };
+  it('page de paiement sans gabarit {evse} : lien sans compte proposé, identifiant du point à copier', () => {
+    const o = payOptions(iz, pt(iz), ops, { portals: real });
+    expect(o.map((x) => x.id).slice(0, 2)).toEqual(['scan', 'operator-link']);
+    expect(o[1]).toMatchObject({ url: 'https://paynow.izivia.com/', copyId: 'FR*IZI*E00123' });
+    expect(o.find((x) => x.id === 'account')).toBeUndefined(); // une voie sans compte existe
+  });
+  it('texte descriptif (pas une URL) : paiement ponctuel reconnu, aucun lien forgé', () => {
+    const fm: Station = { ...base, ok: 'freshmile', pay: ['badge'] };
+    const o = payOptions(fm, pt(fm), ops, { portals: real });
+    expect(o[0].id).toBe('scan');
+    expect(o.find((x) => x.id === 'operator-link')!.available).toBe(false);
+  });
+});

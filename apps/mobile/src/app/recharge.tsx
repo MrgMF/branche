@@ -7,6 +7,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CopyId } from '../components/CopyId';
 import { Button, Notice } from '../components/ui';
 import { apiEnabled } from '../lib/api';
 import { sendCheckin } from '../lib/community';
@@ -266,6 +267,7 @@ export default function Recharge() {
                 : `Finalisez le paiement sur la page de ${d.operatorName}, branchez si ce n’est pas déjà fait, puis revenez ici.`}
             </Text>
           </View>
+          {!reader && d.plan?.pdcId && (d.plan.method === 'operator-link' || d.plan.method === 'account') ? <CopyId id={d.plan.pdcId} dark /> : null}
           <Button label="La charge a démarré" onPress={started} hint="Lance le suivi en direct et les rappels de fin de charge" />
           <Button label="Ça ne démarre pas" variant="light" onPress={() => setHelp(true)} hint="Autre point, autre méthode, appeler l’opérateur" />
           {!reader ? <Button label={`Rouvrir la page ${d.operatorName}`} variant="ghost" onPress={reopen} /> : null}

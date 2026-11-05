@@ -59,9 +59,11 @@ def setup_data():
     })
     json.dump(tile, open(tile_path, 'w'))
     # Portail de l'opérateur de test (format de pipeline/data/operator-portals.json)
-    json.dump({'v': 1, 'operators': {'test': {'name': 'Opérateur Test', 'webPortal': 'http://localhost:8090/pay', 'webStart': {'status': 'inconnu', 'url': None},
-                                               'adhocWeb': True, 'cardReader': False, 'appOnly': False, 'roamingBadgesAccepted': ['Chargemap Pass'], 'sources': ['test']}}},
-              open(os.path.join(data, 'operator-portals.json'), 'w'))
+    real = os.path.join(ROOT, 'pipeline', 'data', 'operator-portals.json')
+    portals = json.load(open(real)) if os.path.exists(real) else {'v': 1, 'operators': {}}
+    portals['operators']['test'] = {'name': 'Opérateur Test', 'webPortal': 'http://localhost:8090/pay', 'webStart': {'status': 'inconnu', 'url': None},
+                                 'adhocWeb': True, 'cardReader': False, 'appOnly': False, 'roamingBadgesAccepted': ['Chargemap Pass'], 'sources': ['test']}
+    json.dump(portals, open(os.path.join(data, 'operator-portals.json'), 'w'))
     for i in ['FRTSTP0001', 'FRTSTE0001', 'FRTSTE0002']:
         p = os.path.join(data, 'evse', f'{fnv_bucket(i)}.json')
         idx = json.load(open(p)) if os.path.exists(p) else {'v': 1, 'm': {}}
@@ -274,19 +276,22 @@ try:
         shot(page, 'b4-points-filtres')
         ok('véhicule proposé (facultatif) ; points filtrés (CHAdeMO masqué pour une Mégane)')
         page.get_by_role('button', name='Point se terminant par B 1 P 1', exact=False).click()
-        page.wait_for_selector('text=Carte bancaire sur la borne')
         page.wait_for_selector('text=Brancher d’abord, puis payer')
         page.wait_for_selector('text=Estimation pour Renault Mégane E-Tech 60 kWh, de 30 % à 80 %')
         shot(page, 'b5-prix-cb')
         page.get_by_text('Brancher d’abord, puis payer').scroll_into_view_if_needed()
         shot(page, 'b5b-methode-cb')
-        ok('méthode recommandée : CB au lecteur (IRVE), mode d’emploi DC « brancher d’abord » ; tarif = lien opérateur')
+        ok('sans compte d’abord : paiement ponctuel (QR) recommandé, CB au lecteur en alternative, mode d’emploi DC « brancher d’abord »')
+        page.get_by_role('button', name='Carte bancaire sur la borne', exact=True).click()
+        page.get_by_role('button', name='J’ai payé par carte').scroll_into_view_if_needed()
+        shot(page, 'b5c-methode-cb')
         page.get_by_role('button', name='J’ai payé par carte').click()
         page.wait_for_selector('text=Payez sur le lecteur de la borne')
         page.get_by_role('button', name='La charge a démarré').click()
         page.wait_for_selector('text=Coût estimé')
-        page.wait_for_selector('text=Prix inconnu')
+        page.wait_for_timeout(800)
         shot(page, 'b6-suivi-cb')
+        assert 'Prix inconnu' in page.inner_text('body'), 'coût inconnu attendu (tarif = lien)'
         page.get_by_role('button', name='J’ai terminé ma recharge').click()
         page.get_by_role('button', name='Enregistrer le reçu').click()
         page.wait_for_selector('text=Reçu enregistré')
@@ -349,7 +354,9 @@ try:
         ok('disponibilité temps réel dans la fiche (1 libre sur 2)')
         page.get_by_role('button', name='Préparer ma recharge').click()
         page.wait_for_selector('text=Choisissez votre point de charge')
-        page.get_by_text('Libre', exact=True).first.wait_for()
+        page.locator('[aria-label*="0 0 0 2"][aria-label*="Libre"]').wait_for()
+        page.locator('[aria-label*="0 0 0 1"][aria-label*="Occupé"]').wait_for()
+        shot(page, 'd2b-points-dispo')
         page.get_by_role('button', name='Passer').first.click()
         page.get_by_role('button', name='Point se terminant par 0 0 0 2', exact=False).click()
         page.get_by_role('button', name='Enregistrer pour mon arrivée').click()

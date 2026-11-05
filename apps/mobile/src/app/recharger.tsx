@@ -2,10 +2,11 @@
 // Une seule action principale par étape. Ouvert par la détection de proximité, le scan d'un QR code, la fiche
 // station, l'arrivée du guidage, ou un lien profond branche://recharger?evse=FR*ABC*E123 (web : /recharger?evse=).
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CopyId } from '../components/CopyId';
 import { TariffLines } from '../components/Pricing';
 import { Button, Notice, Tag } from '../components/ui';
 import { getCommunity, preauthText, reliabilityText, type Community } from '../lib/community';
@@ -81,14 +82,20 @@ export default function Recharger() {
     };
   }, [params.evse, params.station]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Au retour de « Mon véhicule » ou « Mes badges » : profil relu
+  useFocusEffect(
+    useCallback(() => {
+      loadWallet().then(setWallet);
+      loadVehicle().then((v) => {
+        setVehicle(v);
+        if (v && Date.now() - v.socUpdatedAt < SOC_FRESH_MS) setSoc(v.socPercent);
+      });
+    }, []),
+  );
+
   useEffect(() => {
     loadOperators().then(setOps);
     loadPortals().then(setPortals);
-    loadWallet().then(setWallet);
-    loadVehicle().then((v) => {
-      setVehicle(v);
-      if (v && Date.now() - v.socUpdatedAt < SOC_FRESH_MS) setSoc(v.socPercent);
-    });
     AsyncStorage.getItem(SKIP_KEY)
       .then((x) => setSkipped(x === '1'))
       .catch(() => setSkipped(false));
@@ -224,7 +231,7 @@ export default function Recharger() {
       <View style={styles.head}>
         <Button label="Retour" variant="ghost" onPress={back} style={styles.back} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.kicker}>{preparing ? 'Préparer ma recharge · ' : ''}{step === 'point' ? 'Étape 1 sur 2' : points.length > 1 || autoPoint === null ? 'Étape 2 sur 2' : 'Recharger ici'}</Text>
+          <Text style={styles.kicker}>{preparing ? 'Préparation · ' : ''}{step === 'point' ? 'Étape 1 sur 2' : points.length > 1 || autoPoint === null ? 'Étape 2 sur 2' : 'Recharger ici'}</Text>
           <Text style={styles.title} numberOfLines={2} accessibilityRole="header">
             {displayName(station)}
           </Text>
@@ -378,6 +385,7 @@ export default function Recharger() {
                   <Text style={[styles.stepLine, { flex: 1 }]}>{s}</Text>
                 </View>
               ))}
+              {chosen.copyId ? <CopyId id={chosen.copyId} /> : null}
               <Text style={styles.small}>Si l’écran de la borne indique un autre ordre, suivez la borne.</Text>
               {preparing ? <Text style={styles.small}>Préparation : rien n’est payé maintenant. À l’arrivée, un geste suffira.</Text> : null}
               <Button label={preparing ? 'Enregistrer pour mon arrivée' : chosen.cta} onPress={() => go(chosen)} disabled={!chosen.available} hint={chosen.id === 'reader' ? 'Ouvre le suivi de la recharge' : 'Branché vérifie le QR code avant d’ouvrir la page de l’opérateur'} />

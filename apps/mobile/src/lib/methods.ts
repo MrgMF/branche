@@ -31,6 +31,8 @@ export interface PayOption {
   steps: [string, string, string];
   cta: string;
   url?: string;
+  /** Identifiant du point à saisir sur la page de l'opérateur (aucun gabarit {evse} publié). */
+  copyId?: string;
 }
 
 export interface PayContext {
@@ -58,7 +60,10 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
   const reader = s.pay.includes('cb') || s.pay.includes('sans_contact') || portal?.cardReader === true;
   const contactless = s.pay.includes('sans_contact');
   const declaredAdHoc = s.pay.some((p) => p === 'qr_dynamique' || p === 'site_web' || p === 'acte') || !!portal?.adhocWeb;
-  const portalAdhocUrl = typeof portal?.adhocWeb === 'string' && /^https:\/\//.test(portal.adhocWeb) ? portal.adhocWeb.replace('{evse}', encodeURIComponent(point?.id ?? '')) : null;
+  // adhocWeb : URL seule (éventuellement avec {evse}) ; un texte descriptif signale seulement un paiement ponctuel
+  const adhocRaw = typeof portal?.adhocWeb === 'string' && /^https:\/\/[^\s{}]+(\{evse\}[^\s{}]*)?$/.test(portal.adhocWeb) ? portal.adhocWeb : null;
+  const portalAdhocUrl = adhocRaw ? (adhocRaw.includes('{evse}') ? (point ? adhocRaw.replace('{evse}', encodeURIComponent(point.id)) : null) : adhocRaw) : null;
+  const pointId = point?.id;
   const link = directPayUrl(s, ops, point?.id) ?? portalAdhocUrl;
   const account = s.ok ? ctx.wallet?.accounts.find((a) => a.operatorKey === s.ok) : undefined;
   const startUrl = webStartUrl(portal, point?.id);
@@ -88,6 +93,7 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
           : [`Sur le site officiel de ${op}, ouvert dans Branché, créez votre compte ou connectez-vous.`, `Lancez la charge sur ${pt}${dc ? ' après avoir branché le câble' : ', puis branchez'}.`, 'Revenez dans Branché : le suivi démarre, et le compte sera réutilisé la prochaine fois.'],
         cta: account ? `Démarrer avec mon compte ${account.name}` : `Ajouter mon compte ${op}`,
         url: accountUrl,
+        copyId: accountUrl && !accountUrl.includes(encodeURIComponent(pointId ?? '¤')) ? pointId : undefined,
       },
     });
   }
@@ -116,10 +122,11 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
       why: link ? 'Adresse officielle de paiement sans compte connue pour cet opérateur.' : 'Pas de lien de paiement direct connu pour cet opérateur.',
       order,
       steps: dc
-        ? [`Branchez ${cable} sur votre voiture.`, `Ouvrez la page de paiement de ${op} et vérifiez que ${pt} est indiqué.`, 'Payez, puis revenez dans Branché.']
-        : [`Ouvrez la page de paiement de ${op} et vérifiez que ${pt} est indiqué.`, 'Payez, puis revenez dans Branché.', `Branchez ${cable} : la charge démarre.`],
+        ? [`Branchez ${cable} sur votre voiture.`, `Sur la page de paiement de ${op}, collez l’identifiant de ${pt} (copié par Branché).`, 'Payez, puis revenez dans Branché.']
+        : [`Sur la page de paiement de ${op}, collez l’identifiant de ${pt} (copié par Branché).`, 'Payez, puis revenez dans Branché.', `Branchez ${cable} : la charge démarre.`],
       cta: `Ouvrir la page ${op}`,
       url: link ?? undefined,
+      copyId: link && !link.includes(encodeURIComponent(pointId ?? '¤')) ? pointId : undefined,
     },
   });
   ranked.push({
