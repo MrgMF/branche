@@ -387,7 +387,7 @@ function PointRow({ p, onPress, selected, disabled, status }: { p: ChargePoint; 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Point se terminant par ${p.short.split('').join(' ')}, ${kw(p.kw)}, ${p.plugs.map((x) => PLUG_LABEL[x]).join(', ')}${disabled ? ', incompatible' : ''}`}
+      accessibilityLabel={`Point se terminant par ${p.short.split('').join(' ')}, ${kw(p.kw)}, ${p.plugs.map((x) => PLUG_LABEL[x]).join(', ')}${disabled ? ', incompatible' : ''}${status && status.status !== 'inconnu' ? `, ${AVAIL_LABEL[status.status]}` : ''}`}
       accessibilityState={{ disabled: !!disabled, selected: !!selected }}
       disabled={disabled}
       onPress={onPress}

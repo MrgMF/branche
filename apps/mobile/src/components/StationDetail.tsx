@@ -4,6 +4,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ApiConfig } from '../lib/api';
 import { navigationLinks, startCharge } from '../lib/charge';
 import { euros, km, kw, minutes, PAY_LABEL, PLUG_LABEL } from '../lib/format';
+import { getAvailability, stationSummary, type AvailItem } from '../lib/availability';
 import { getCommunity, type Community } from '../lib/community';
 import { displayName, type Station } from '../lib/stations';
 import { store } from '../lib/store';
@@ -29,10 +30,14 @@ export function StationDetail(props: {
   const reserved = s.acc === 'reserve';
   const opName = props.operatorName;
   const [community, setCommunity] = useState<Community | null>(null);
+  const [avail, setAvail] = useState<Record<string, AvailItem>>({});
+  const live = stationSummary(s, avail);
+  const near = distance != null && distance < 0.3;
   useEffect(() => {
     let alive = true;
     setCommunity(null);
     getCommunity(s.id).then((c) => alive && setCommunity(c));
+    getAvailability((s.pdc ?? []).map(([id]) => id)).then((a) => alive && setAvail(a));
     return () => {
       alive = false;
     };
@@ -83,15 +88,32 @@ export function StationDetail(props: {
 
       <View style={styles.payCard}>
         <Text style={styles.payTitle}>Recharger à cette borne</Text>
+        {live.known ? (
+          <Text style={[styles.live, { color: live.free ? colors.accentPressed : colors.busy }]}>
+            {live.free ? `${live.free} point${live.free > 1 ? 's' : ''} libre${live.free > 1 ? 's' : ''} sur ${live.total}` : 'Aucun point libre signalé'} (temps réel){live.down ? ` · ${live.down} hors service` : ''}
+          </Text>
+        ) : null}
         <Text style={styles.payText}>Sans compte ni appli : choix du point, prix estimé pour votre voiture, puis paiement direct à {opName} (carte sur la borne ou page officielle vérifiée).</Text>
         <Button
-          label="Recharger ici"
+          label={near ? 'Recharger ici' : 'Préparer ma recharge'}
           onPress={() => {
             store.setCurrent(s);
-            router.push({ pathname: '/recharger', params: { station: s.id } });
+            router.push({ pathname: '/recharger', params: near ? { station: s.id } : { station: s.id, prepare: '1' } });
           }}
-          hint="Choix du point de charge, prix avant de payer et mode d’emploi"
+          hint={near ? 'Choix du point de charge, prix avant de payer et mode d’emploi' : 'Point, méthode et prix choisis maintenant ; à l’arrivée, un seul geste pour payer'}
         />
+        {!near ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              store.setCurrent(s);
+              router.push({ pathname: '/recharger', params: { station: s.id } });
+            }}
+            style={styles.link}
+          >
+            <Text style={styles.linkText}>Je suis déjà à la borne</Text>
+          </Pressable>
+        ) : null}
         <Text style={styles.boxTitle}>Prix opérateur</Text>
         <TariffLines station={s} community={community} compact />
         {payAtStation.length ? <Text style={styles.small}>Moyens acceptés sur place : {payAtStation.join(' · ')}.</Text> : null}
@@ -138,6 +160,7 @@ const styles = StyleSheet.create({
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   addr: { fontFamily: fonts.body, fontSize: 14, color: colors.inkMuted },
   payCard: { borderWidth: 2, borderColor: colors.accent, borderRadius: radius.lg, padding: 14, gap: 10 },
+  live: { fontFamily: fonts.bold, fontSize: 14 },
   payTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.ink },
   payText: { fontFamily: fonts.medium, fontSize: 14, color: colors.inkMuted, lineHeight: 20 },
   priceRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
