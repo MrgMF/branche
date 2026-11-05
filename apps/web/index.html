@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Branché — Toutes les bornes. Une seule app.</title>
-  <meta name="description" content="Trouvez la borne de recharge la plus proche, voyez prix et compatibilité, payez depuis l'app sans télécharger l'application de chaque opérateur.">
+  <meta name="description" content="Trouvez la borne de recharge la plus proche, voyez sa puissance, ses prises et ses moyens de paiement, payez depuis l'app sans télécharger l'application de chaque opérateur.">
   <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0F1A17" media="(prefers-color-scheme: dark)">
   <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon.png">
@@ -13,7 +13,7 @@
   <meta property="og:locale" content="fr_FR">
   <meta property="og:site_name" content="Branché">
   <meta property="og:title" content="Branché — Toutes les bornes. Une seule app.">
-  <meta property="og:description" content="La borne la plus proche, son prix, sa compatibilité. Payez depuis l'app, sans l'application de chaque opérateur.">
+  <meta property="og:description" content="La borne la plus proche, sa puissance, ses prises. Payez depuis l'app, sans l'application de chaque opérateur.">
   <meta property="og:image" content="assets/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -59,7 +59,7 @@
         <div>
           <span class="badge">Recharge de véhicule électrique</span>
           <h1 id="hero-titre" style="margin-top:16px">Toutes les bornes. <span>Une seule app.</span></h1>
-          <p class="hero__lead">Trouvez la borne la plus proche, voyez son prix et sa compatibilité avec votre voiture, puis payez depuis l'app, sans télécharger l'application de chaque opérateur.</p>
+          <p class="hero__lead">Trouvez la borne la plus proche, voyez sa puissance, ses types de prise et ses tarifs publiés, puis payez depuis l'app, sans télécharger l'application de chaque opérateur.</p>
           <div class="hero__actions">
             <a class="btn btn-primary" href="./app/">
               Ouvrir l'app web
@@ -95,11 +95,10 @@
                 <div class="pin" style="left:26%;top:54%"><span class="pin__dot"><svg><use href="#i-bolt"/></svg></span>0,35 €</div>
                 <div class="pin pin--off" style="left:80%;top:52%"><span class="pin__dot"><svg><use href="#i-bolt"/></svg></span>—</div>
               </div>
-              <div class="mock__search"><svg><use href="#i-search"/></svg>Rechercher une adresse</div>
+              <div class="mock__search">Bornes les plus proches</div>
               <div class="mock__chips">
-                <span class="mock__chip mock__chip--on">Compatibles</span>
-                <span class="mock__chip">Disponibles</span>
-                <span class="mock__chip">Rapide</span>
+                <span class="mock__chip mock__chip--on">Rapide ≥ 50 kW</span>
+                <span class="mock__chip">CCS</span>
                 <span class="mock__chip">Type 2</span>
               </div>
               <div class="sheet">
@@ -107,12 +106,12 @@
                 <div class="sheet__top">
                   <div>
                     <p class="sheet__title">Parking de la Gare</p>
-                    <p class="sheet__meta">Opérateur exemple · Disponible</p>
+                    <p class="sheet__meta">Opérateur exemple · 22 kW</p>
                   </div>
                   <div class="sheet__price">0,39 €<small>par kWh</small></div>
                 </div>
                 <div class="sheet__tags">
-                  <span class="sheet__tag sheet__tag--ok">Compatible</span>
+                  <span class="sheet__tag sheet__tag--ok">CCS</span>
                   <span class="sheet__tag">Type 2</span>
                   <span class="sheet__tag">Combo CCS</span>
                 </div>
@@ -175,7 +174,7 @@
           <h2 id="operateurs-titre">Pour les opérateurs</h2>
           <p>Vous exploitez un réseau de bornes et souhaitez ouvrir le paiement à nos utilisateurs par itinérance : parlons-en.</p>
         </div>
-        <a class="btn btn-secondary" href="mailto:[EMAIL DE CONTACT]?subject=Branch%C3%A9%20%E2%80%94%20itin%C3%A9rance">
+        <a class="btn btn-secondary" href="mailto:{{CONTACT_EMAIL}}?subject=Branch%C3%A9%20%E2%80%94%20itin%C3%A9rance">
           <svg aria-hidden="true" focusable="false"><use href="#i-mail"/></svg>
           Nous écrire
         </a>

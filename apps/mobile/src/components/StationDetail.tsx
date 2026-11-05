@@ -7,7 +7,14 @@ import { displayName, priceInfo, type Station } from '../lib/stations';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { Button, Notice, Stat, Tag } from './ui';
 
-export function StationDetail(props: { station: Station; distance: number | null; api: ApiConfig | null; apiError: boolean; onClose: () => void }) {
+export function StationDetail(props: {
+  station: Station;
+  distance: number | null;
+  api: ApiConfig | null;
+  apiError: boolean;
+  apiLoading: boolean;
+  onClose: () => void;
+}) {
   const { station: s, distance, api } = props;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -86,6 +93,8 @@ export function StationDetail(props: { station: Station; distance: number | null
             </Text>
           )}
         </>
+      ) : props.apiLoading ? (
+        <Notice>Connexion au service de paiement… (jusqu’à une minute au premier lancement)</Notice>
       ) : (
         <Notice tone={props.apiError ? 'error' : 'info'}>
           {props.apiError

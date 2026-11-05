@@ -5,7 +5,7 @@
       "env": {
         "DATA_URL": "https://REPLACE_ME.github.io/branche/data",
         "SITE_URL": "https://REPLACE_ME.github.io/branche",
-        "API_URL": ""
+        "API_URL": "https://branche-api.onrender.com"
       }
     },
     "preview": {

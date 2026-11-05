@@ -49,11 +49,11 @@ export function Button(props: {
 export function Chip(props: { label: string; active: boolean; onPress: () => void }) {
   return (
     <Pressable
-      accessibilityRole="switch"
+      role="switch"
+      aria-checked={props.active}
       accessibilityState={{ checked: props.active }}
       accessibilityLabel={props.label}
       onPress={props.onPress}
-      hitSlop={4}
       style={[styles.chip, props.active ? styles.chipOn : styles.chipOff]}
     >
       <Text style={[styles.chipText, { color: props.active ? '#FFFFFF' : colors.ink }]}>{props.label}</Text>
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   btn: { minHeight: 56, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   label: { fontFamily: fonts.bold, fontSize: 17 },
-  chip: { minHeight: MIN_TOUCH - 8, paddingHorizontal: 14, borderRadius: 18, justifyContent: 'center' },
+  chip: { minHeight: MIN_TOUCH, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' },
   chipOn: { backgroundColor: colors.ink },
   chipOff: { backgroundColor: colors.surface, borderWidth: 1, borderColor: '#C9D3D0' },
   chipText: { fontFamily: fonts.semibold, fontSize: 13 },

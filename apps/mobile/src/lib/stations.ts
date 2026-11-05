@@ -118,7 +118,8 @@ const LOOKS_LIKE_ID = /^[A-Z]{2}\*?[A-Z0-9]{3}\*?[PE][A-Z0-9*]*$|\*|\/[0-9a-f]{8
 export function displayName(s: Pick<Station, 'n' | 'o' | 'a'>): string {
   if (s.n && !LOOKS_LIKE_ID.test(s.n)) return s.n;
   const street = s.a?.split(/\d{5}/)[0]?.replace(/[,\s]+$/, '').trim();
-  return [s.o, street].filter(Boolean).join(' — ') || 'Borne de recharge';
+  const op = s.o?.split('|').map((x) => x.trim()).find((x) => x && !x.includes('*'));
+  return [op, street].filter(Boolean).join(' — ') || 'Borne de recharge';
 }
 
 /** Le champ tarification contient parfois une URL plutôt qu'un prix. */

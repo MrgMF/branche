@@ -3,6 +3,9 @@ import type { ExpoConfig } from 'expo/config';
 // Variables injectées au build (CI GitHub Actions ou EAS) :
 // BASE_URL : sous-chemin web (ex. /branche/app) · DATA_URL : base des tuiles IRVE · API_URL : API de paiement (vide = paiement in-app désactivé)
 const baseUrl = process.env.BASE_URL ?? '';
+if (process.env.EAS_BUILD && [process.env.DATA_URL, process.env.SITE_URL].some((v) => !v || v.includes('REPLACE_ME'))) {
+  throw new Error('eas.json : remplacez REPLACE_ME par votre identifiant GitHub (DATA_URL, SITE_URL) avant de lancer un build.');
+}
 const config: ExpoConfig = {
   name: 'Branché',
   slug: 'branche',

@@ -77,6 +77,7 @@ export function fakeStripe() {
 }
 
 export const STRIPE_ENV = {
+  ALLOWED_RETURN_PREFIXES: 'branche://,https://monorg.github.io/branche/',
   PAYMENT_PROVIDER: 'stripe',
   STRIPE_SECRET_KEY: 'sk_test_fake',
   STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,

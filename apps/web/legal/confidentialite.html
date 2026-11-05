@@ -11,7 +11,7 @@
     <a href="../index.html">← Branché</a>
   </header>
   <main class="page prose">
-    <p class="draft"><strong>Brouillon à faire valider</strong> par un professionnel du droit avant publication définitive. Les éléments entre crochets sont à compléter.</p>
+    <p class="draft"><strong>Brouillon à faire valider</strong> par un professionnel du droit avant publication définitive.</p>
 
     <h1>Politique de confidentialité</h1>
     <p>Dernière mise à jour : 5 novembre 2026. S'applique au site et aux applications « Branché » (iOS, Android, web).</p>
@@ -24,7 +24,7 @@
     </ul>
 
     <h2>1. Responsable du traitement</h2>
-    <p>[ÉDITEUR], [ADRESSE], [EMAIL DE CONTACT].</p>
+    <p>{{EDITEUR_NOM}}, personne physique agissant à titre non professionnel. Contact : <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a>.</p>
 
     <h2>2. Données traitées</h2>
     <table>
@@ -42,13 +42,13 @@
           <td>Session de paiement de démonstration : identifiant aléatoire (« ses_… »), borne choisie, horodatages, montants fictifs</td>
           <td>Faire fonctionner la démonstration de paiement et de recharge</td>
           <td>Exécution du service demandé (art. 6.1.b)</td>
-          <td>En mémoire du serveur, effacée au redémarrage du service et au plus tard [X] jours</td>
+          <td>En mémoire du serveur uniquement (aucune base de données) : effacée au redémarrage du service et au plus tard après 24 heures</td>
         </tr>
         <tr>
           <td>Journaux techniques de l'API : adresse IP, date, requête, code de réponse, navigateur</td>
           <td>Sécurité, diagnostic des erreurs</td>
           <td>Intérêt légitime (art. 6.1.f)</td>
-          <td>[X] jours (7 jours sur l'offre actuelle de l'hébergeur Render)</td>
+          <td>7 jours chez l'hébergeur Render (offre gratuite), puis suppression automatique</td>
         </tr>
         <tr>
           <td>Journaux de connexion des hébergeurs du site et de la carte (adresse IP)</td>
@@ -57,7 +57,7 @@
           <td>Selon chaque hébergeur (voir section 4)</td>
         </tr>
         <tr>
-          <td>Message envoyé à [EMAIL DE CONTACT]</td>
+          <td>Message envoyé à {{CONTACT_EMAIL}}</td>
           <td>Vous répondre</td>
           <td>Intérêt légitime (art. 6.1.f)</td>
           <td>3 ans après le dernier échange</td>
@@ -79,10 +79,10 @@
     </ul>
 
     <h2>5. Transferts hors de l'Union européenne</h2>
-    <p>GitHub, Render et Stripe sont établis aux États-Unis. Ces trois sociétés déclarent adhérer au <a href="https://www.dataprivacyframework.gov/">Data Privacy Framework UE–États-Unis</a> (décision d'adéquation de la Commission européenne du 10 juillet 2023) et prévoient en complément des clauses contractuelles types de la Commission européenne. [À VÉRIFIER : présence active de chaque société sur la liste officielle du DPF à la date de publication.]</p>
+    <p>GitHub, Render et Stripe sont établis aux États-Unis. Selon leurs politiques de confidentialité, ces trois sociétés déclarent adhérer au <a href="https://www.dataprivacyframework.gov/">Data Privacy Framework UE–États-Unis</a> (décision d'adéquation de la Commission européenne du 10 juillet 2023) et prévoient en complément des clauses contractuelles types de la Commission européenne.</p>
 
     <h2>6. Vos droits</h2>
-    <p>Vous disposez des droits d'accès, de rectification, d'effacement, de limitation, d'opposition (notamment au traitement fondé sur l'intérêt légitime) et de portabilité lorsqu'il s'applique (RGPD, art. 15 à 21). Comme nous ne gérons pas de compte, indiquez si possible l'identifiant de session ou la date et l'heure concernées. Écrivez à [EMAIL DE CONTACT] ; réponse sous un mois.</p>
+    <p>Vous disposez des droits d'accès, de rectification, d'effacement, de limitation, d'opposition (notamment au traitement fondé sur l'intérêt légitime) et de portabilité lorsqu'il s'applique (RGPD, art. 15 à 21). Comme nous ne gérons pas de compte, indiquez si possible l'identifiant de session ou la date et l'heure concernées. Écrivez à <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a> ; réponse sous un mois.</p>
     <p>Vous pouvez retirer à tout moment l'accès à la position dans les réglages de votre appareil ou de votre navigateur ; l'application reste utilisable en déplaçant la carte manuellement.</p>
     <p>Vous pouvez introduire une réclamation auprès de la CNIL : Service des plaintes, 3 place de Fontenoy, 75007 Paris, ou en ligne sur <a href="https://www.cnil.fr/fr/plaintes">cnil.fr/fr/plaintes</a>.</p>
 

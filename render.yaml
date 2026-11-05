@@ -6,7 +6,7 @@ services:
     plan: free
     region: frankfurt
     rootDir: apps/api
-    buildCommand: npm install && npm run build
+    buildCommand: cd ../.. && npm ci --workspace apps/api --include-workspace-root=false && npm run build -w apps/api
     startCommand: npm start
     healthCheckPath: /health
     autoDeploy: true
@@ -29,8 +29,9 @@ services:
         value: "50"
       - key: SIM_SPEED
         value: "20"
+      # Anti open-redirect : remplacer OWNER par votre identifiant GitHub.
       - key: ALLOWED_RETURN_PREFIXES
-        value: "branche://,exp://,exps://,http://localhost,http://127.0.0.1,https://*.github.io"
+        value: "branche://,https://OWNER.github.io/branche/app/"
       # URL publique (par défaut : RENDER_EXTERNAL_URL fourni par Render).
       - key: PUBLIC_URL
         sync: false

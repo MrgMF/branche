@@ -10,7 +10,12 @@ function escapeRegex(s: string): string {
   return s.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// IPv4 privée (10/8, 172.16/12, 192.168/16, 127/8), port facultatif, puis fin de l'autorité.
+const PRIVATE_IP = String.raw`(?:10(?:\.\d{1,3}){3}|127(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})`;
+const EXPO_LAN = new RegExp(`^exps?://${PRIVATE_IP}(?::\\d{1,5})?(?=$|[/?#])`, 'i');
+
 function prefixToRegex(prefix: string): RegExp {
+  if (prefix === 'exp://LAN') return EXPO_LAN;
   const body = prefix
     .split('*')
     .map(escapeRegex)

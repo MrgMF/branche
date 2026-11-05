@@ -73,6 +73,10 @@ describe('création de session', () => {
     'javascript:alert(1)',
     '//evil.com',
     'https://user.github.io\\@evil.com',
+    'https://evil.github.io/',
+    'exp://evil.com/--/session',
+    'exp://192.168.evil.com/--/session',
+    'exp://10.0.0.1.evil.com/',
   ])('refuse la returnUrl %s (400)', async (returnUrl) => {
     ({ app } = await makeApp());
     const res = await createSession(app, { returnUrl });
@@ -80,13 +84,20 @@ describe('création de session', () => {
     expect(res.json().error.code).toBe('invalid_return_url');
   });
 
-  it.each(['branche://session', 'exp://192.168.1.2:8081/--/session', 'http://localhost:8081/session', 'https://monorg.github.io/branche/session'])(
-    'accepte la returnUrl %s',
+  it.each(['branche://session', 'exp://192.168.1.2:8081/--/session', 'exp://10.0.0.5:8081/--/session', 'http://localhost:8081/session'])(
+    'accepte la returnUrl %s (défauts)',
     async (returnUrl) => {
       ({ app } = await makeApp());
       expect((await createSession(app, { returnUrl })).statusCode).toBe(201);
     },
   );
+
+  it('production : seul le site configuré est accepté', async () => {
+    ({ app } = await makeApp({ ALLOWED_RETURN_PREFIXES: 'branche://,https://monorg.github.io/branche/app/' }));
+    expect((await createSession(app, { returnUrl: 'https://monorg.github.io/branche/app/session' })).statusCode).toBe(201);
+    expect((await createSession(app, { returnUrl: 'https://autre.github.io/branche/app/session' })).statusCode).toBe(400);
+    expect((await createSession(app, { returnUrl: 'exp://192.168.1.2:8081/--/session' })).statusCode).toBe(400);
+  });
 
   it('valide le corps (champ manquant, champ inconnu, type)', async () => {
     ({ app } = await makeApp());

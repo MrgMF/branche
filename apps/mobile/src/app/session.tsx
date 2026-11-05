@@ -88,16 +88,21 @@ export default function SessionScreen() {
       {s ? (
         <>
           <View style={styles.ring} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(pct * 100) }}>
-            <Text style={styles.big}>{s.status === 'completed' ? euros(s.totalCents) : kwh(s.energyWh)}</Text>
+            <Text style={styles.big}>{s.status === 'completed' ? euros(s.totalCents) : s.status === 'cancelled' || s.status === 'failed' ? '0,00 €' : kwh(s.energyWh)}</Text>
             <Text style={styles.state}>{statusText[s.status]}</Text>
-            <View style={styles.bar}>
-              <View style={[styles.barFill, { width: `${Math.round(pct * 100)}%` }]} />
-            </View>
-            <Text style={styles.muted}>
-              {euros(s.totalCents)} sur {euros(s.preauthCents)} pré-autorisés
-            </Text>
+            {ACTIVE.has(s.status) || s.status === 'completed' ? (
+              <>
+                <View style={styles.bar}>
+                  <View style={[styles.barFill, { width: `${Math.round(pct * 100)}%` }]} />
+                </View>
+                <Text style={styles.muted}>
+                  {euros(s.totalCents)} sur {euros(s.preauthCents)} pré-autorisés
+                </Text>
+              </>
+            ) : null}
           </View>
 
+          {s.status === 'cancelled' || s.status === 'failed' ? null : (
           <View style={styles.stats}>
             {s.status === 'completed' ? (
               <Stat dark label="Durée" value={duration(s.startedAt, s.endedAt)} />
@@ -107,6 +112,7 @@ export default function SessionScreen() {
             <Stat dark label="Coût énergie" value={euros(s.costCents)} />
             <Stat dark label="Frais Branché" value={euros(s.feeCents)} />
           </View>
+          )}
 
           {s.status === 'awaiting_payment' ? (
             <View style={{ gap: 10 }}>

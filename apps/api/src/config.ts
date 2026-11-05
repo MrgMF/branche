@@ -21,8 +21,12 @@ export interface Config {
   checkoutTtlMs: number;
 }
 
-export const DEFAULT_RETURN_PREFIXES =
-  'branche://,exp://,exps://,http://localhost,http://127.0.0.1,https://*.github.io';
+/**
+ * Défaut sûr : app installée (branche://) et développement local.
+ * En production, fixer ALLOWED_RETURN_PREFIXES (ex. « branche://,https://<owner>.github.io/branche/app/ »).
+ * « exp://LAN » autorise Expo Go sur une IP de réseau privé uniquement (tests sur téléphone).
+ */
+export const DEFAULT_RETURN_PREFIXES = 'branche://,http://localhost,http://127.0.0.1,exp://LAN';
 
 type Env = Record<string, string | undefined>;
 

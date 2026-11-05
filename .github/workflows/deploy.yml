@@ -23,6 +23,8 @@ jobs:
       REPO: ${{ github.event.repository.name }}
       OWNER: ${{ github.repository_owner }}
       API_URL: ${{ vars.API_URL }}
+      EDITEUR_NOM: ${{ vars.EDITEUR_NOM }}
+      CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,7 +34,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - name: Tuiles IRVE (base nationale data.gouv.fr)
-        run: npm run data -- --out dist/data
+        run: npm run build -w pipeline -- --out dist/data
       - name: Export web de l'app
         working-directory: apps/mobile
         run: npx expo export -p web

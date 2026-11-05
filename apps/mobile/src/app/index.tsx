@@ -1,13 +1,13 @@
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapView, type MapHandle } from '../components/MapView';
 import type { MapOut } from '../components/mapHtml';
 import { StationDetail } from '../components/StationDetail';
 import { Chip, Notice } from '../components/ui';
-import { apiEnabled, getConfig, type ApiConfig } from '../lib/api';
+import { apiEnabled, getConfigWithRetry, type ApiConfig } from '../lib/api';
 import { DEFAULT_CENTER } from '../lib/config';
 import { km, kw, minutes, PLUG_LABEL } from '../lib/format';
 import { applyFilters, displayName, distanceKm, loadAround, nearest, NO_FILTERS, type Filters, type Station } from '../lib/stations';
@@ -18,7 +18,8 @@ type LocState = 'pending' | 'granted' | 'denied';
 
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
+  const wide = width >= 768;
   const map = useRef<MapHandle>(null);
   const [mapReady, setMapReady] = useState(false);
   const [loc, setLoc] = useState<LocState>('pending');
@@ -31,13 +32,32 @@ export default function MapScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [api, setApi] = useState<ApiConfig | null>(null);
   const [apiError, setApiError] = useState(false);
+  const [apiLoading, setApiLoading] = useState(apiEnabled());
   const loadedFor = useRef<string>('');
 
   // Configuration du paiement
   useEffect(() => {
     if (!apiEnabled()) return;
-    getConfig().then(setApi).catch(() => setApiError(true));
+    getConfigWithRetry()
+      .then(setApi)
+      .catch(() => setApiError(true))
+      .finally(() => setApiLoading(false));
   }, []);
+
+  // Retour arrière (Android) et Échap (web) ferment la fiche au lieu de quitter l'app
+  useEffect(() => {
+    if (!selectedId) return;
+    if (Platform.OS === 'web') {
+      const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setSelectedId(null);
+      window.addEventListener('keydown', onKey);
+      return () => window.removeEventListener('keydown', onKey);
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSelectedId(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [selectedId]);
 
   // Localisation
   useEffect(() => {
@@ -140,7 +160,7 @@ export default function MapScreen() {
       <MapView ref={map} onMessage={onMap} />
 
       <View style={[styles.top, { paddingTop: insets.top + 10 }]} pointerEvents="box-none">
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityLabel="Filtres">
+        <ScrollView horizontal style={{ flex: 1 }} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityLabel="Filtres">
           <Chip label="Rapide ≥ 50 kW" active={filters.fast} onPress={() => toggle('fast')} />
           <Chip label="CCS" active={filters.ccs} onPress={() => toggle('ccs')} />
           <Chip label="Type 2" active={filters.t2} onPress={() => toggle('t2')} />
@@ -162,7 +182,7 @@ export default function MapScreen() {
         </Pressable>
       ) : null}
 
-      <View style={[styles.sheet, { maxHeight: sheetMax, paddingBottom: insets.bottom + 12 }]}>
+      <View style={[styles.sheet, wide && styles.sheetWide, { maxHeight: sheetMax, paddingBottom: insets.bottom + 12 }]}>
         <View style={styles.grip} />
         <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 8 }} keyboardShouldPersistTaps="handled">
           {selected ? (
@@ -171,6 +191,7 @@ export default function MapScreen() {
               distance={user ? distanceKm(user, selected) : null}
               api={api}
               apiError={apiError}
+              apiLoading={apiLoading}
               onClose={() => setSelectedId(null)}
             />
           ) : (
@@ -258,6 +279,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     elevation: 12,
   },
+  sheetWide: { right: undefined, width: 440, left: 16, bottom: 16, borderRadius: radius.xl },
   grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: '#C9D3D0', marginBottom: 10 },
   h1: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   loading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },

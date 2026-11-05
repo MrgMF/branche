@@ -33,11 +33,23 @@ export interface ApiConfig {
 
 export const apiEnabled = () => API_URL.length > 0;
 
+const TIMEOUT_MS = 15000;
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...init,
+      signal: ctrl.signal,
+      headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
+    });
+  } catch {
+    throw new Error('Connexion au service de paiement impossible. Vérifiez votre réseau puis réessayez.');
+  } finally {
+    clearTimeout(timer);
+  }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = (body as { error?: { message?: string } })?.error?.message ?? `Erreur ${res.status}`;
@@ -47,6 +59,20 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const getConfig = () => call<ApiConfig>('/v1/config');
+
+/** Le service gratuit peut mettre jusqu'à ~50 s à se réveiller : plusieurs essais espacés. */
+export async function getConfigWithRetry(delays = [0, 4000, 10000, 20000]): Promise<ApiConfig> {
+  let last: unknown;
+  for (const d of delays) {
+    if (d) await new Promise((r) => setTimeout(r, d));
+    try {
+      return await getConfig();
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last;
+}
 export const createSession = (input: { stationId: string; stationName: string; pdcId?: string; returnUrl: string }) =>
   call<Session>('/v1/sessions', { method: 'POST', body: JSON.stringify(input) });
 export const getSession = (id: string) => call<Session>(`/v1/sessions/${encodeURIComponent(id)}`);
