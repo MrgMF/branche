@@ -15,6 +15,10 @@ import { mockCheckoutRoutes } from './routes/mockCheckout.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { webhookRoutes } from './routes/webhook.js';
 import { navigationRoutes } from './routes/navigation.js';
+import { searchRoutes } from './routes/search.js';
+import { buildSearch, type SearchProvider } from './search/service.js';
+import { checkinRoutes } from './routes/checkins.js';
+import { CheckinStore } from './checkins/store.js';
 import { IncidentService, ReportStore } from './incidents/service.js';
 import { TomTomRouteProvider, ValhallaRouteProvider, type RouteProvider } from './navigation/route.js';
 import { reqSerializer } from './lib/logRedact.js';
@@ -34,6 +38,7 @@ export interface AppDeps {
   /** fetch injectable (tests : fixtures, aucun appel réseau). */
   fetch?: FetchLike;
   router?: RouteProvider;
+  search?: SearchProvider | null;
 }
 
 function buildRouter(config: Config, fetchFn: FetchLike): RouteProvider | null {
@@ -158,6 +163,10 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
     );
   }
   await app.register(async (scope) => navigationRoutes(scope, { router, incidents, reports }));
+  await app.register(async (scope) => searchRoutes(scope, { search: deps.search ?? buildSearch(config, fetchFn) }));
+  // Retours de recharge anonymes (fiabilité et prix constatés par la communauté) — docs/api-contract-v2.md
+  const checkins = new CheckinStore(now);
+  await app.register(async (scope) => checkinRoutes(scope, { checkins }));
 
   return app;
 }

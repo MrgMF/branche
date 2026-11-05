@@ -31,6 +31,8 @@ export interface Config {
   reportsDisabled: ReportsDisabledZone[];
   /** Flux DATEX II Bison Futé (événements RRN non concédé). */
   incidentsUrl: string;
+  /** Photon (recherche d'adresse sans clé TomTom). null = désactivé (PHOTON_URL=off). */
+  photonUrl: string | null;
 }
 
 export interface ReportsDisabledZone {
@@ -66,6 +68,8 @@ export function parseReportsDisabled(raw: string | undefined): ReportsDisabledZo
 
 export const DEFAULT_VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
 export const DEFAULT_INCIDENTS_URL = 'https://www.data.gouv.fr/api/1/datasets/r/d16c8cb6-0123-44e7-b8b1-f99fc6a59497';
+/** Recherche d'adresse sans clé (données OSM). Usage raisonnable toléré par komoot ; « off » désactive. */
+export const DEFAULT_PHOTON_URL = 'https://photon.komoot.io/api/';
 
 function httpUrl(env: Env, name: string, def: string): string {
   const raw = env[name]?.trim() || def;
@@ -179,5 +183,6 @@ export function loadConfig(env: Env = process.env): Config {
     production,
     reportsDisabled: parseReportsDisabled(env.REPORTS_DISABLED),
     incidentsUrl: httpUrl(env, 'INCIDENTS_URL', DEFAULT_INCIDENTS_URL),
+    photonUrl: env.PHOTON_URL?.trim() === 'off' ? null : httpUrl(env, 'PHOTON_URL', DEFAULT_PHOTON_URL),
   };
 }

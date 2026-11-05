@@ -22,12 +22,30 @@ const point = {
   properties: { lat: { type: 'number' }, lon: { type: 'number' } },
 } as const;
 
+export const MAX_VIA = 3;
+
 const routeBody = {
   type: 'object',
   required: ['from', 'to'],
   additionalProperties: false,
-  properties: { from: point, to: point },
+  properties: {
+    from: point,
+    to: point,
+    via: { type: 'array', maxItems: MAX_VIA, items: point },
+    options: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { avoidTolls: { type: 'boolean' }, avoidMotorways: { type: 'boolean' } },
+    },
+  },
 } as const;
+
+interface RouteBody {
+  from: LatLon;
+  to: LatLon;
+  via?: LatLon[];
+  options?: { avoidTolls?: boolean; avoidMotorways?: boolean };
+}
 
 const reportBody = {
   type: 'object',
@@ -57,7 +75,7 @@ export async function navigationRoutes(app: FastifyInstance, deps: NavigationDep
     );
   });
 
-  app.post<{ Body: { from: LatLon; to: LatLon } }>(
+  app.post<{ Body: RouteBody }>(
     '/v1/route',
     { schema: { body: routeBody }, config: { rateLimit: { max: 20, timeWindow: 60_000, keyGenerator: hashedIp } } },
     async (req, reply) => {
@@ -66,16 +84,24 @@ export async function navigationRoutes(app: FastifyInstance, deps: NavigationDep
         throw new AppError(503, 'routing_unavailable', 'Le calcul d’itinéraire n’est pas disponible sur ce serveur pour le moment.');
       }
       const { from, to } = req.body;
+      const via = req.body.via ?? [];
+      const options = { avoidTolls: req.body.options?.avoidTolls === true, avoidMotorways: req.body.options?.avoidMotorways === true };
       validPoint(from, 'départ');
       validPoint(to, 'arrivée');
-      if (zoneOf(from) !== zoneOf(to)) throw badRequest('out_of_area', 'Le départ et l’arrivée doivent être dans le même territoire.');
+      via.forEach((v) => validPoint(v, 'étape'));
+      const zone = zoneOf(from);
+      if (zoneOf(to) !== zone || via.some((v) => zoneOf(v) !== zone)) {
+        throw badRequest('out_of_area', 'Le départ, les étapes et l’arrivée doivent être dans le même territoire.');
+      }
       const d = haversineM(from, to);
-      if (d > MAX_ROUTE_KM * 1000) throw badRequest('too_far', `Trajet trop long : ${MAX_ROUTE_KM} km maximum à vol d’oiseau.`);
+      const pts = [from, ...via, to];
+      const legs = pts.slice(1).reduce((acc, p, i) => acc + haversineM(pts[i]!, p), 0);
+      if (Math.max(d, legs) > MAX_ROUTE_KM * 1000) throw badRequest('too_far', `Trajet trop long : ${MAX_ROUTE_KM} km maximum à vol d’oiseau.`);
       if (d < 10) throw badRequest('same_point', 'Le départ et l’arrivée sont identiques.');
       // Pas de cache partagé : les conditions TomTom l'interdisent ; réponse privée et non stockée.
       reply.header('cache-control', 'no-store');
       try {
-        return await router.route(from, to);
+        return await router.route({ from, to, via, options });
       } catch (err) {
         if (err instanceof RouteProviderError) {
           req.log.warn({ provider: err.provider, reason: err.reason }, 'échec du fournisseur d’itinéraire');

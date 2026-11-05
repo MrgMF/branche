@@ -1,0 +1,493 @@
+{
+ "formatVersion": "0.0.12",
+ "routes": [
+  {
+   "summary": {
+    "lengthInMeters": 17244,
+    "travelTimeInSeconds": 1900,
+    "trafficDelayInSeconds": 420,
+    "trafficLengthInMeters": 800,
+    "departureTime": "2026-11-05T13:00:00+01:00",
+    "arrivalTime": "2026-11-05T13:35:00+01:00"
+   },
+   "legs": [
+    {
+     "summary": {
+      "lengthInMeters": 17244,
+      "travelTimeInSeconds": 1900
+     },
+     "points": [
+      {
+       "latitude": 48.858,
+       "longitude": 2.347
+      },
+      {
+       "latitude": 48.8609,
+       "longitude": 2.3204
+      },
+      {
+       "latitude": 48.8483,
+       "longitude": 2.2741
+      },
+      {
+       "latitude": 48.8442,
+       "longitude": 2.2546
+      },
+      {
+       "latitude": 48.8049,
+       "longitude": 2.1301
+      }
+     ]
+    }
+   ],
+   "sections": [
+    {
+     "startPointIndex": 0,
+     "endPointIndex": 4,
+     "sectionType": "TRAVEL_MODE",
+     "travelMode": "car"
+    },
+    {
+     "startPointIndex": 1,
+     "endPointIndex": 2,
+     "sectionType": "TRAFFIC",
+     "simpleCategory": "SLOW_TRAFFIC",
+     "effectiveSpeedInKmh": 30,
+     "delayInSeconds": 420,
+     "magnitudeOfDelay": 2
+    }
+   ],
+   "guidance": {
+    "instructions": [
+     {
+      "routeOffsetInMeters": 0,
+      "travelTimeInSeconds": 0,
+      "point": {
+       "latitude": 48.858,
+       "longitude": 2.347
+      },
+      "pointIndex": 0,
+      "instructionType": "LOCATION_DEPARTURE",
+      "maneuver": "DEPART",
+      "street": "Quai de la Mégisserie",
+      "message": "Partez de <street>Quai de la Mégisserie</street>"
+     },
+     {
+      "routeOffsetInMeters": 1972,
+      "travelTimeInSeconds": 100,
+      "point": {
+       "latitude": 48.8609,
+       "longitude": 2.3204
+      },
+      "pointIndex": 1,
+      "instructionType": "TURN",
+      "maneuver": "BEAR_LEFT",
+      "street": "Avenue de Versailles",
+      "message": "Serrez à gauche sur <street>Avenue de Versailles</street>"
+     },
+     {
+      "routeOffsetInMeters": 17244,
+      "travelTimeInSeconds": 1900,
+      "point": {
+       "latitude": 48.8049,
+       "longitude": 2.1301
+      },
+      "pointIndex": 4,
+      "instructionType": "LOCATION_ARRIVAL",
+      "maneuver": "ARRIVE_RIGHT",
+      "message": "Vous êtes arrivé à destination, sur votre droite"
+     }
+    ]
+   }
+  },
+  {
+   "summary": {
+    "lengthInMeters": 17371,
+    "travelTimeInSeconds": 1720,
+    "trafficDelayInSeconds": 240,
+    "trafficLengthInMeters": 2100,
+    "departureTime": "2026-11-05T13:00:00+01:00",
+    "arrivalTime": "2026-11-05T13:28:40+01:00",
+    "noTrafficTravelTimeInSeconds": 1480,
+    "historicTrafficTravelTimeInSeconds": 1700,
+    "liveTrafficIncidentsTravelTimeInSeconds": 1720
+   },
+   "legs": [
+    {
+     "summary": {
+      "lengthInMeters": 17371,
+      "travelTimeInSeconds": 1720
+     },
+     "points": [
+      {
+       "latitude": 48.858,
+       "longitude": 2.347
+      },
+      {
+       "latitude": 48.8566,
+       "longitude": 2.3412
+      },
+      {
+       "latitude": 48.8531,
+       "longitude": 2.3301
+      },
+      {
+       "latitude": 48.8502,
+       "longitude": 2.3215
+      },
+      {
+       "latitude": 48.8455,
+       "longitude": 2.3108
+      },
+      {
+       "latitude": 48.8462,
+       "longitude": 2.2861
+      },
+      {
+       "latitude": 48.8442,
+       "longitude": 2.2546
+      },
+      {
+       "latitude": 48.8301,
+       "longitude": 2.2316
+      },
+      {
+       "latitude": 48.8183,
+       "longitude": 2.1802
+      },
+      {
+       "latitude": 48.8049,
+       "longitude": 2.1301
+      }
+     ]
+    }
+   ],
+   "sections": [
+    {
+     "startPointIndex": 0,
+     "endPointIndex": 9,
+     "sectionType": "TRAVEL_MODE",
+     "travelMode": "car"
+    },
+    {
+     "startPointIndex": 2,
+     "endPointIndex": 4,
+     "sectionType": "TRAFFIC",
+     "simpleCategory": "JAM",
+     "effectiveSpeedInKmh": 18,
+     "delayInSeconds": 158,
+     "magnitudeOfDelay": 3,
+     "tec": {
+      "effectCode": 4,
+      "causes": [
+       {
+        "mainCauseCode": 1
+       }
+      ]
+     }
+    },
+    {
+     "startPointIndex": 6,
+     "endPointIndex": 7,
+     "sectionType": "TRAFFIC",
+     "simpleCategory": "ROAD_WORK",
+     "effectiveSpeedInKmh": 45,
+     "delayInSeconds": 82,
+     "magnitudeOfDelay": 1,
+     "tec": {
+      "effectCode": 4,
+      "causes": [
+       {
+        "mainCauseCode": 9
+       }
+      ]
+     }
+    },
+    {
+     "startPointIndex": 5,
+     "endPointIndex": 8,
+     "sectionType": "MOTORWAY"
+    },
+    {
+     "startPointIndex": 6,
+     "endPointIndex": 7,
+     "sectionType": "TOLL",
+     "tollPaymentTypes": [
+      "CREDIT_CARD",
+      "ETC_TRANSPONDER"
+     ]
+    },
+    {
+     "startPointIndex": 0,
+     "endPointIndex": 4,
+     "sectionType": "SPEED_LIMIT",
+     "maxSpeedLimitInKmh": 50
+    },
+    {
+     "startPointIndex": 4,
+     "endPointIndex": 5,
+     "sectionType": "SPEED_LIMIT",
+     "maxSpeedLimitInKmh": 70
+    },
+    {
+     "startPointIndex": 5,
+     "endPointIndex": 8,
+     "sectionType": "SPEED_LIMIT",
+     "maxSpeedLimitInKmh": 110
+    },
+    {
+     "startPointIndex": 8,
+     "endPointIndex": 9,
+     "sectionType": "SPEED_LIMIT",
+     "maxSpeedLimitInKmh": 50
+    },
+    {
+     "startPointIndex": 7,
+     "endPointIndex": 8,
+     "sectionType": "LANES",
+     "lanes": [
+      {
+       "directions": [
+        "STRAIGHT"
+       ]
+      },
+      {
+       "directions": [
+        "STRAIGHT"
+       ]
+      },
+      {
+       "directions": [
+        "SLIGHT_RIGHT"
+       ],
+       "follow": "SLIGHT_RIGHT"
+      }
+     ],
+     "laneSeparators": [
+      "SINGLE_SOLID",
+      "LONG_DASHED",
+      "LONG_DASHED",
+      "SINGLE_SOLID"
+     ]
+    }
+   ],
+   "guidance": {
+    "instructions": [
+     {
+      "routeOffsetInMeters": 0,
+      "travelTimeInSeconds": 0,
+      "point": {
+       "latitude": 48.858,
+       "longitude": 2.347
+      },
+      "pointIndex": 0,
+      "instructionType": "LOCATION_DEPARTURE",
+      "drivingSide": "RIGHT",
+      "possibleCombineWithNext": false,
+      "maneuver": "DEPART",
+      "message": "Partez de <street>Quai de la Mégisserie</street>",
+      "countryCode": "FRA",
+      "street": "Quai de la Mégisserie"
+     },
+     {
+      "routeOffsetInMeters": 452,
+      "travelTimeInSeconds": 40,
+      "point": {
+       "latitude": 48.8566,
+       "longitude": 2.3412
+      },
+      "pointIndex": 1,
+      "instructionType": "TURN",
+      "drivingSide": "RIGHT",
+      "possibleCombineWithNext": false,
+      "maneuver": "TURN_RIGHT",
+      "message": "Tournez à droite sur <street>Rue de Rivoli</street>",
+      "countryCode": "FRA",
+      "street": "Rue de Rivoli",
+      "junctionType": "REGULAR",
+      "turnAngleInDecimalDegrees": 90
+     },
+     {
+      "routeOffsetInMeters": 2060,
+      "travelTimeInSeconds": 182,
+      "point": {
+       "latitude": 48.8502,
+       "longitude": 2.3215
+      },
+      "pointIndex": 3,
+      "instructionType": "TURN",
+      "drivingSide": "RIGHT",
+      "possibleCombineWithNext": false,
+      "maneuver": "ROUNDABOUT_RIGHT",
+      "message": "Au rond-point, prenez la <roundaboutExitNumber>2e</roundaboutExitNumber> sortie sur <street>Avenue de Suffren</street>",
+      "countryCode": "FRA",
+      "street": "Avenue de Suffren",
+      "junctionType": "ROUNDABOUT",
+      "roundaboutExitNumber": 2,
+      "turnAngleInDecimalDegrees": 80
+     },
+     {
+      "routeOffsetInMeters": 4810,
+      "travelTimeInSeconds": 426,
+      "point": {
+       "latitude": 48.8462,
+       "longitude": 2.2861
+      },
+      "pointIndex": 5,
+      "instructionType": "ROAD_CHANGE",
+      "drivingSide": "RIGHT",
+      "possibleCombineWithNext": false,
+      "maneuver": "ENTER_MOTORWAY",
+      "message": "Prenez l'autoroute <roadNumber>A13</roadNumber> vers <signpostText>Rouen</signpostText>",
+      "countryCode": "FRA",
+      "roadNumbers": [
+       "A13",
+       "E5"
+      ],
+      "signpostText": "Rouen"
+     },
+     {
+      "routeOffsetInMeters": 13411,
+      "travelTimeInSeconds": 1187,
+      "point": {
+       "latitude": 48.8183,
+       "longitude": 2.1802
+      },
+      "pointIndex": 8,
+      "instructionType": "ROAD_CHANGE",
+      "drivingSide": "RIGHT",
+      "possibleCombineWithNext": false,
+      "maneuver": "MOTORWAY_EXIT_RIGHT",
+      "message": "Prenez la sortie <exitNumber>4</exitNumber> vers <signpostText>Versailles-Centre</signpostText>",
+      "countryCode": "FRA",
+      "exitNumber": "4",
+      "signpostText": "Versailles-Centre",
+      "roadNumbers": [
+       "D182"
+      ]
+     },
+     {
+      "routeOffsetInMeters": 17371,
+      "travelTimeInSeconds": 1537,
+      "point": {
+       "latitude": 48.8049,
+       "longitude": 2.1301
+      },
+      "pointIndex": 9,
+      "instructionType": "LOCATION_ARRIVAL",
+      "drivingSide": "RIGHT",
+      "possibleCombineWithNext": false,
+      "maneuver": "ARRIVE",
+      "message": "Vous êtes arrivé à destination",
+      "countryCode": "FRA"
+     }
+    ],
+    "instructionGroups": []
+   }
+  },
+  {
+   "summary": {
+    "lengthInMeters": 17519,
+    "travelTimeInSeconds": 2080,
+    "trafficDelayInSeconds": 300,
+    "trafficLengthInMeters": 800,
+    "departureTime": "2026-11-05T13:00:00+01:00",
+    "arrivalTime": "2026-11-05T13:35:00+01:00"
+   },
+   "legs": [
+    {
+     "summary": {
+      "lengthInMeters": 17519,
+      "travelTimeInSeconds": 2080
+     },
+     "points": [
+      {
+       "latitude": 48.858,
+       "longitude": 2.347
+      },
+      {
+       "latitude": 48.8461,
+       "longitude": 2.3398
+      },
+      {
+       "latitude": 48.8302,
+       "longitude": 2.2902
+      },
+      {
+       "latitude": 48.8187,
+       "longitude": 2.2101
+      },
+      {
+       "latitude": 48.8049,
+       "longitude": 2.1301
+      }
+     ]
+    }
+   ],
+   "sections": [
+    {
+     "startPointIndex": 0,
+     "endPointIndex": 4,
+     "sectionType": "TRAVEL_MODE",
+     "travelMode": "car"
+    },
+    {
+     "startPointIndex": 1,
+     "endPointIndex": 2,
+     "sectionType": "TRAFFIC",
+     "simpleCategory": "SLOW_TRAFFIC",
+     "effectiveSpeedInKmh": 30,
+     "delayInSeconds": 300,
+     "magnitudeOfDelay": 2
+    },
+    {
+     "startPointIndex": 2,
+     "endPointIndex": 3,
+     "sectionType": "TOLL"
+    }
+   ],
+   "guidance": {
+    "instructions": [
+     {
+      "routeOffsetInMeters": 0,
+      "travelTimeInSeconds": 0,
+      "point": {
+       "latitude": 48.858,
+       "longitude": 2.347
+      },
+      "pointIndex": 0,
+      "instructionType": "LOCATION_DEPARTURE",
+      "maneuver": "DEPART",
+      "street": "Quai de la Mégisserie",
+      "message": "Partez de <street>Quai de la Mégisserie</street>"
+     },
+     {
+      "routeOffsetInMeters": 1424,
+      "travelTimeInSeconds": 100,
+      "point": {
+       "latitude": 48.8461,
+       "longitude": 2.3398
+      },
+      "pointIndex": 1,
+      "instructionType": "TURN",
+      "maneuver": "BEAR_LEFT",
+      "street": "Avenue de Versailles",
+      "message": "Serrez à gauche sur <street>Avenue de Versailles</street>"
+     },
+     {
+      "routeOffsetInMeters": 17519,
+      "travelTimeInSeconds": 2080,
+      "point": {
+       "latitude": 48.8049,
+       "longitude": 2.1301
+      },
+      "pointIndex": 4,
+      "instructionType": "LOCATION_ARRIVAL",
+      "maneuver": "ARRIVE_RIGHT",
+      "message": "Vous êtes arrivé à destination, sur votre droite"
+     }
+    ]
+   }
+  }
+ ]
+}

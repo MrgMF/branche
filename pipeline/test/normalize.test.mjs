@@ -51,3 +51,46 @@ test('agrégation par station, dédoublonnage des points', () => {
   assert.equal(t.acc, undefined);
   assert.equal(t.pdc.length, 2);
 });
+
+test('points : id, puissance et prises PAR point (affichage et compatibilité véhicule)', () => {
+  const a = createAggregator();
+  a.add(row({ id_pdc_itinerance: 'FR*AAA*E1', prise_type_2: 'True', puissance_nominale: '22', cable_t2_attache: 'False' }));
+  a.add(row({ id_pdc_itinerance: 'FR*AAA*E2', prise_type_2: 'False', prise_type_combo_ccs: 'True', prise_type_chademo: 'True', puissance_nominale: '150000' }));
+  a.add(row({ id_pdc_itinerance: 'FR*AAA*E3', prise_type_2: 'False', prise_type_ef: 'True', puissance_nominale: '3.7', cable_t2_attache: 'True' }));
+  const s = a.stations.get('FRAAAP1');
+  assert.deepEqual(s.pdc, [
+    ['FR*AAA*E1', 22, ['t2']],
+    ['FR*AAA*E2', 150, ['ccs', 'chademo']],
+    ['FR*AAA*E3', 3.7, ['ef']],
+  ]);
+  assert.equal(s.cab, true);
+  const t = [...toTiles(a.stations).values()][0][0];
+  assert.deepEqual(t.pdc[1], ['FR*AAA*E2', 150, ['ccs', 'chademo']]);
+  assert.equal(t.extra, undefined);
+});
+
+test('tarification conservée jusqu’à 300 caractères (analyse du prix dans l’app)', () => {
+  const a = createAggregator();
+  const long = 'entre 08:00 et 20:00 : 0.30916667€ par kwh de charge, 3.75€ par heure d’occupation hors charge, '.repeat(4);
+  a.add(row({ tarification: long }));
+  assert.equal(a.stations.get('FRAAAP1').prix.length, 300);
+});
+
+test('index EVSE : seau stable, points au-delà de MAX_PDC retrouvés avec leur station', async () => {
+  const { evseIndex, evseBucket, normId, MAX_PDC } = await import('../src/normalize.mjs');
+  // Vecteurs partagés avec apps/mobile/src/lib/evse.test.ts
+  assert.equal(evseBucket('FR*TST*E0001'), evseBucket('frtste0001'));
+  assert.equal(evseBucket('FRTSTE0001'), '2c');
+  assert.equal(evseBucket('FR*S61*E123'), '56');
+  assert.equal(normId('fr*abc* e1'), 'FRABCE1');
+  const a = createAggregator();
+  for (let i = 1; i <= MAX_PDC + 2; i++) a.add(row({ id_pdc_itinerance: `FRAAAE${i}` }));
+  const s = a.stations.get('FRAAAP1');
+  assert.equal(s.pdc.length, MAX_PDC);
+  assert.equal(s.p, MAX_PDC + 2);
+  const idx = evseIndex(a.stations);
+  const look = (id) => idx.get(evseBucket(id))?.[normId(id)];
+  assert.equal(look('FRAAAP1'), '195_9');
+  assert.equal(look('FR*AAA*E1'), '195_9');
+  assert.equal(look(`FRAAAE${MAX_PDC + 2}`), '195_9|FRAAAP1');
+});

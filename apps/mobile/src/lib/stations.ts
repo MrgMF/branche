@@ -22,8 +22,9 @@ export interface Station {
   h?: string;
   pmr?: string;
   maj?: string;
-  pdc?: [string, number][];
+  pdc?: [string, number, Plug[]?][]; // [id_pdc_itinerance, kW, prises du point (V2)]
   ok?: string; // clé opérateur (registre)
+  cab?: boolean; // câble Type 2 attaché sur au moins un point
 }
 
 export interface Meta {

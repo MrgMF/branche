@@ -1,0 +1,117 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     2.3589,
+     48.85566
+    ]
+   },
+   "properties": {
+    "osm_type": "N",
+    "osm_id": 1,
+    "osm_key": "place",
+    "osm_value": "house",
+    "type": "house",
+    "housenumber": "10",
+    "street": "Rue de Rivoli",
+    "postcode": "75004",
+    "city": "Paris",
+    "district": "Quartier Saint-Merri",
+    "state": "Île-de-France",
+    "country": "France",
+    "countrycode": "FR"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     2.33656,
+     48.86209
+    ]
+   },
+   "properties": {
+    "osm_type": "W",
+    "osm_id": 2,
+    "osm_key": "highway",
+    "osm_value": "primary",
+    "type": "street",
+    "name": "Rue de Rivoli",
+    "postcode": "75001",
+    "city": "Paris",
+    "state": "Île-de-France",
+    "country": "France",
+    "countrycode": "FR"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     2.3376,
+     48.8606
+    ]
+   },
+   "properties": {
+    "osm_type": "W",
+    "osm_id": 3,
+    "osm_key": "tourism",
+    "osm_value": "museum",
+    "type": "house",
+    "name": "Musée du Louvre",
+    "street": "Rue de Rivoli",
+    "postcode": "75001",
+    "city": "Paris",
+    "country": "France",
+    "countrycode": "FR"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     2.29,
+     48.8
+    ]
+   },
+   "properties": {
+    "osm_type": "R",
+    "osm_id": 4,
+    "osm_key": "place",
+    "osm_value": "city",
+    "type": "city",
+    "name": "Antony",
+    "postcode": "92160",
+    "state": "Île-de-France",
+    "country": "France",
+    "countrycode": "FR"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     7.68,
+     45.07
+    ]
+   },
+   "properties": {
+    "osm_type": "W",
+    "osm_id": 5,
+    "type": "street",
+    "name": "Via Rivoli",
+    "city": "Torino",
+    "country": "Italia",
+    "countrycode": "IT"
+   }
+  }
+ ]
+}

@@ -4,6 +4,8 @@
 import { createOperatorRegistry, operatorKey } from './operators.mjs';
 
 export const TILE_SIZE = 0.25; // degrés
+export const MAX_PDC = 24; // points détaillés par station dans les tuiles
+export const EVSE_BUCKETS = 256;
 
 const first = (row, ...keys) => {
   for (const k of keys) {
@@ -89,7 +91,7 @@ export function createAggregator() {
         c: [],
         pay: [],
         free: bool(first(row, 'gratuit')),
-        prix: clean(first(row, 'tarification'), 160),
+        prix: clean(first(row, 'tarification'), 300),
         acc: first(row, 'condition_acces') === 'Accès réservé' ? 'reserve' : 'libre',
         h: clean(first(row, 'horaires'), 80),
         pmr: clean(first(row, 'accessibilite_pmr'), 40),
@@ -106,7 +108,10 @@ export function createAggregator() {
     const plugs = [
       ['ccs', 'prise_type_combo_ccs'], ['t2', 'prise_type_2'], ['chademo', 'prise_type_chademo'], ['ef', 'prise_type_ef'],
     ];
-    for (const [code, col] of plugs) if (bool(row[col]) && !s.c.includes(code)) s.c.push(code);
+    // Prises de CE point (affichées par point dans l'app, filtrées selon le véhicule)
+    const rowPlugs = plugs.filter(([, col]) => bool(row[col])).map(([code]) => code);
+    for (const code of rowPlugs) if (!s.c.includes(code)) s.c.push(code);
+    if (bool(row.cable_t2_attache)) s.cab = true;
     const pay = new Set(s.pay);
     if (bool(first(row, 'paiement_cb'))) pay.add('cb');
     if (bool(first(row, 'cb_sans_contact'))) pay.add('sans_contact');
@@ -114,7 +119,11 @@ export function createAggregator() {
     for (const m of adHocMethods(row)) pay.add(m);
     if (bool(first(row, 'paiement_autre')) || bool(first(row, 'abonnement'))) pay.add('badge');
     s.pay = [...pay];
-    if (pdcId && s.pdc.length < 12) s.pdc.push([pdcId, kw]);
+    // Point : [id_pdc_itinerance, puissance kW, prises] ; au-delà de MAX_PDC, seul l'index EVSE le connaît.
+    if (pdcId) {
+      if (s.pdc.length < MAX_PDC) s.pdc.push([pdcId, kw, rowPlugs]);
+      else (s.extra ??= []).push(pdcId);
+    }
   }
 
   function stats() { return { rows, skipped, stations: stations.size, pdc: [...stations.values()].reduce((t, s) => t + s.p, 0) }; }
@@ -130,10 +139,46 @@ export function toTiles(stations) {
     if (!tiles.has(k)) tiles.set(k, []);
     const out = { ...s };
     for (const f of ['tel', 'prix', 'h', 'pmr', 'maj', 'a', 'o', 'ok']) if (!out[f]) delete out[f];
+    delete out.extra;
     if (!out.free) delete out.free;
+    if (!out.cab) delete out.cab;
     if (out.acc === 'libre') delete out.acc;
     if (!out.pdc.length) delete out.pdc;
     tiles.get(k).push(out);
   }
   return tiles;
+}
+
+/** Identifiant normalisé pour la recherche : majuscules, sans « * » ni espaces. */
+export const normId = (id) => String(id).toUpperCase().replace(/[*\s]/g, '');
+
+/** Seau d'index (FNV-1a 32 bits) — même calcul dans l'app (apps/mobile/src/lib/evse.ts). */
+export function evseBucket(id) {
+  let h = 0x811c9dc5;
+  const s = normId(id);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return (h % EVSE_BUCKETS).toString(16).padStart(2, '0');
+}
+
+/**
+ * Index « identifiant de point ou de station → tuile » pour ouvrir une borne depuis un QR code ou un lien
+ * profond sans connaître la position. Valeur : clé de tuile, ou « tuile|id_station » pour un point absent de la tuile.
+ */
+export function evseIndex(stations) {
+  const buckets = new Map();
+  const put = (id, value) => {
+    const b = evseBucket(id);
+    if (!buckets.has(b)) buckets.set(b, {});
+    buckets.get(b)[normId(id)] = value;
+  };
+  for (const s of stations.values()) {
+    const k = tileKey(s.lat, s.lon);
+    put(s.id, k);
+    for (const [id] of s.pdc) put(id, k);
+    for (const id of s.extra ?? []) put(id, `${k}|${s.id}`);
+  }
+  return buckets;
 }
