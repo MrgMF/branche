@@ -14,13 +14,16 @@ import { AVAIL_LABEL, getAvailability, type AvailItem } from '../lib/availabilit
 import { clearPrepared, loadPrepared, savePrepared, type Prepared } from '../lib/prepared';
 import { durationLabel, estimateCharge, isDc } from '../lib/estimate';
 import { findStation, pointById, pointsOf, type ChargePoint } from '../lib/evse';
-import { euros, kw, PLUG_LABEL } from '../lib/format';
+import { euros, km, kw, PLUG_LABEL } from '../lib/format';
 import type { MethodId } from '../lib/history';
 import type { Operator } from '../lib/qr';
-import { displayName, loadOperators, type Station } from '../lib/stations';
+import { displayName, distanceKm, loadOperators, nearest, type Station } from '../lib/stations';
 import { store } from '../lib/store';
 import { parseTariff } from '../lib/tariff';
 import { compatible, loadVehicle, saveVehicle, type Vehicle } from '../lib/vehicle';
+import { loadWallet, type Wallet } from '../lib/accounts';
+import { appOnly } from '../lib/methods';
+import { loadPortals, type Portals } from '../lib/portals';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 
 const SKIP_KEY = 'branche.vehicle.skipped.v1';
@@ -40,6 +43,8 @@ export default function Recharger() {
   const [method, setMethod] = useState<MethodId | null>((params.method as MethodId) || null);
   const [showIncompatible, setShowIncompatible] = useState(false);
   const [avail, setAvail] = useState<Record<string, AvailItem>>({});
+  const [portals, setPortals] = useState<Portals>({});
+  const [wallet, setWallet] = useState<Wallet>({ accounts: [], badges: [] });
   const [prepared, setPrepared] = useState<Prepared | null>(null);
   const [savedPrep, setSavedPrep] = useState(false);
   const preparing = params.prepare === '1';
@@ -78,6 +83,8 @@ export default function Recharger() {
 
   useEffect(() => {
     loadOperators().then(setOps);
+    loadPortals().then(setPortals);
+    loadWallet().then(setWallet);
     loadVehicle().then((v) => {
       setVehicle(v);
       if (v && Date.now() - v.socUpdatedAt < SOC_FRESH_MS) setSoc(v.socPercent);
@@ -106,7 +113,16 @@ export default function Recharger() {
     () => (point ? estimateCharge({ vehicle: vehicle ?? null, socPercent: soc, pointKw: point.kw, plugs: point.plugs, tariff }) : null),
     [point, vehicle, soc, tariff],
   );
-  const options = useMemo(() => (station ? payOptions(station, point, ops) : []), [station, point, ops]);
+  const options = useMemo(() => (station ? payOptions(station, point, ops, { portals, wallet }) : []), [station, point, ops, portals, wallet]);
+  const portal = station?.ok ? portals[station.ok] : undefined;
+  const accountConnected = !!station?.ok && wallet.accounts.some((a) => a.operatorKey === station.ok);
+  // Rien de payable ici depuis Branché : alternative la plus proche qui l'est
+  const blocked = appOnly(options);
+  const alternative = useMemo(() => {
+    if (!blocked || !station) return null;
+    const near = nearest(store.stations().filter((x) => x.id !== station.id && x.acc !== 'reserve' && compatible(x.c, vehicle)), station, 30);
+    return near.find(({ s: x }) => !appOnly(payOptions(x, null, ops, { portals, wallet }).filter((o) => o.id !== 'scan' || x.pay.some((p) => p === 'qr_dynamique' || p === 'site_web' || p === 'acte')))) ?? null;
+  }, [blocked, station, ops, portals, wallet, vehicle]);
   // QR code sans lien de paiement (identifiant seul) : on recommande la méthode suivante
   const fallback = params.noLink ? options.find((o) => o.available && o.id !== 'scan') : undefined;
   const chosen: PayOption | undefined = options.find((o) => o.id === method && o.available) ?? fallback ?? options[0];
@@ -195,7 +211,7 @@ export default function Recharger() {
         <Text style={[styles.p, { textAlign: 'center' }]}>
           À votre arrivée à {displayName(station)}, Branché affichera « Payer maintenant » : un seul geste pour {chosen?.id === 'reader' ? 'le mode d’emploi du lecteur de carte' : 'ouvrir la bonne page de paiement'}.
         </Text>
-        <Notice>Rien n’est débité maintenant : vous payez à la borne, directement à {opName}. Le prépaiement et la réservation demandent un partenariat avec les opérateurs, pas encore en place.</Notice>
+        <Notice>Rien n’est débité maintenant : à l’arrivée, vous payez {opName} directement depuis Branché, en un geste.</Notice>
         <Button label="Retour à la carte" onPress={() => router.replace('/')} style={{ alignSelf: 'stretch' }} />
       </View>
     );
@@ -323,8 +339,27 @@ export default function Recharger() {
 
           {prepared && !preparing ? <Notice>Recharge préparée : point et méthode repris. Il ne reste qu’à payer.</Notice> : null}
           {params.noLink ? <Notice>Borne et point identifiés par le QR code. Il ne contient pas de lien de paiement : {fallback ? 'utilisez la méthode ci-dessous.' : 'cherchez un autre QR code ou le lecteur de carte sur la borne.'}</Notice> : null}
+          {blocked ? (
+            <View style={[styles.card, { borderColor: colors.busy }]}>
+              <Text style={styles.cardTitle} accessibilityRole="header">Pas de paiement possible ici depuis Branché</Text>
+              <Text style={styles.p}>
+                {opName} n’accepte que son application ou un badge d’abonnement{portal?.roamingBadgesAccepted?.length ? ` (${portal.roamingBadgesAccepted.join(', ')})` : ''}. Ajoutez votre badge dans « Mes comptes et badges » si vous en avez un.
+              </Text>
+              {alternative ? (
+                <Button
+                  label={`Borne payable la plus proche : ${displayName(alternative.s)} (${km(alternative.d)})`}
+                  variant="secondary"
+                  onPress={() => {
+                    store.setCurrent(alternative.s);
+                    router.replace({ pathname: '/recharger', params: { station: alternative.s.id } });
+                  }}
+                />
+              ) : null}
+              <Button label="Mes comptes et badges" variant="ghost" onPress={() => router.push('/comptes')} />
+            </View>
+          ) : null}
           {/* Méthode recommandée + mode d'emploi */}
-          {chosen ? (
+          {chosen && !blocked ? (
             <View style={[styles.card, styles.methodCard]}>
               <View style={styles.rowWrap}>
                 <Text style={[styles.cardTitle, { flexShrink: 1 }]} accessibilityRole="header">
@@ -348,6 +383,11 @@ export default function Recharger() {
             </View>
           ) : null}
 
+          {portal?.webPortal && !accountConnected ? (
+            <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/comptes', params: { op: station.ok } })} style={styles.link}>
+              <Text style={styles.linkText}>Vous avez un compte {opName} ? Connectez-le une fois dans Branché</Text>
+            </Pressable>
+          ) : null}
           <Text style={styles.h3}>Autres méthodes</Text>
           {options
             .filter((o) => o.id !== chosen?.id)
@@ -367,7 +407,7 @@ export default function Recharger() {
                     {o.why}
                   </Text>
                 </View>
-                {o.id === 'branche-card' ? <Tag>Bientôt</Tag> : !o.available ? <Tag>Indisponible</Tag> : <Text style={styles.linkText}>Choisir</Text>}
+                {!o.available ? <Tag>Indisponible</Tag> : <Text style={styles.linkText}>Choisir</Text>}
               </Pressable>
             ))}
           {station.tel ? (

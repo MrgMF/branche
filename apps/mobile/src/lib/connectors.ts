@@ -57,7 +57,7 @@ export async function openOperatorPayment(url: string, station: Station | null, 
 export function runPlan(station: Station, plan: ChargePlan, operatorName: string, url?: string) {
   store.setCurrent(station);
   store.setPlan(plan);
-  if (plan.method === 'reader') startReaderCharge(station, operatorName);
-  else if (plan.method === 'operator-link' && url) openOperatorPayment(url, station, operatorName);
+  if (plan.method === 'reader' || plan.method === 'badge') startReaderCharge(station, operatorName);
+  else if ((plan.method === 'operator-link' || plan.method === 'account') && url) openOperatorPayment(url, station, operatorName);
   else router.push({ pathname: '/payer', params: { from: 'recharger' } });
 }

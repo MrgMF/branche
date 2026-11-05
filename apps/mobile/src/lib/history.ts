@@ -1,13 +1,14 @@
 // Historique des recharges et dépenses — stocké uniquement sur l'appareil (AsyncStorage), jamais envoyé.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type MethodId = 'reader' | 'scan' | 'operator-link' | 'branche-card';
+export type MethodId = 'account' | 'scan' | 'operator-link' | 'reader' | 'badge';
 
 export const METHOD_LABEL: Record<MethodId, string> = {
   reader: 'Carte bancaire au lecteur',
   scan: 'Page de l’opérateur (QR code vérifié)',
   'operator-link': 'Page de l’opérateur (lien connu)',
-  'branche-card': 'Carte Branché',
+  account: 'Compte opérateur connecté',
+  badge: 'Badge de recharge',
 };
 
 export interface ChargeRecord {

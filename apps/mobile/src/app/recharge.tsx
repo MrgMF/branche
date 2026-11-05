@@ -254,10 +254,14 @@ export default function Recharge() {
         <>
           <View style={styles.ring}>
             <Text style={styles.stateBig} accessibilityRole="header">
-              {reader ? 'Payez sur le lecteur de la borne' : `Paiement chez ${d.operatorName}`}
+              {d.plan?.method === 'badge' ? 'Passez votre badge sur la borne' : d.plan?.method === 'account' ? `Démarrage avec votre compte ${d.operatorName}` : reader ? 'Payez sur le lecteur de la borne' : `Paiement chez ${d.operatorName}`}
             </Text>
             <Text style={styles.muted}>
-              {reader
+              {d.plan?.method === 'badge'
+                ? 'Suivez l’écran de la borne, puis branchez. Branché suit la recharge ici.'
+                : d.plan?.method === 'account'
+                  ? `Lancez la charge sur la page de ${d.operatorName}, branchez si ce n’est pas déjà fait, puis revenez ici.`
+                  : reader
                 ? `Suivez l’écran de la borne : carte bancaire${d.plan?.pdcId ? `, point …${d.plan.pdcId.slice(-4)}` : ''}, puis branchement. Branché suit la recharge ici.`
                 : `Finalisez le paiement sur la page de ${d.operatorName}, branchez si ce n’est pas déjà fait, puis revenez ici.`}
             </Text>
