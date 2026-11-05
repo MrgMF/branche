@@ -1,0 +1,281 @@
+{
+ "formatVersion": "0.0.12",
+ "routes": [
+  {
+   "summary": {
+    "lengthInMeters": 18200,
+    "travelTimeInSeconds": 1900,
+    "trafficDelayInSeconds": 420,
+    "trafficLengthInMeters": 0,
+    "departureTime": "2026-11-05T13:00:00+01:00",
+    "arrivalTime": "2026-11-05T13:30:00+01:00",
+    "noTrafficTravelTimeInSeconds": 1480,
+    "historicTrafficTravelTimeInSeconds": 1900,
+    "liveTrafficIncidentsTravelTimeInSeconds": 1900
+   },
+   "legs": [
+    {
+     "summary": {
+      "lengthInMeters": 18200,
+      "travelTimeInSeconds": 1900
+     },
+     "points": [
+      {
+       "latitude": 48.858,
+       "longitude": 2.347
+      },
+      {
+       "latitude": 48.8566,
+       "longitude": 2.3412
+      },
+      {
+       "latitude": 48.8462,
+       "longitude": 2.2861
+      },
+      {
+       "latitude": 48.8301,
+       "longitude": 2.2316
+      },
+      {
+       "latitude": 48.8049,
+       "longitude": 2.1301
+      }
+     ]
+    }
+   ],
+   "sections": [
+    {
+     "startPointIndex": 0,
+     "endPointIndex": 4,
+     "sectionType": "TRAVEL_MODE",
+     "travelMode": "car"
+    }
+   ],
+   "guidance": {
+    "instructions": [
+     {
+      "routeOffsetInMeters": 0,
+      "travelTimeInSeconds": 0,
+      "point": {
+       "latitude": 48.858,
+       "longitude": 2.347
+      },
+      "pointIndex": 0,
+      "instructionType": "LOCATION_DEPARTURE",
+      "street": "Quai de la Mégisserie",
+      "possibleCombineWithNext": false,
+      "drivingSide": "RIGHT",
+      "maneuver": "DEPART",
+      "message": "Partez de Quai de la Mégisserie (principal)"
+     },
+     {
+      "routeOffsetInMeters": 850,
+      "travelTimeInSeconds": 140,
+      "point": {
+       "latitude": 48.8566,
+       "longitude": 2.3412
+      },
+      "pointIndex": 1,
+      "instructionType": "TURN",
+      "street": "Avenue de Versailles",
+      "maneuver": "TURN_RIGHT",
+      "message": "Tournez à droite sur Avenue de Versailles"
+     },
+     {
+      "routeOffsetInMeters": 18200,
+      "travelTimeInSeconds": 1900,
+      "point": {
+       "latitude": 48.8049,
+       "longitude": 2.1301
+      },
+      "pointIndex": 4,
+      "instructionType": "LOCATION_ARRIVAL",
+      "maneuver": "ARRIVE",
+      "message": "Vous êtes arrivé à destination"
+     }
+    ],
+    "instructionGroups": []
+   }
+  },
+  {
+   "summary": {
+    "lengthInMeters": 19400,
+    "travelTimeInSeconds": 1720,
+    "trafficDelayInSeconds": 60,
+    "trafficLengthInMeters": 0,
+    "departureTime": "2026-11-05T13:00:00+01:00",
+    "arrivalTime": "2026-11-05T13:30:00+01:00",
+    "noTrafficTravelTimeInSeconds": 1660,
+    "historicTrafficTravelTimeInSeconds": 1720,
+    "liveTrafficIncidentsTravelTimeInSeconds": 1720
+   },
+   "legs": [
+    {
+     "summary": {
+      "lengthInMeters": 19400,
+      "travelTimeInSeconds": 1720
+     },
+     "points": [
+      {
+       "latitude": 48.858,
+       "longitude": 2.347
+      },
+      {
+       "latitude": 48.8609,
+       "longitude": 2.3204
+      },
+      {
+       "latitude": 48.8442,
+       "longitude": 2.2546
+      },
+      {
+       "latitude": 48.8049,
+       "longitude": 2.1301
+      }
+     ]
+    }
+   ],
+   "sections": [
+    {
+     "startPointIndex": 0,
+     "endPointIndex": 3,
+     "sectionType": "TRAVEL_MODE",
+     "travelMode": "car"
+    }
+   ],
+   "guidance": {
+    "instructions": [
+     {
+      "routeOffsetInMeters": 0,
+      "travelTimeInSeconds": 0,
+      "point": {
+       "latitude": 48.858,
+       "longitude": 2.347
+      },
+      "pointIndex": 0,
+      "instructionType": "LOCATION_DEPARTURE",
+      "street": "Quai de la Mégisserie",
+      "possibleCombineWithNext": false,
+      "drivingSide": "RIGHT",
+      "maneuver": "DEPART",
+      "message": "Partez de Quai de la Mégisserie (le plus rapide)"
+     },
+     {
+      "routeOffsetInMeters": 850,
+      "travelTimeInSeconds": 140,
+      "point": {
+       "latitude": 48.8609,
+       "longitude": 2.3204
+      },
+      "pointIndex": 1,
+      "instructionType": "TURN",
+      "street": "Avenue de Versailles",
+      "maneuver": "TURN_RIGHT",
+      "message": "Tournez à droite sur Avenue de Versailles"
+     },
+     {
+      "routeOffsetInMeters": 19400,
+      "travelTimeInSeconds": 1720,
+      "point": {
+       "latitude": 48.8049,
+       "longitude": 2.1301
+      },
+      "pointIndex": 3,
+      "instructionType": "LOCATION_ARRIVAL",
+      "maneuver": "ARRIVE",
+      "message": "Vous êtes arrivé à destination"
+     }
+    ],
+    "instructionGroups": []
+   }
+  },
+  {
+   "summary": {
+    "lengthInMeters": 16900,
+    "travelTimeInSeconds": 2100,
+    "trafficDelayInSeconds": 0,
+    "trafficLengthInMeters": 0,
+    "departureTime": "2026-11-05T13:00:00+01:00",
+    "arrivalTime": "2026-11-05T13:30:00+01:00",
+    "noTrafficTravelTimeInSeconds": 2100,
+    "historicTrafficTravelTimeInSeconds": 2100,
+    "liveTrafficIncidentsTravelTimeInSeconds": 2100
+   },
+   "legs": [
+    {
+     "summary": {
+      "lengthInMeters": 16900,
+      "travelTimeInSeconds": 2100
+     },
+     "points": [
+      {
+       "latitude": 48.858,
+       "longitude": 2.347
+      },
+      {
+       "latitude": 48.84,
+       "longitude": 2.3
+      },
+      {
+       "latitude": 48.8049,
+       "longitude": 2.1301
+      }
+     ]
+    }
+   ],
+   "sections": [
+    {
+     "startPointIndex": 0,
+     "endPointIndex": 2,
+     "sectionType": "TRAVEL_MODE",
+     "travelMode": "car"
+    }
+   ],
+   "guidance": {
+    "instructions": [
+     {
+      "routeOffsetInMeters": 0,
+      "travelTimeInSeconds": 0,
+      "point": {
+       "latitude": 48.858,
+       "longitude": 2.347
+      },
+      "pointIndex": 0,
+      "instructionType": "LOCATION_DEPARTURE",
+      "street": "Quai de la Mégisserie",
+      "possibleCombineWithNext": false,
+      "drivingSide": "RIGHT",
+      "maneuver": "DEPART",
+      "message": "Partez de Quai de la Mégisserie (alternative)"
+     },
+     {
+      "routeOffsetInMeters": 850,
+      "travelTimeInSeconds": 140,
+      "point": {
+       "latitude": 48.84,
+       "longitude": 2.3
+      },
+      "pointIndex": 1,
+      "instructionType": "TURN",
+      "street": "Avenue de Versailles",
+      "maneuver": "TURN_RIGHT",
+      "message": "Tournez à droite sur Avenue de Versailles"
+     },
+     {
+      "routeOffsetInMeters": 16900,
+      "travelTimeInSeconds": 2100,
+      "point": {
+       "latitude": 48.8049,
+       "longitude": 2.1301
+      },
+      "pointIndex": 2,
+      "instructionType": "LOCATION_ARRIVAL",
+      "maneuver": "ARRIVE",
+      "message": "Vous êtes arrivé à destination"
+     }
+    ],
+    "instructionGroups": []
+   }
+  }
+ ]
+}

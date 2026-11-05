@@ -25,6 +25,16 @@ export const MAP_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf
   map.on('load',function(){
     map.addSource('st',{type:'geojson',data:empty,cluster:true,clusterRadius:42,clusterMaxZoom:13});
     map.addSource('me',{type:'geojson',data:empty});
+    map.addSource('zones',{type:'geojson',data:empty});
+    map.addSource('route',{type:'geojson',data:empty});
+    map.addSource('inc',{type:'geojson',data:empty});
+    map.addLayer({id:'zones-f',type:'fill',source:'zones',paint:{'fill-color':'#B45309','fill-opacity':0.12}});
+    map.addLayer({id:'zones-l',type:'line',source:'zones',paint:{'line-color':'#B45309','line-width':1.5,'line-dasharray':[2,2]}});
+    map.addLayer({id:'route-casing',type:'line',source:'route',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#FFFFFF','line-width':10}});
+    map.addLayer({id:'route',type:'line',source:'route',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#1D4ED8','line-width':6}});
+    map.addLayer({id:'inc',type:'circle',source:'inc',paint:{'circle-radius':9,'circle-color':['match',['get','t'],'accident','#B42318','fermeture','#B42318','travaux','#B45309','bouchon','#C2410C','#5B6662'],'circle-stroke-width':3,'circle-stroke-color':'#fff'}});
+    map.addLayer({id:'inc-l',type:'symbol',source:'inc',minzoom:12,layout:{'text-field':['get','title'],'text-size':11,'text-offset':[0,1.4],'text-anchor':'top','text-font':['Noto Sans Bold'],'text-max-width':10},paint:{'text-color':'#0F1A17','text-halo-color':'#fff','text-halo-width':2}});
+    map.on('click','inc',function(e){var f=e.features&&e.features[0];if(f)send({type:'tapIncident',id:f.properties.id})});
     map.addLayer({id:'cl',type:'circle',source:'st',filter:['has','point_count'],paint:{'circle-color':'#0F1A17','circle-radius':['step',['get','point_count'],16,20,20,100,26],'circle-stroke-width':3,'circle-stroke-color':'#fff'}});
     map.addLayer({id:'cl-n',type:'symbol',source:'st',filter:['has','point_count'],layout:{'text-field':['get','point_count_abbreviated'],'text-size':13,'text-font':['Noto Sans Bold']},paint:{'text-color':'#fff'}});
     map.addLayer({id:'pt',type:'circle',source:'st',filter:['!',['has','point_count']],paint:{
@@ -45,6 +55,12 @@ export const MAP_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf
     if(m.type==='stations'){map.getSource('st').setData({type:'FeatureCollection',features:m.stations.map(function(s){return{type:'Feature',geometry:{type:'Point',coordinates:[s.lon,s.lat]},properties:{id:s.id,kw:s.kw,r:s.r?1:0,label:s.label}}})})}
     else if(m.type==='user'){map.getSource('me').setData({type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Point',coordinates:[m.lon,m.lat]},properties:{}}]})}
     else if(m.type==='fly'){map.flyTo({center:[m.lon,m.lat],zoom:m.zoom||map.getZoom(),offset:[0,m.offsetY||0],duration:m.instant?0:900})}
+    else if(m.type==='route'){map.getSource('route').setData(m.coords&&m.coords.length?{type:'Feature',geometry:{type:'LineString',coordinates:m.coords},properties:{}}:empty)}
+    else if(m.type==='incidents'){map.getSource('inc').setData({type:'FeatureCollection',features:m.items.map(function(i){return{type:'Feature',geometry:{type:'Point',coordinates:[i.lon,i.lat]},properties:{id:i.id,t:i.type,title:i.title}}})})}
+    else if(m.type==='zones'){map.getSource('zones').setData({type:'FeatureCollection',features:m.polys.map(function(r){return{type:'Feature',geometry:{type:'Polygon',coordinates:[r]},properties:{}}})})}
+    else if(m.type==='fit'){map.fitBounds([[m.bounds[0],m.bounds[1]],[m.bounds[2],m.bounds[3]]],{padding:{top:m.top||80,bottom:m.bottom||80,left:40,right:40},duration:800,maxZoom:16})}
+    else if(m.type==='follow'){map.easeTo({center:[m.lon,m.lat],zoom:16.5,bearing:m.bearing||0,pitch:45,offset:[0,m.offsetY||0],duration:900})}
+    else if(m.type==='unfollow'){map.easeTo({pitch:0,bearing:0,duration:600})}
     else if(m.type==='select'){selected=m.id;map.setFilter('sel',['==',['get','id'],m.id||'__none__'])}
   }
   window.__recv=function(m){try{handle(typeof m==='string'?JSON.parse(m):m)}catch(e){}};
@@ -56,10 +72,17 @@ export type MapIn =
   | { type: 'stations'; stations: { id: string; lat: number; lon: number; kw: number; r: boolean; label: string }[] }
   | { type: 'user'; lat: number; lon: number }
   | { type: 'fly'; lat: number; lon: number; zoom?: number; offsetY?: number; instant?: boolean }
-  | { type: 'select'; id: string | null };
+  | { type: 'select'; id: string | null }
+  | { type: 'route'; coords: [number, number][] }
+  | { type: 'incidents'; items: { id: string; lon: number; lat: number; type: string; title: string }[] }
+  | { type: 'zones'; polys: [number, number][][] }
+  | { type: 'fit'; bounds: [number, number, number, number]; top?: number; bottom?: number }
+  | { type: 'follow'; lat: number; lon: number; bearing?: number; offsetY?: number }
+  | { type: 'unfollow' };
 
 export type MapOut =
   | { type: 'ready' }
   | { type: 'error' }
   | { type: 'tap'; id: string }
+  | { type: 'tapIncident'; id: string }
   | { type: 'moveend'; lat: number; lon: number; zoom: number; user: boolean };

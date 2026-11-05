@@ -44,4 +44,6 @@ const meta = {
   tiles: [...tiles.keys()].sort(),
 };
 await writeFile(join(outDir, 'meta.json'), JSON.stringify(meta));
-console.log(`OK : ${st.rows} lignes, ${st.skipped} ignorées, ${st.stations} stations, ${st.pdc} points, ${tiles.size} tuiles → ${outDir}`);
+const registry = agg.operators();
+await writeFile(join(outDir, 'operators.json'), JSON.stringify(registry));
+console.log(`OK : ${st.rows} lignes, ${st.skipped} ignorées, ${st.stations} stations, ${st.pdc} points, ${tiles.size} tuiles, ${registry.operators.length} opérateurs → ${outDir}`);

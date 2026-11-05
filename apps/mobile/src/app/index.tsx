@@ -6,11 +6,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapView, type MapHandle } from '../components/MapView';
 import type { MapOut } from '../components/mapHtml';
 import { StationDetail } from '../components/StationDetail';
+import { TripPanel } from '../components/TripPanel';
 import { Chip, Notice } from '../components/ui';
 import { apiEnabled, getConfigWithRetry, type ApiConfig } from '../lib/api';
 import { DEFAULT_CENTER } from '../lib/config';
 import { km, kw, minutes, PLUG_LABEL } from '../lib/format';
-import { applyFilters, displayName, distanceKm, loadAround, nearest, NO_FILTERS, type Filters, type Station } from '../lib/stations';
+import { operatorLabel } from '../lib/connectors';
+import type { Operator } from '../lib/qr';
+import { applyFilters, displayName, distanceKm, loadAround, loadOperators, nearest, NO_FILTERS, type Filters, type Station } from '../lib/stations';
+import { store } from '../lib/store';
+import { useTrip } from '../lib/useTrip';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 
 type Pos = { lat: number; lon: number };
@@ -34,6 +39,11 @@ export default function MapScreen() {
   const [apiError, setApiError] = useState(false);
   const [apiLoading, setApiLoading] = useState(apiEnabled());
   const loadedFor = useRef<string>('');
+  const [ops, setOps] = useState<Operator[]>([]);
+
+  useEffect(() => {
+    loadOperators().then(setOps);
+  }, []);
 
   // Configuration du paiement
   useEffect(() => {
@@ -110,7 +120,15 @@ export default function MapScreen() {
   const visible = useMemo(() => applyFilters(all, filters), [all, filters]);
   const closest = useMemo(() => nearest(visible, ref, 5), [visible, ref.lat, ref.lon]);
   const selected = selectedId ? byId.get(selectedId) ?? null : null;
-  const sheetMax = Math.round(height * (selected ? 0.62 : 0.46));
+  const { trip, plan, start, clear } = useTrip(map, user, Math.round(height * 0.5));
+  const sheetMax = Math.round(height * (trip ? (trip.guiding ? 0.42 : 0.55) : selected ? 0.62 : 0.46));
+
+  useEffect(() => {
+    store.setStations(all);
+  }, [all]);
+  useEffect(() => {
+    store.setCurrent(selected);
+  }, [selected]);
 
   // Synchronisation carte
   useEffect(() => {
@@ -159,7 +177,7 @@ export default function MapScreen() {
     <View style={styles.root}>
       <MapView ref={map} onMessage={onMap} />
 
-      <View style={[styles.top, { paddingTop: insets.top + 10 }]} pointerEvents="box-none">
+      <View style={[styles.top, { paddingTop: insets.top + 10 }, trip?.guiding ? { display: 'none' } : null]} pointerEvents="box-none">
         <ScrollView horizontal style={{ flex: 1 }} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityLabel="Filtres">
           <Chip label="Rapide" a11y="Rapide, 50 kW et plus" active={filters.fast} onPress={() => toggle('fast')} />
           <Chip label="CCS" active={filters.ccs} onPress={() => toggle('ccs')} />
@@ -182,13 +200,26 @@ export default function MapScreen() {
       <View style={[styles.sheet, wide && styles.sheetWide, { maxHeight: sheetMax, paddingBottom: insets.bottom + 12 }]}>
         <View style={styles.grip} />
         <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 8 }} keyboardShouldPersistTaps="handled">
-          {selected ? (
+          {trip ? (
+            <TripPanel
+              trip={trip}
+              user={user}
+              onStart={start}
+              onStop={clear}
+              onPay={() => {
+                store.setCurrent(trip.dest);
+                router.push('/payer');
+              }}
+            />
+          ) : selected ? (
             <StationDetail
               station={selected}
               distance={user ? distanceKm(user, selected) : null}
               api={api}
               apiError={apiError}
               apiLoading={apiLoading}
+              operatorName={operatorLabel(selected, ops)}
+              onRoute={() => plan(selected)}
               onClose={() => setSelectedId(null)}
             />
           ) : (

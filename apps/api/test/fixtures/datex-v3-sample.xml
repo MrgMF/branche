@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Fixture synthétique construite d'après le schéma DATEX II v3 (SituationPublication), pour tester la tolérance du parseur. -->
+<d2:payload xmlns:d2="http://levelC/schema/3/d2Payload" xmlns:com="http://datex2.eu/schema/3/common"
+  xmlns:sit="http://datex2.eu/schema/3/situation" xmlns:loc="http://datex2.eu/schema/3/locationReferencing"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="sit:SituationPublication" lang="fr" modelBaseVersion="3">
+  <com:publicationTime>2026-11-05T11:58:00+01:00</com:publicationTime>
+  <com:publicationCreator><com:country>fr</com:country><com:nationalIdentifier>TEST</com:nationalIdentifier></com:publicationCreator>
+  <sit:situation id="v3-001">
+    <sit:overallSeverity>high</sit:overallSeverity>
+    <sit:situationRecord xsi:type="sit:Accident" id="v3-001-1" version="1">
+      <sit:situationRecordCreationTime>2026-11-05T11:40:00+01:00</sit:situationRecordCreationTime>
+      <sit:situationRecordVersionTime>2026-11-05T11:41:00+01:00</sit:situationRecordVersionTime>
+      <sit:severity>highest</sit:severity>
+      <sit:validity><com:validityStatus>active</com:validityStatus><com:validityTimeSpecification><com:overallStartTime>2026-11-05T11:40:00+01:00</com:overallStartTime></com:validityTimeSpecification></sit:validity>
+      <sit:generalPublicComment><sit:comment><com:values><com:value lang="en">Accident</com:value><com:value lang="fr">Accident &amp; véhicule en feu, voie de gauche neutralisée</com:value></com:values></sit:comment><sit:commentType>description</sit:commentType></sit:generalPublicComment>
+      <sit:locationReference xsi:type="loc:SingleRoadLinearLocation">
+        <loc:locationForDisplay><loc:latitude>48.7712</loc:latitude><loc:longitude>2.3051</loc:longitude></loc:locationForDisplay>
+        <loc:gmlLineString><loc:posList>48.77 2.30 48.78 2.31</loc:posList></loc:gmlLineString>
+      </sit:locationReference>
+      <sit:accidentType>collision</sit:accidentType>
+    </sit:situationRecord>
+  </sit:situation>
+  <sit:situation id="v3-002">
+    <sit:overallSeverity>low</sit:overallSeverity>
+    <sit:situationRecord xsi:type="sit:AbnormalTraffic" id="v3-002-1" version="2">
+      <sit:validity><com:validityStatus>active</com:validityStatus><com:validityTimeSpecification><com:overallStartTime>2026-11-05T11:00:00+01:00</com:overallStartTime><com:overallEndTime>2026-11-05T14:00:00+01:00</com:overallEndTime></com:validityTimeSpecification></sit:validity>
+      <sit:locationReference xsi:type="loc:PointLocation">
+        <loc:pointByCoordinates><loc:pointCoordinates><loc:latitude>48.8301</loc:latitude><loc:longitude>2.2316</loc:longitude></loc:pointCoordinates></loc:pointByCoordinates>
+      </sit:locationReference>
+      <sit:abnormalTrafficType>stationaryTraffic</sit:abnormalTrafficType>
+    </sit:situationRecord>
+    <sit:situationRecord xsi:type="sit:VehicleObstruction" id="v3-002-2" version="1">
+      <sit:locationReference xsi:type="loc:SingleRoadLinearLocation">
+        <loc:gmlLineString><loc:posList>48.9 2.4 48.91 2.41</loc:posList></loc:gmlLineString>
+      </sit:locationReference>
+      <sit:vehicleObstructionType>brokenDownVehicle</sit:vehicleObstructionType>
+    </sit:situationRecord>
+    <sit:situationRecord xsi:type="sit:PoorEnvironmentConditions" id="v3-002-3" version="1">
+      <sit:locationReference xsi:type="loc:PointLocation"><loc:pointByCoordinates><loc:pointCoordinates><loc:latitude>45.1</loc:latitude><loc:longitude>5.7</loc:longitude></loc:pointCoordinates></loc:pointByCoordinates></sit:locationReference>
+      <sit:poorEnvironmentType>fog</sit:poorEnvironmentType>
+    </sit:situationRecord>
+    <sit:situationRecord xsi:type="sit:Accident" id="v3-sans-position" version="1">
+      <sit:locationReference xsi:type="loc:AlertCPoint"/>
+    </sit:situationRecord>
+  </sit:situation>
+</d2:payload>

@@ -35,6 +35,27 @@ jobs:
       - run: npm test
       - name: Tuiles IRVE (base nationale data.gouv.fr)
         run: npm run build -w pipeline -- --out dist/data
+      # Après les tuiles (cli.mjs vide dist/data). Overpass / data.gouv peuvent être indisponibles : on ne bloque pas.
+      - name: Zones de danger (radars OSM + data.gouv, positions masquées)
+        id: radars
+        continue-on-error: true
+        timeout-minutes: 10
+        run: npm run radars -w pipeline -- --out dist/data
+        env:
+          RADAR_SALT: ${{ secrets.RADAR_SALT }}
+      - name: Zones de danger — reprise du fichier de la veille
+        if: steps.radars.outcome == 'failure'
+        continue-on-error: true
+        run: |
+          f=pipeline/dist/data/danger-zones.json
+          if curl -fsSL --max-time 60 -o "$f.prev" "https://${OWNER}.github.io/${REPO}/data/danger-zones.json" \
+            && node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1]));if(d.v!==1||!Array.isArray(d.zones)||!d.zones.length)process.exit(1)' "$f.prev"; then
+            mv "$f.prev" "$f"
+            echo "::warning::Sources radars indisponibles : fichier de la veille republié."
+          else
+            rm -f "$f.prev" "$f"
+            echo "::warning::Sources radars indisponibles et pas de fichier précédent : publication sans zones de danger."
+          fi
       - name: Export web de l'app
         working-directory: apps/mobile
         run: npx expo export -p web

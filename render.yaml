@@ -40,3 +40,13 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+      # Itinéraire avec trafic (serveur uniquement, jamais renvoyée). Clé gratuite : developer.tomtom.com.
+      # Sans clé : repli Valhalla sans trafic (le serveur public FOSSGIS n'est pas prévu pour la production).
+      - key: TOMTOM_API_KEY
+        sync: false
+      # Instance Valhalla auto-hébergée recommandée en production (défaut : serveur public FOSSGIS).
+      - key: VALHALLA_URL
+        sync: false
+      # Flux DATEX II Bison Futé, événements RRN non concédé (Licence Ouverte 2.0).
+      - key: INCIDENTS_URL
+        value: https://www.data.gouv.fr/api/1/datasets/r/d16c8cb6-0123-44e7-b8b1-f99fc6a59497

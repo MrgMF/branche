@@ -1,7 +1,16 @@
 {
-  "locationPermission": "Branché utilise votre position pour trouver la borne la plus proche. Le calcul se fait sur votre appareil : votre position n'est jamais envoyée à nos serveurs.",
+  "locationPermission": "Branché utilise votre position pour trouver la borne la plus proche, sur votre appareil. Elle n'est envoyée à nos serveurs que si vous demandez un itinéraire ou faites un signalement.",
   "demoBanner": "Mode démo : paiement simulé, aucune borne réelle activée, aucun débit.",
   "dataAttribution": "Bornes : base nationale IRVE, data.gouv.fr (Licence Ouverte 2.0), mise à jour du {date}. Disponibilité non garantie.",
   "mapAttribution": "OpenFreeMap · © OpenMapTiles · © contributeurs OpenStreetMap",
-  "paymentDisclaimer": "Démonstration : aucune carte n'est débitée et votre véhicule ne sera pas rechargé. Pour recharger, payez directement à la borne."
+  "paymentDisclaimer": "Démonstration : aucune carte n'est débitée et votre véhicule ne sera pas rechargé. Pour recharger, payez directement à la borne.",
+  "cameraPermission": "Branché utilise l'appareil photo pour lire le QR code de la borne. L'image est analysée sur votre téléphone, jamais enregistrée ni envoyée.",
+  "qrOfficial": "Domaine de l'opérateur {operator} selon la base IRVE : {domain}. Vérifiez que le QR code est imprimé sur la borne, pas collé.",
+  "qrUnknown": "Domaine inconnu : {domain}. Ce lien n'est pas reconnu pour cette borne et peut être un faux QR code. En cas de doute, payez avec la carte bancaire sur la borne.",
+  "qrDangerous": "Lien bloqué : il présente des signes de fraude ({reason}). Ne payez pas avec ce QR code et prévenez l'opérateur.",
+  "thirdPartyPayment": "Vous payez directement l'opérateur {operator} sur sa page officielle ({domain}). Branché ne voit pas votre carte et n'encaisse rien.",
+  "dangerZone": "Zone de danger : prudence et respect des limitations.",
+  "routingPrivacy": "Pour calculer l'itinéraire, le départ et l'arrivée sont envoyés à notre serveur et à TomTom. Ils ne sont pas conservés par Branché.",
+  "reportDisclaimer": "Signalement anonyme, visible 1 h (24 h pour une borne hors service). Signalez seulement ce que vous avez constaté, jamais un contrôle ou un radar, et pas en conduisant.",
+  "trafficAttribution": "Trafic et itinéraire © TomTom · Perturbations : Bison Futé (DIR), transport.data.gouv.fr, Licence Ouverte 2.0, mise à jour {date} · Zones : © contributeurs OpenStreetMap (ODbL)"
 }

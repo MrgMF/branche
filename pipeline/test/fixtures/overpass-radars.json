@@ -1,0 +1,17 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.1 (fixture Branché)",
+  "osm3s": { "timestamp_osm_base": "2026-11-04T23:59:00Z", "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL." },
+  "elements": [
+    { "type": "node", "id": 266093421, "lat": 48.7231806, "lon": 2.3618443, "tags": { "highway": "speed_camera", "maxspeed": "110", "ref": "A6" } },
+    { "type": "node", "id": 1185023377, "lat": 45.7489012, "lon": 4.8471255, "tags": { "highway": "speed_camera", "maxspeed": "50", "zone:traffic": "FR:urban" } },
+    { "type": "node", "id": 3012774410, "lat": 47.3946210, "lon": 0.6834591, "tags": { "highway": "speed_camera", "maxspeed": "80", "zone:traffic": "FR:rural" } },
+    { "type": "node", "id": 4410285561, "lat": 43.6038120, "lon": 1.4419740, "tags": { "highway": "speed_camera", "maxspeed": "50" } },
+    { "type": "node", "id": 5523981042, "lat": 49.4431002, "lon": 1.0993157, "tags": { "highway": "speed_camera" } },
+    { "type": "node", "id": 6630014478, "lat": -20.9010450, "lon": 55.4810230, "tags": { "highway": "speed_camera", "maxspeed": "90" } },
+    { "type": "node", "id": 7741002233, "lat": 43.5297010, "lon": 5.4474320, "tags": { "highway": "speed_camera", "maxspeed": "130", "road_ref": "A8" } },
+    { "type": "node", "id": 7741002234, "lat": 43.5299001, "lon": 5.4479112, "tags": { "highway": "speed_camera", "maxspeed": "130" } },
+    { "type": "node", "id": 8812345678, "lat": 0, "lon": 0, "tags": { "highway": "speed_camera" } },
+    { "type": "way", "id": 99, "nodes": [1, 2] }
+  ]
+}

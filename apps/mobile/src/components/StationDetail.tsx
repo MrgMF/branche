@@ -1,9 +1,11 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ApiConfig } from '../lib/api';
 import { navigationLinks, startCharge } from '../lib/charge';
 import { euros, km, kw, minutes, PAY_LABEL, PLUG_LABEL } from '../lib/format';
 import { displayName, priceInfo, type Station } from '../lib/stations';
+import { store } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { Button, Notice, Stat, Tag } from './ui';
 
@@ -13,6 +15,8 @@ export function StationDetail(props: {
   api: ApiConfig | null;
   apiError: boolean;
   apiLoading: boolean;
+  operatorName: string;
+  onRoute: () => void;
   onClose: () => void;
 }) {
   const { station: s, distance, api } = props;
@@ -22,6 +26,7 @@ export function StationDetail(props: {
   const payAtStation = s.pay.filter((p) => p !== 'badge').map((p) => PAY_LABEL[p]);
   const reserved = s.acc === 'reserve';
   const price = priceInfo(s);
+  const opName = props.operatorName;
 
   async function charge() {
     setErr(null);
@@ -66,50 +71,50 @@ export function StationDetail(props: {
       {reserved ? <Notice tone="demo">Accès réservé (clients, résidents ou abonnés) : vérifiez sur place avant de vous y rendre.</Notice> : null}
       {s.a ? <Text style={styles.addr}>{s.a}</Text> : null}
 
-      <View style={styles.box}>
-        <Text style={styles.boxTitle}>Prix opérateur</Text>
-        {price.url ? (
-          <Pressable accessibilityRole="link" onPress={() => Linking.openURL(price.url!)} style={styles.inlineLink}>
-            <Text style={styles.linkText}>{price.text}</Text>
-          </Pressable>
-        ) : (
-          <Text style={styles.boxText}>{price.text}</Text>
-        )}
-        <Text style={[styles.boxTitle, { marginTop: 8 }]}>Payer directement à la borne</Text>
-        <Text style={styles.boxText}>{payAtStation.length ? payAtStation.join(' · ') : 'Moyens de paiement non renseignés.'}</Text>
+      <View style={styles.payCard}>
+        <Text style={styles.payTitle}>Payer cette borne</Text>
+        <Text style={styles.payText}>Directement sur la page officielle de {opName}, sans compte ni application à télécharger.</Text>
+        <Button
+          label="Payer depuis Branché"
+          onPress={() => {
+            store.setCurrent(s);
+            router.push('/payer');
+          }}
+          hint="Scannez le QR code de la borne : nous vérifions qu’il mène bien au site de l’opérateur"
+        />
+        <View style={styles.priceRow}>
+          <Text style={styles.boxTitle}>Prix opérateur : </Text>
+          {price.url ? (
+            <Pressable accessibilityRole="link" onPress={() => Linking.openURL(price.url!)} style={styles.inlineLink}>
+              <Text style={styles.linkText}>{price.text}</Text>
+            </Pressable>
+          ) : (
+            <Text style={[styles.boxText, { flex: 1 }]}>{price.text}</Text>
+          )}
+        </View>
+        {payAtStation.length ? <Text style={styles.small}>Aussi accepté sur place : {payAtStation.join(' · ')}.</Text> : null}
+      </View>
+
+      <Button label="Itinéraire le plus rapide" variant="secondary" onPress={props.onRoute} hint="Calcule le trajet avec le trafic en temps réel et les perturbations" />
+      <View style={styles.navRow}>
+        {navigationLinks(s).map((l) => (
+          <Button key={l.label} label={l.label} variant="ghost" style={{ flex: 1, minHeight: 44 }} onPress={() => Linking.openURL(l.url)} />
+        ))}
       </View>
 
       {api ? (
-        <>
-          <Button label="Charger ici avec Branché" onPress={charge} loading={busy} hint="Ouvre la page de paiement sécurisée" />
-          {api.demo ? (
-            <Notice tone="demo">
-              Démo : paiement et borne simulés, aucun débit. Pré-autorisation de {euros(api.preauthCents)}, {euros(api.priceCentsPerKwh)}/kWh + {euros(api.feeCents)} de
-              frais.
-            </Notice>
-          ) : (
-            <Text style={styles.small}>
-              Pré-autorisation de {euros(api.preauthCents)}, seul le montant réel est débité ({euros(api.priceCentsPerKwh)}/kWh + {euros(api.feeCents)} de frais).
-            </Text>
-          )}
-        </>
+        <View style={styles.demoBox}>
+          <Text style={styles.boxTitle}>Paiement Branché (itinérance, en préparation)</Text>
+          <Button label="Essayer en démo" variant="light" onPress={charge} loading={busy} hint="Paiement et borne simulés, aucun débit" style={styles.demoBtn} />
+          <Text style={styles.small}>
+            Démo : aucun débit. {euros(api.priceCentsPerKwh)}/kWh + {euros(api.feeCents)} de frais, pré-autorisation de {euros(api.preauthCents)}.
+          </Text>
+        </View>
       ) : props.apiLoading ? (
-        <Notice>Connexion au service de paiement… (jusqu’à une minute au premier lancement)</Notice>
-      ) : (
-        <Notice tone={props.apiError ? 'error' : 'info'}>
-          {props.apiError
-            ? 'Service de paiement momentanément indisponible. Vous pouvez payer directement à la borne.'
-            : 'Paiement dans l’app bientôt disponible sur ce réseau. En attendant, payez directement à la borne.'}
-        </Notice>
-      )}
+        <Text style={styles.small}>Connexion au service Branché…</Text>
+      ) : null}
       {err ? <Notice tone="error">{err}</Notice> : null}
 
-      <Text style={styles.navTitle}>Itinéraire</Text>
-      <View style={styles.navRow}>
-        {navigationLinks(s).map((l) => (
-          <Button key={l.label} label={l.label} variant="secondary" style={{ flex: 1, minHeight: 48 }} onPress={() => Linking.openURL(l.url)} />
-        ))}
-      </View>
       {s.tel ? (
         <Pressable accessibilityRole="link" onPress={() => Linking.openURL(`tel:${s.tel!.replace(/[^+\d]/g, '')}`)} style={styles.link}>
           <Text style={styles.linkText}>Appeler l’opérateur · {s.tel}</Text>
@@ -130,6 +135,12 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', gap: 10 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   addr: { fontFamily: fonts.body, fontSize: 14, color: colors.inkMuted },
+  payCard: { borderWidth: 2, borderColor: colors.accent, borderRadius: radius.lg, padding: 14, gap: 10 },
+  payTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.ink },
+  payText: { fontFamily: fonts.medium, fontSize: 14, color: colors.inkMuted, lineHeight: 20 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  demoBox: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 12, gap: 8 },
+  demoBtn: { minHeight: 48 },
   box: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 14, gap: 2 },
   boxTitle: { fontFamily: fonts.semibold, fontSize: 13, color: colors.inkMuted },
   boxText: { fontFamily: fonts.medium, fontSize: 15, color: colors.ink },

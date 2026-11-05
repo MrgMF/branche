@@ -19,7 +19,7 @@ const config: ExpoConfig = {
     supportsTablet: false,
     infoPlist: {
       NSLocationWhenInUseUsageDescription:
-        'Branché utilise votre position pour trouver la borne la plus proche. Le calcul se fait sur votre appareil : votre position n’est jamais envoyée à nos serveurs.',
+        'Branché utilise votre position pour trouver la borne la plus proche, sur votre appareil. Elle n’est envoyée à nos serveurs que si vous demandez un itinéraire ou faites un signalement.',
       ITSAppUsesNonExemptEncryption: false,
     },
   },
@@ -35,9 +35,10 @@ const config: ExpoConfig = {
     'expo-font',
     'expo-web-browser',
     ['expo-splash-screen', { image: './assets/splash-icon.png', imageWidth: 160, resizeMode: 'contain', backgroundColor: '#FFFFFF' }],
+    ['expo-camera', { cameraPermission: 'Branché utilise l’appareil photo pour lire le QR code de la borne. L’image est analysée sur votre téléphone, jamais enregistrée ni envoyée.', recordAudioAndroid: false }],
     [
       'expo-location',
-      { locationWhenInUsePermission: 'Branché utilise votre position pour trouver la borne la plus proche. Le calcul se fait sur votre appareil : votre position n’est jamais envoyée à nos serveurs.' },
+      { locationWhenInUsePermission: 'Branché utilise votre position pour trouver la borne la plus proche, sur votre appareil. Elle n’est envoyée à nos serveurs que si vous demandez un itinéraire ou faites un signalement.' },
     ],
   ],
   experiments: { typedRoutes: false, ...(baseUrl ? { baseUrl } : {}) },
@@ -45,6 +46,8 @@ const config: ExpoConfig = {
     dataUrl: process.env.DATA_URL ?? 'https://REPLACE_ME.github.io/branche/data',
     apiUrl: process.env.API_URL ?? '',
     siteUrl: process.env.SITE_URL ?? 'https://REPLACE_ME.github.io/branche',
+    // Développement / tests E2E uniquement : hôtes http de CPO de test acceptés par le scanner.
+    devHosts: (process.env.DEV_TRUSTED_HOSTS ?? '').split(',').map((h: string) => h.trim()).filter(Boolean),
   },
 };
 export default config;

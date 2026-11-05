@@ -8,7 +8,7 @@
     "pipeline"
   ],
   "scripts": {
-    "test": "npm run test -w pipeline && npm run test -w apps/api",
+    "test": "npm run test -w pipeline && npm run test -w apps/api && npm run test -w apps/mobile",
     "build": "npm run build -w apps/api && npm run build:web -w apps/mobile && node scripts/assemble-site.mjs",
     "data": "npm run build -w pipeline"
   },

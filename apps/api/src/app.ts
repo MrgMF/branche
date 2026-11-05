@@ -14,6 +14,11 @@ import { metaRoutes } from './routes/meta.js';
 import { mockCheckoutRoutes } from './routes/mockCheckout.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { webhookRoutes } from './routes/webhook.js';
+import { navigationRoutes } from './routes/navigation.js';
+import { IncidentService, ReportStore } from './incidents/service.js';
+import { TomTomRouteProvider, ValhallaRouteProvider, type RouteProvider } from './navigation/route.js';
+import { reqSerializer } from './lib/logRedact.js';
+import type { FetchLike } from './lib/ttlCache.js';
 import { SessionService } from './sessions/service.js';
 import { InMemorySessionStore, type SessionStore } from './sessions/store.js';
 
@@ -25,7 +30,23 @@ export interface AppDeps {
   payment?: PaymentProvider;
   charger?: ChargerAdapter;
   store?: SessionStore;
-  logger?: boolean | { level: string };
+  logger?: boolean | { level: string; stream?: { write: (msg: string) => void } };
+  /** fetch injectable (tests : fixtures, aucun appel réseau). */
+  fetch?: FetchLike;
+  router?: RouteProvider;
+}
+
+function buildRouter(config: Config, fetchFn: FetchLike): RouteProvider {
+  return config.tomtomApiKey
+    ? new TomTomRouteProvider(config.tomtomApiKey, fetchFn)
+    : new ValhallaRouteProvider(config.valhallaUrl, fetchFn);
+}
+
+/** Journaux sans corps, sans IP ni coordonnées précises (voir lib/logRedact.ts). */
+function loggerOptions(logger: AppDeps['logger']) {
+  if (!logger) return false;
+  const base = logger === true ? {} : logger;
+  return { ...base, serializers: { req: reqSerializer } };
 }
 
 function buildPayment(config: Config, deps: AppDeps, now: () => number): PaymentProvider {
@@ -55,7 +76,7 @@ const STATUS_CODES: Record<number, string> = {
 export async function buildApp(config: Config, deps: AppDeps = {}): Promise<FastifyInstance> {
   const now = deps.now ?? Date.now;
   const app: FastifyInstance = Fastify({
-    logger: deps.logger ?? false,
+    logger: loggerOptions(deps.logger),
     // Nombre de proxys de confiance (Render : 1) → fonction, pour ne pas faire confiance à un X-Forwarded-For forgé.
     trustProxy:
       typeof config.trustProxy === 'number'
@@ -126,6 +147,12 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
   // Page de paiement simulée : uniquement en mode démo (sinon on pourrait démarrer sans payer).
   if (payment.name === 'mock') await app.register(async (scope) => mockCheckoutRoutes(scope, ctx));
   await app.register(async (scope) => webhookRoutes(scope, ctx));
+
+  const fetchFn: FetchLike = deps.fetch ?? ((input, init) => fetch(input, init));
+  const reports = new ReportStore(now);
+  const incidents = new IncidentService({ url: config.incidentsUrl, fetchFn, now, reports, log: app.log });
+  const router = deps.router ?? buildRouter(config, fetchFn);
+  await app.register(async (scope) => navigationRoutes(scope, { router, incidents, reports }));
 
   return app;
 }

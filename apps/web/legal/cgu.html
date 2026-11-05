@@ -15,10 +15,10 @@
     <p class="draft"><strong>Brouillon à faire valider</strong> par un professionnel du droit avant publication définitive.</p>
 
     <h1>Conditions générales d'utilisation</h1>
-    <p>Version 0.1 · dernière mise à jour : 5 novembre 2026.</p>
+    <p>Version 0.2 · dernière mise à jour : 5 novembre 2026.</p>
 
     <h2>1. Objet</h2>
-    <p>Les présentes conditions encadrent l'utilisation gratuite du site et de l'application « Branché » (iOS, Android, web), édités par {{EDITEUR_NOM}}, personne physique agissant à titre non professionnel (voir les <a href="mentions-legales.html">mentions légales</a>). Branché affiche les bornes de recharge publiques pour véhicules électriques, indique la plus proche et oriente vers les moyens de paiement disponibles. Utiliser Branché vaut acceptation de ces conditions.</p>
+    <p>Les présentes conditions encadrent l'utilisation gratuite du site et de l'application « Branché » (iOS, Android, web), édités par {{EDITEUR_NOM}}, personne physique agissant à titre non professionnel (voir les <a href="mentions-legales.html">mentions légales</a>). Branché affiche les bornes de recharge publiques pour véhicules électriques, indique la plus proche, oriente vers les moyens de paiement des opérateurs, calcule des itinéraires et signale des perturbations et des zones de danger. Utiliser Branché vaut acceptation de ces conditions.</p>
 
     <h2>2. Mode démo : aucun paiement réel, aucune recharge réelle</h2>
     <p><strong>Dans cette version, le paiement dans l'application est une démonstration.</strong></p>
@@ -30,33 +30,59 @@
     </ul>
     <p>Branché n'est pas, à ce jour, opérateur de mobilité ni prestataire de services de paiement, et n'a pas de contrat avec les opérateurs de bornes. Si un paiement réel était activé à l'avenir, il ferait l'objet de conditions spécifiques, d'une information préalable sur les prix et de votre accord exprès.</p>
 
-    <h2>3. Recharger réellement : paiement direct à la borne</h2>
-    <p>Pour recharger, utilisez les moyens proposés par l'opérateur de la borne. Quand la base nationale l'indique, Branché affiche ces moyens (carte bancaire sur la borne, QR code, site web de l'opérateur) et peut ouvrir le lien correspondant. Le contrat de recharge, le prix et le paiement relèvent alors exclusivement de l'opérateur, selon ses propres conditions. Branché n'intervient pas dans cette transaction.</p>
+    <h2>3. Recharger réellement : payer directement l'opérateur</h2>
+    <p>Pour recharger, utilisez les moyens de paiement de l'opérateur de la borne. Branché peut vous y conduire de trois façons :</p>
+    <ul>
+      <li><strong>Scanner et payer</strong> : l'application lit le QR code de la borne, vérifie le domaine du lien et ouvre la page de paiement de l'opérateur dans le navigateur système intégré (Safari ou Chrome).</li>
+      <li><strong>Lien opérateur</strong> : l'application ouvre la page de paiement ad hoc connue pour l'opérateur de la borne.</li>
+      <li><strong>Paiement à la borne</strong> : carte bancaire sur le lecteur de la borne, quand la base nationale l'indique.</li>
+    </ul>
+    <p>Dans tous ces cas, <strong>vous concluez le contrat de recharge directement avec l'opérateur</strong>, à son prix et selon ses conditions. Branché n'est pas partie à cette transaction. Branché ne reçoit, ne conserve et ne transmet aucun fonds et ne voit pas vos données de carte, saisies sur la page de l'opérateur. Branché n'est pas rémunéré sur ces paiements. Les réclamations sur la recharge, son prix ou son remboursement sont à adresser à l'opérateur.</p>
 
-    <h2>4. Données affichées : aucune garantie</h2>
+    <h2>4. Vérification des QR codes : une aide, pas une garantie</h2>
+    <p>De faux QR codes sont parfois collés sur des bornes pour détourner des paiements. Branché compare le domaine du lien avec les domaines de l'opérateur, déduits de la base nationale IRVE. Il affiche l'un des résultats suivants :</p>
+    <ul>
+      <li><strong>« Domaine de l'opérateur »</strong> : le domaine correspond à l'opérateur de cette borne selon la base IRVE.</li>
+      <li><strong>« Domaine inconnu »</strong> : le domaine n'est pas reconnu. Il est affiché, et vous devez confirmer pour continuer.</li>
+      <li><strong>« Lien dangereux »</strong> : l'ouverture est bloquée (lien non sécurisé, raccourcisseur, domaine imitant un domaine connu, etc.).</li>
+    </ul>
+    <p>Ce contrôle repose sur des données déclarées par les opérateurs et ne détecte pas toutes les fraudes. Vérifiez toujours l'adresse affichée et que le QR code est bien imprimé sur la borne, et non collé par-dessus. Ne saisissez jamais vos identifiants de banque en ligne. En cas de doute, payez avec la carte bancaire sur la borne. Si vous pensez avoir été victime, contactez votre banque, prévenez l'opérateur et signalez la fraude à la carte sur <a href="https://www.service-public.gouv.fr/particuliers/vosdroits/R46526">Perceval</a>. Vous pouvez aussi signaler un QR code suspect à <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a>.</p>
+    <p>La « Carte Branché » (carte de paiement virtuelle) n'est pas disponible. Si elle était proposée, elle serait émise par un établissement agréé et ferait l'objet de conditions distinctes.</p>
+
+    <h2>5. Données affichées : aucune garantie</h2>
     <ul>
       <li>Les informations sur les bornes (position, puissance, prises, accès, moyens de paiement, horaires) proviennent de la base nationale IRVE, alimentée par les opérateurs. Elles peuvent être incomplètes, inexactes ou périmées.</li>
       <li><strong>Branché ne garantit ni la disponibilité, ni le bon fonctionnement, ni l'accessibilité d'une borne</strong>, ni son prix. Une borne affichée peut être occupée, en panne, réservée à certains usagers ou supprimée.</li>
-      <li>La distance indiquée est calculée à vol d'oiseau, pas selon un itinéraire.</li>
+      <li>La distance affichée dans la liste est calculée à vol d'oiseau. Les itinéraires, durées et retards dus au trafic sont des estimations, sans garantie. Ils peuvent ignorer une fermeture, une restriction ou un danger. <strong>La signalisation et le code de la route priment toujours sur les indications de l'application.</strong></li>
+      <li>Les perturbations (Bison Futé et signalements des usagers) peuvent être incomplètes ou périmées. Les signalements des usagers ne sont pas vérifiés par Branché.</li>
       <li>Vérifiez sur place et sur les canaux de l'opérateur avant de vous déplacer, surtout avec une autonomie faible.</li>
     </ul>
 
-    <h2>5. Sources et licences</h2>
+    <h2>6. Zones de danger (aide à la conduite)</h2>
+    <p>Branché peut vous avertir à l'entrée de <strong>zones de danger</strong> : des zones étendues (de l'ordre de 1 km en agglomération, 4 km hors agglomération et 8 km sur autoroute) où la prudence est recommandée. Branché <strong>n'indique jamais la position d'un radar ni d'un contrôle</strong> (article R413-15 du code de la route). La zone ne dit pas ce qu'elle contient et ne remplace pas l'attention au volant. Respectez les limitations de vitesse en tout lieu. Les zones sont calculées à partir de données publiques qui peuvent être inexactes ou incomplètes.</p>
+
+    <h2>7. Signalements des usagers</h2>
+    <p>Vous pouvez signaler un accident, des travaux, un obstacle, un bouchon ou une borne hors service. Le signalement est anonyme et visible par les autres usagers pendant 1 heure (24 heures pour une borne hors service). En signalant, vous vous engagez à décrire une situation réelle, constatée par vous. <strong>Il est interdit de signaler la présence de forces de l'ordre, de contrôles routiers ou de radars</strong> : l'application ne le permet pas et de tels usages seront supprimés. Ne signalez rien en conduisant : arrêtez-vous en lieu sûr ou laissez faire un passager. Branché peut retirer tout signalement manifestement faux ou abusif, ou limiter la publication des signalements sur une zone, notamment à la demande des autorités. Pour signaler un contenu illicite, écrivez à <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a> en indiquant le lieu, l'heure et le motif ; vous serez informé de la suite donnée.</p>
+
+    <h2>8. Sources et licences</h2>
     <ul>
-      <li>Données bornes : Base nationale des IRVE, <a href="https://www.data.gouv.fr/datasets/base-nationale-des-irve-infrastructures-de-recharge-pour-vehicules-electriques">data.gouv.fr</a>, <a href="https://www.etalab.gouv.fr/licence-ouverte-open-licence/">Licence Ouverte 2.0</a> ; date de mise à jour affichée dans l'application. Données retraitées par Branché ; cette réutilisation n'est pas soutenue par l'administration.</li>
+      <li>Données bornes : Base nationale des IRVE, <a href="https://www.data.gouv.fr/datasets/base-nationale-des-irve-infrastructures-de-recharge-pour-vehicules-electriques">data.gouv.fr</a>, <a href="https://www.etalab.gouv.fr/licence-ouverte-open-licence/">Licence Ouverte 2.0</a> ; date de mise à jour affichée dans l'application. Données retraitées par Branché, y compris le registre des domaines d'opérateurs ; cette réutilisation n'est pas soutenue par l'administration.</li>
+      <li>Perturbations : Bison Futé, événements routiers du réseau routier national non concédé (DIR), via <a href="https://www.data.gouv.fr/datasets/62558686864eeafd3af07eac">transport.data.gouv.fr</a>, format DATEX II, Licence Ouverte 2.0 ; date de mise à jour affichée.</li>
+      <li>Itinéraire et trafic : <a href="https://www.tomtom.com">© TomTom</a> ; à défaut, <a href="https://valhalla.github.io/valhalla/">Valhalla</a> sur des données © contributeurs OpenStreetMap.</li>
+      <li>Zones de danger : base dérivée de données <a href="https://www.openstreetmap.org/copyright">© contributeurs OpenStreetMap</a>, publiée sous <a href="https://opendatacommons.org/licenses/odbl/">ODbL</a>, et du jeu « Radars automatiques » publié sur <a href="https://www.data.gouv.fr/datasets/radars-automatiques/">data.gouv.fr</a> (Licence Ouverte 2.0, source non officielle).</li>
       <li>Carte : <a href="https://openfreemap.org">OpenFreeMap</a>, <a href="https://www.openmaptiles.org/">© OpenMapTiles</a>, données <a href="https://www.openstreetmap.org/copyright">© contributeurs OpenStreetMap</a> (ODbL).</li>
     </ul>
 
-    <h2>6. Utilisation</h2>
-    <p>N'utilisez pas l'application en conduisant. Il est interdit de perturber le service, de l'utiliser à des fins illicites ou d'en extraire massivement le contenu propre à Branché (les données publiques restent librement accessibles à leur source).</p>
+    <h2>9. Utilisation</h2>
+    <p>Ne manipulez pas l'application en conduisant ; préparez l'itinéraire à l'arrêt. Il est interdit de perturber le service, de l'utiliser à des fins illicites ou d'en extraire massivement le contenu propre à Branché (les données publiques restent librement accessibles à leur source).</p>
 
-    <h2>7. Disponibilité et responsabilité</h2>
-    <p>Le service est fourni gratuitement, en l'état, et peut être interrompu ou modifié à tout moment. Dans la limite permise par la loi, Branché n'est pas responsable des conséquences d'une donnée erronée, d'une borne indisponible ou d'une interruption du service. Rien dans ces conditions ne limite les droits que vous tenez du droit de la consommation.</p>
+    <h2>10. Disponibilité et responsabilité</h2>
+    <p>Le service est fourni gratuitement, en l'état, et peut être interrompu ou modifié à tout moment. Dans la limite permise par la loi, Branché n'est pas responsable des conséquences d'une donnée erronée, d'une borne indisponible, d'un itinéraire inadapté, d'un signalement d'usager ou d'une interruption du service, ni des transactions conclues sur les sites des opérateurs. Rien dans ces conditions ne limite les droits que vous tenez du droit de la consommation.</p>
 
-    <h2>8. Données personnelles</h2>
-    <p>Voir la <a href="confidentialite.html">politique de confidentialité</a>. Votre position est utilisée uniquement sur votre appareil.</p>
+    <h2>11. Données personnelles</h2>
+    <p>Voir la <a href="confidentialite.html">politique de confidentialité</a>. La recherche de borne se fait sur votre appareil. Le départ et l'arrivée d'un itinéraire sont envoyés à notre serveur et à notre sous-traitant pour le calcul. L'image de l'appareil photo n'est jamais envoyée.</p>
 
-    <h2>9. Modification, droit applicable, contact</h2>
+    <h2>12. Modification, droit applicable, contact</h2>
     <p>Ces conditions peuvent évoluer ; la version en vigueur est celle publiée sur cette page. Elles sont soumises au droit français. En cas de litige, contactez d'abord <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a> ; à défaut d'accord amiable, les tribunaux français sont compétents, sous réserve des règles protectrices du consommateur.</p>
   </main>
 </body>

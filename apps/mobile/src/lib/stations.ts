@@ -23,6 +23,7 @@ export interface Station {
   pmr?: string;
   maj?: string;
   pdc?: [string, number][];
+  ok?: string; // clé opérateur (registre)
 }
 
 export interface Meta {
@@ -130,4 +131,26 @@ export function priceInfo(s: Pick<Station, 'prix' | 'free'>): { text: string; ur
   const url = p.match(/https?:\/\/\S+/)?.[0];
   if (url && p.replace(url, '').trim().length < 4) return { text: 'Voir les tarifs de l’opérateur', url };
   return { text: p, url };
+}
+
+import type { Operator } from './qr';
+let opsPromise: Promise<Operator[]> | null = null;
+/** Registre des opérateurs (domaines officiels, gabarits de paiement). */
+export function loadOperators(): Promise<Operator[]> {
+  if (!opsPromise) {
+    opsPromise = getJson<{ operators: Operator[] }>(`${DATA_URL}/operators.json`)
+      .then((d) => d.operators)
+      .catch(() => {
+        opsPromise = null;
+        return [];
+      });
+  }
+  return opsPromise;
+}
+
+/** Retrouve une station chargée à partir d'un identifiant de point de charge (normalisé, sans *). */
+export function findByEvse(list: Station[], evse: string): Station | undefined {
+  const norm = (x: string) => x.toUpperCase().replace(/\*/g, '');
+  const target = norm(evse);
+  return list.find((s) => s.pdc?.some(([id]) => norm(id) === target) || norm(s.id) === target);
 }

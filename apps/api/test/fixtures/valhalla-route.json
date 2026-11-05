@@ -1,0 +1,61 @@
+{
+ "trip": {
+  "locations": [
+   {
+    "type": "break",
+    "lat": 48.858,
+    "lon": 2.347
+   },
+   {
+    "type": "break",
+    "lat": 48.8049,
+    "lon": 2.1301
+   }
+  ],
+  "legs": [
+   {
+    "maneuvers": [
+     {
+      "type": 1,
+      "instruction": "Conduisez vers l’ouest sur Quai de la Mégisserie.",
+      "time": 60.2,
+      "length": 0.45,
+      "begin_shape_index": 0,
+      "end_shape_index": 1
+     },
+     {
+      "type": 10,
+      "instruction": "Tournez à droite sur Avenue de Versailles.",
+      "time": 900.4,
+      "length": 17.3,
+      "begin_shape_index": 1,
+      "end_shape_index": 4
+     },
+     {
+      "type": 4,
+      "instruction": "Vous êtes arrivé à votre destination.",
+      "time": 0,
+      "length": 0,
+      "begin_shape_index": 4,
+      "end_shape_index": 4
+     }
+    ],
+    "summary": {
+     "time": 1260.6,
+     "length": 17.75
+    },
+    "shape": "_x`e|Ao~fnCnvAniJ~hSvrjBfm^fmiB~ep@vfeE"
+   }
+  ],
+  "summary": {
+   "time": 1260.6,
+   "length": 17.75,
+   "has_toll": false
+  },
+  "status_message": "Found route between points",
+  "status": 0,
+  "units": "kilometers",
+  "language": "fr-FR"
+ },
+ "id": "x"
+}

@@ -1,6 +1,6 @@
 # @branche/api
 
-API V1 de Branché (Fastify 5, TypeScript strict). Contrat : [`docs/api-contract.md`](../../docs/api-contract.md). Décisions : [`docs/adr/0001-api-v1.md`](../../docs/adr/0001-api-v1.md).
+API V1 de Branché (Fastify 5, TypeScript strict). Contrats : [`docs/api-contract.md`](../../docs/api-contract.md), [`docs/api-contract-v1.1.md`](../../docs/api-contract-v1.1.md) (itinéraire, incidents, signalements). Décisions : [`docs/adr/0001-api-v1.md`](../../docs/adr/0001-api-v1.md), [`docs/adr/0003-navigation-api.md`](../../docs/adr/0003-navigation-api.md).
 
 ## Lancer
 
@@ -27,7 +27,30 @@ Parcours démo : `POST /v1/sessions` → ouvrir `checkoutUrl` → « Autoriser 5
 | `ALLOWED_RETURN_PREFIXES` | `branche://,exp://,exps://,http://localhost,http://127.0.0.1,https://*.github.io` | Préfixes autorisés pour `returnUrl` (`*` = un label DNS) |
 | `RATE_LIMIT_MAX` | `60` | Requêtes/min/IP |
 | `TRUST_PROXY` | `false` | `1` derrière Render (IP réelle pour le rate-limit) |
-| `LOG_LEVEL` | `info` | Logs pino |
+| `LOG_LEVEL` | `info` | Logs pino (sans corps, IP ni coordonnées ; `bbox` arrondie à 2 décimales) |
+| `TOMTOM_API_KEY` | — | Itinéraire avec trafic (TomTom Routing). Serveur uniquement, jamais renvoyée |
+| `VALHALLA_URL` | `https://valhalla1.openstreetmap.de/route` | Repli sans clé TomTom. Le défaut public FOSSGIS est **non commercial et non prévu pour la production** |
+| `INCIDENTS_URL` | flux data.gouv « Événements RRN non concédé » (temps réel) | DATEX II Bison Futé, cache 2 min |
+
+## Navigation (contrat V1.1)
+
+```bash
+curl -X POST localhost:8787/v1/route -H 'content-type: application/json' \
+  -d '{"from":{"lat":48.858,"lon":2.347},"to":{"lat":48.805,"lon":2.130}}'
+curl 'localhost:8787/v1/incidents?bbox=2.2,48.8,2.5,48.95'
+curl -X POST localhost:8787/v1/reports -H 'content-type: application/json' -d '{"type":"bouchon","lon":2.35,"lat":48.86}'
+```
+
+- Itinéraire en **POST** (les coordonnées ne doivent pas figurer dans les URL ni les journaux) ; `GET /v1/route` → 405. Pas de cache (conditions TomTom). Champ `attribution` à afficher sous la carte.
+- **Production** : définir `TOMTOM_API_KEY` ou un Valhalla auto-hébergé (`VALHALLA_URL`). Le serveur public FOSSGIS sert uniquement au développement et à la démo.
+- Signalements : `accident`, `travaux`, `obstacle`, `bouchon` (1 h), `borne_hs` (24 h) ; 10/h/IP ; mémoire seule, position arrondie à 4 décimales, aucune IP stockée (limitation par empreinte salée, en mémoire). Pas de type « police ».
+
+### Obtenir une clé TomTom gratuite
+
+1. Créer un compte sur <https://developer.tomtom.com> (offre gratuite : quota journalier de requêtes, sans carte bancaire à la date de rédaction ; vérifier les conditions en vigueur).
+2. Tableau de bord → **Keys** → copier la clé par défaut (ou en créer une limitée à *Routing API*).
+3. La saisir dans Render (`TOMTOM_API_KEY`, non synchronisée) ou en local : `TOMTOM_API_KEY=… npm run dev -w apps/api`.
+4. Vérifier : la réponse de `POST /v1/route` porte `"provider":"tomtom","traffic":true`.
 
 ## Passer en Stripe (mode test)
 

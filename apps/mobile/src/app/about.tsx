@@ -31,13 +31,13 @@ export default function About() {
           Bornes : base nationale IRVE (data.gouv.fr), Licence Ouverte 2.0.
           {meta ? ` ${meta.stations.toLocaleString('fr-FR')} stations et ${meta.pdc.toLocaleString('fr-FR')} points de charge, mis à jour le ${new Date(meta.generatedAt).toLocaleDateString('fr-FR')}.` : ''}
         </Text>
-        <Text style={styles.p}>Carte : © contributeurs OpenStreetMap, tuiles OpenFreeMap, rendu MapLibre.</Text>
+        <Text style={styles.p}>Carte : © contributeurs OpenStreetMap, tuiles OpenFreeMap, rendu MapLibre. Itinéraire et trafic : © TomTom. Perturbations : Bison Futé (DIR), Licence Ouverte 2.0. Zones de danger : © contributeurs OpenStreetMap (ODbL).</Text>
         <Text style={styles.p}>La disponibilité en temps réel n’est pas encore garantie : vérifiez sur place.</Text>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.h2}>Votre position</Text>
-        <Text style={styles.p}>Elle sert uniquement à trier les bornes sur votre téléphone. Elle n’est jamais envoyée à nos serveurs.</Text>
+        <Text style={styles.p}>Elle sert à trier les bornes sur votre téléphone. Elle n’est envoyée à notre serveur (et à TomTom) que pour calculer un itinéraire ou publier un signalement, sans être conservée par Branché.</Text>
       </View>
 
       {links.map((l) => (

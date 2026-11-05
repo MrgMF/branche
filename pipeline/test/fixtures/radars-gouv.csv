@@ -1,0 +1,8 @@
+id,date_heure_dernier_changement,date_heure_creation,departement,latitude,longitude,equipement,date_installation,type,emplacement,route,longueur_troncon_km,vitesse_poids_lourds_kmh,vitesse_vehicules_legers_kmh
+21120,2025-03-12T10:41:00Z,2009-06-04T00:00:00Z,91,48.7238,2.3622,MESTA 210C,2009-06-04,Radar fixe,A6 sens Province-Paris,A6,,90,110
+32051,2024-11-02T08:00:00Z,2017-02-20T00:00:00Z,69,45.7631,4.8357,MESTA FUSION,2017-02-20,Radar feu rouge,Lyon - carrefour quai Saint-Antoine,,,,50
+40817,2025-01-30T14:12:00Z,2012-10-11T00:00:00Z,37,47.3949,0.6838,MESTA 210C,2012-10-11,Radar fixe,D910 hors agglomération,D910,,80,80
+51003,2023-06-18T09:30:00Z,2015-04-01T00:00:00Z,13,43.2965,5.3698,MESTA 3.0,2015-04-01,Radar urbain,Marseille agglomération,,,50,50
+62890,2025-07-07T07:07:00Z,2019-09-09T00:00:00Z,59,50.6292,3.0573,MESTA FUSION,2019-09-09,Radar vitesse moyenne,A1 Lille,A 1,6.2,90,130
+70011,2024-02-02T12:00:00Z,2011-01-01T00:00:00Z,971,16.2650,-61.5510,MESTA 210C,2011-01-01,Radar fixe,N1,N1,,,90
+70012,2024-02-02T12:00:00Z,2011-01-01T00:00:00Z,33,,,MESTA 210C,2011-01-01,Radar fixe,D1215,D1215,,,80

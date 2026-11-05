@@ -1,6 +1,8 @@
 // Transforme les lignes IRVE (un point de charge par ligne) en stations compactes.
 // Compatible schéma consolidé v2.3.x et schéma statique récent (noms de colonnes alternatifs).
 
+import { createOperatorRegistry, operatorKey } from './operators.mjs';
+
 export const TILE_SIZE = 0.25; // degrés
 
 const first = (row, ...keys) => {
@@ -56,6 +58,7 @@ const clean = (s, max = 120) => s.replace(/\s+/g, ' ').slice(0, max);
 /** Agrège un flux de lignes en Map<stationKey, station>. */
 export function createAggregator() {
   const stations = new Map();
+  const operators = createOperatorRegistry();
   const seenPdc = new Set();
   let rows = 0;
   let skipped = 0;
@@ -92,9 +95,11 @@ export function createAggregator() {
         pmr: clean(first(row, 'accessibilite_pmr'), 40),
         maj: first(row, 'date_maj', 'horodatage_maj').slice(0, 10),
         pdc: [],
+        ok: operatorKey(row)?.key ?? '',
       };
       stations.set(key, s);
     }
+    if (s.ok) operators.observe(row, s.ok, key);
     s.p += 1;
     const kw = powerKw(row);
     if (kw > s.kw) s.kw = kw;
@@ -114,7 +119,7 @@ export function createAggregator() {
 
   function stats() { return { rows, skipped, stations: stations.size, pdc: [...stations.values()].reduce((t, s) => t + s.p, 0) }; }
 
-  return { add, stations, stats };
+  return { add, stations, stats, operators: () => operators.build() };
 }
 
 /** Répartit les stations par tuile. */
@@ -124,7 +129,7 @@ export function toTiles(stations) {
     const k = tileKey(s.lat, s.lon);
     if (!tiles.has(k)) tiles.set(k, []);
     const out = { ...s };
-    for (const f of ['tel', 'prix', 'h', 'pmr', 'maj', 'a', 'o']) if (!out[f]) delete out[f];
+    for (const f of ['tel', 'prix', 'h', 'pmr', 'maj', 'a', 'o', 'ok']) if (!out[f]) delete out[f];
     if (!out.free) delete out.free;
     if (out.acc === 'libre') delete out.acc;
     if (!out.pdc.length) delete out.pdc;

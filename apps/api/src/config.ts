@@ -19,6 +19,28 @@ export interface Config {
   trustProxy: boolean | number;
   /** Délai max pour payer avant annulation automatique (ms). */
   checkoutTtlMs: number;
+  /** Clé TomTom (serveur uniquement, jamais renvoyée). Absente → Valhalla sans trafic. */
+  tomtomApiKey: string | null;
+  /** Instance Valhalla (`/route`). Défaut : serveur public FOSSGIS, non commercial, pas pour la production. */
+  valhallaUrl: string;
+  /** Flux DATEX II Bison Futé (événements RRN non concédé). */
+  incidentsUrl: string;
+}
+
+export const DEFAULT_VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
+export const DEFAULT_INCIDENTS_URL = 'https://www.data.gouv.fr/api/1/datasets/r/d16c8cb6-0123-44e7-b8b1-f99fc6a59497';
+
+function httpUrl(env: Env, name: string, def: string): string {
+  const raw = env[name]?.trim() || def;
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    throw new Error(`Variable ${name} invalide : URL http(s) attendue.`);
+  }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error(`Variable ${name} invalide : URL http(s) attendue.`);
+  if (u.username || u.password) throw new Error(`Variable ${name} invalide : pas d'identifiants dans l'URL.`);
+  return u.toString();
 }
 
 /**
@@ -111,5 +133,8 @@ export function loadConfig(env: Env = process.env): Config {
     rateLimitMax: int(env, 'RATE_LIMIT_MAX', 60, 1),
     trustProxy: trustProxy(env.TRUST_PROXY?.trim()),
     checkoutTtlMs: 30 * 60 * 1000,
+    tomtomApiKey: env.TOMTOM_API_KEY?.trim() || null,
+    valhallaUrl: httpUrl(env, 'VALHALLA_URL', DEFAULT_VALHALLA_URL),
+    incidentsUrl: httpUrl(env, 'INCIDENTS_URL', DEFAULT_INCIDENTS_URL),
   };
 }

@@ -22,6 +22,8 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ title: 'Branché — bornes de recharge' }} />
         <Stack.Screen name="session" options={{ title: 'Recharge', gestureEnabled: false }} />
         <Stack.Screen name="about" options={{ title: 'À propos', presentation: 'modal' }} />
+        <Stack.Screen name="payer" options={{ title: 'Payer la borne' }} />
+        <Stack.Screen name="recharge" options={{ title: 'Recharge en cours', gestureEnabled: false }} />
       </Stack>
     </SafeAreaProvider>
   );

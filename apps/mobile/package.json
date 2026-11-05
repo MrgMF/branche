@@ -6,11 +6,13 @@
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
     "expo": "~58.0.23",
+    "expo-camera": "~58.0.14",
     "expo-constants": "~58.0.15",
     "expo-font": "~58.0.11",
     "expo-linking": "~58.0.16",
     "expo-location": "~58.0.20",
     "expo-router": "~58.0.30",
+    "expo-speech": "~58.0.3",
     "expo-splash-screen": "~58.0.13",
     "expo-status-bar": "~58.0.4",
     "expo-web-browser": "~58.0.7",
@@ -24,15 +26,17 @@
   },
   "devDependencies": {
     "@types/react": "~19.3.0",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^3.2.7"
   },
   "scripts": {
     "start": "expo start",
-    "build:web": "expo export -p web",
+    "build:web": "expo export -p web --clear",
     "typecheck": "tsc --noEmit",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test": "vitest run"
   },
   "private": true
 }

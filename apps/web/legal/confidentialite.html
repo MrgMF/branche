@@ -14,13 +14,15 @@
     <p class="draft"><strong>Brouillon à faire valider</strong> par un professionnel du droit avant publication définitive.</p>
 
     <h1>Politique de confidentialité</h1>
-    <p>Dernière mise à jour : 5 novembre 2026. S'applique au site et aux applications « Branché » (iOS, Android, web).</p>
+    <p>Version 0.2 · dernière mise à jour : 5 novembre 2026. S'applique au site et aux applications « Branché » (iOS, Android, web).</p>
 
     <h2>En bref</h2>
     <ul>
       <li>Pas de compte, pas de publicité, pas de mesure d'audience, aucun traceur.</li>
-      <li>Votre position GPS reste sur votre appareil : elle n'est jamais envoyée à nos serveurs.</li>
-      <li>Le paiement est en mode démo : aucune donnée de carte bancaire n'est demandée.</li>
+      <li>La recherche de la borne la plus proche se fait sur votre appareil. Votre position n'est envoyée à nos serveurs que si vous demandez un itinéraire ou faites un signalement, et seulement pour ces usages.</li>
+      <li>L'appareil photo sert à lire le QR code d'une borne. L'image est analysée sur votre téléphone et n'est ni enregistrée ni envoyée.</li>
+      <li>Quand vous payez une recharge via « Scanner et payer » ou « Lien opérateur », vous payez directement l'opérateur sur sa page. Branché ne voit pas votre carte bancaire.</li>
+      <li>Le paiement dans l'application reste en mode démo : aucune donnée de carte bancaire n'est demandée.</li>
     </ul>
 
     <h2>1. Responsable du traitement</h2>
@@ -33,10 +35,40 @@
       </thead>
       <tbody>
         <tr>
-          <td>Position de l'appareil (si vous l'autorisez)</td>
-          <td>Trouver la borne la plus proche. Le calcul est fait <strong>sur l'appareil</strong>. L'app télécharge seulement les tuiles de données couvrant votre zone (carrés d'environ 0,25° de côté, soit environ 28 × 18 km en France) : nos serveurs ne reçoivent jamais vos coordonnées.</td>
+          <td>Position de l'appareil (si vous l'autorisez), pour la carte et la borne la plus proche</td>
+          <td>Trouver la borne la plus proche. Le calcul est fait <strong>sur l'appareil</strong>. L'app télécharge seulement les tuiles de données couvrant votre zone (carrés d'environ 0,25° de côté, soit environ 28 × 18 km en France) : nos serveurs ne reçoivent pas vos coordonnées pour cet usage.</td>
           <td>Sans objet pour nos serveurs (aucune collecte) ; accès autorisé par vous via la permission du système</td>
           <td>Non conservée par Branché</td>
+        </tr>
+        <tr>
+          <td>Point de départ (souvent votre position actuelle) et point d'arrivée d'un itinéraire</td>
+          <td>Calculer l'itinéraire le plus rapide en tenant compte du trafic. Ces deux points sont envoyés à notre API, qui les transmet à notre sous-traitant de calcul d'itinéraire (TomTom, ou à défaut un serveur Valhalla, voir section 4). Ils ne sont liés à aucun compte ni identifiant.</td>
+          <td>Exécution du service que vous demandez (art. 6.1.b)</td>
+          <td>Non enregistrés par Branché en dehors du temps du calcul. Les journaux techniques ne contiennent pas les coordonnées. Chez TomTom : selon son contrat de sous-traitance</td>
+        </tr>
+        <tr>
+          <td>Zone de carte affichée (rectangle géographique)</td>
+          <td>Afficher les perturbations (Bison Futé et signalements) sur la zone que vous regardez</td>
+          <td>Exécution du service (art. 6.1.b)</td>
+          <td>Non conservée en dehors des journaux techniques</td>
+        </tr>
+        <tr>
+          <td>Signalement : type (accident, travaux, obstacle, bouchon, borne hors service), position du signalement, heure</td>
+          <td>Informer les autres usagers. Le signalement est publié <strong>anonymement</strong> : il n'est lié à aucun compte, nom ou appareil.</td>
+          <td>Intérêt légitime (art. 6.1.f) : information des usagers sur la sécurité et l'état des bornes</td>
+          <td>Supprimé automatiquement après 1 heure, ou 24 heures pour « borne hors service »</td>
+        </tr>
+        <tr>
+          <td>Adresse IP lors d'un signalement</td>
+          <td>Limiter les abus (10 signalements par heure au plus). Elle n'est pas enregistrée avec le signalement.</td>
+          <td>Intérêt légitime (art. 6.1.f)</td>
+          <td>Compteur en mémoire seulement (forme hachée), effacé après 1 heure. Jamais écrite en base</td>
+        </tr>
+        <tr>
+          <td>Image de l'appareil photo (si vous l'autorisez)</td>
+          <td>Lire le QR code d'une borne. L'analyse est faite <strong>sur votre appareil</strong>. Seul le texte du QR code est utilisé, pour vérifier son domaine sur votre téléphone</td>
+          <td>Sans objet pour nos serveurs (aucune collecte) ; accès autorisé par vous via la permission du système</td>
+          <td>Ni enregistrée, ni envoyée</td>
         </tr>
         <tr>
           <td>Session de paiement de démonstration : identifiant aléatoire (« ses_… »), borne choisie, horodatages, montants fictifs</td>
@@ -45,7 +77,7 @@
           <td>En mémoire du serveur uniquement (aucune base de données) : effacée au redémarrage du service et au plus tard après 24 heures</td>
         </tr>
         <tr>
-          <td>Journaux techniques de l'API : adresse IP, date, requête, code de réponse, navigateur</td>
+          <td>Journaux techniques de l'API : adresse IP, date, chemin de la requête (sans coordonnées), code de réponse, navigateur</td>
           <td>Sécurité, diagnostic des erreurs</td>
           <td>Intérêt légitime (art. 6.1.f)</td>
           <td>7 jours chez l'hébergeur Render (offre gratuite), puis suppression automatique</td>
@@ -64,33 +96,35 @@
         </tr>
       </tbody>
     </table>
-    <p>Nous ne vendons aucune donnée, ne faisons aucun profilage et ne prenons aucune décision automatisée vous concernant.</p>
+    <p>Nous ne vendons aucune donnée, ne faisons aucun profilage et ne prenons aucune décision automatisée vous concernant. Les zones de danger et la vérification des QR codes sont calculées à partir de données publiques ; elles ne traitent aucune donnée vous concernant en dehors de votre appareil.</p>
 
     <h2>3. Cookies et traceurs</h2>
-    <p>Branché ne dépose <strong>aucun cookie publicitaire ou de mesure d'audience et aucun traceur</strong> ; aucun bandeau de consentement n'est donc nécessaire. L'application peut garder sur votre appareil des données strictement nécessaires à son fonctionnement (tuiles de bornes en cache, identifiant de la session de démo en cours). Elles ne quittent pas votre appareil, hormis l'identifiant de session envoyé à notre API pour suivre la démo.</p>
+    <p>Branché ne dépose <strong>aucun cookie publicitaire ou de mesure d'audience et aucun traceur</strong> ; aucun bandeau de consentement n'est donc nécessaire. L'application peut garder sur votre appareil des données strictement nécessaires à son fonctionnement : tuiles de bornes, registre des opérateurs et zones de danger en cache, identifiant de la session de démo en cours. Elles ne quittent pas votre appareil, hormis l'identifiant de session envoyé à notre API pour suivre la démo.</p>
 
     <h2>4. Destinataires et sous-traitants</h2>
     <ul>
-      <li><strong>GitHub, Inc.</strong> (États-Unis) : hébergement du site et des données de bornes (GitHub Pages). GitHub enregistre l'adresse IP des visiteurs pour des raisons de sécurité. <a href="https://docs.github.com/fr/site-policy/privacy-policies/github-general-privacy-statement">Politique de GitHub</a>.</li>
-      <li><strong>Render Services, Inc.</strong> (États-Unis) : hébergement de l'API de démonstration. <a href="https://render.com/privacy">Politique de Render</a>.</li>
+      <li><strong>TomTom International B.V.</strong> (Pays-Bas) : calcul de l'itinéraire avec trafic. TomTom reçoit de notre serveur le départ, l'arrivée, l'heure de la requête et l'adresse IP de notre serveur (pas la vôtre). Il agit comme <strong>sous-traitant</strong> de Branché et utilise lui-même des hébergeurs (AWS, Microsoft Azure, Scalyr) dans des centres de données de l'Union européenne, selon son <a href="https://www.tomtom.com/legal/third-party-product-terms/data-processing-schedule">contrat de sous-traitance</a>. TomTom peut utiliser des données agrégées et anonymisées pour améliorer ses services. <a href="https://www.tomtom.com/privacy/">Politique de TomTom</a>.</li>
+      <li><strong>Serveur Valhalla</strong> [PRESTATAIRE À DÉFINIR : instance auto-hébergée ou fournisseur] : calcul de l'itinéraire sans trafic quand TomTom est indisponible. Il reçoit les mêmes points de départ et d'arrivée.</li>
+      <li><strong>GitHub, Inc.</strong> (États-Unis) : hébergement du site et des données publiques (bornes, opérateurs, zones de danger) sur GitHub Pages. GitHub enregistre l'adresse IP des visiteurs pour des raisons de sécurité. <a href="https://docs.github.com/fr/site-policy/privacy-policies/github-general-privacy-statement">Politique de GitHub</a>.</li>
+      <li><strong>Render Services, Inc.</strong> (États-Unis) : hébergement de notre API (itinéraire, perturbations, signalements, démo). <a href="https://render.com/privacy">Politique de Render</a>.</li>
       <li><strong>OpenFreeMap</strong> (Hyperknot Software Kft., Hongrie) : tuiles du fond de carte. Selon sa politique, ses journaux d'accès ne contiennent pas d'adresse IP et ses journaux d'erreurs sont supprimés sous 7 jours ; il peut utiliser le réseau Cloudflare. <a href="https://openfreemap.org/privacy/">Politique d'OpenFreeMap</a>.</li>
       <li><strong>Stripe</strong> : non utilisé en mode démo. Si un paiement réel était activé, vos données de carte seraient saisies directement sur la page Stripe Checkout et traitées par Stripe ; Branché n'y aurait pas accès. Cette politique serait alors mise à jour avant activation. <a href="https://stripe.com/fr/privacy">Politique de Stripe</a>.</li>
-      <li>Sites des opérateurs de bornes : si vous ouvrez leur lien de paiement, vous quittez Branché et leur propre politique s'applique.</li>
+      <li><strong>Sites des opérateurs de bornes</strong> (« Scanner et payer », « Lien opérateur ») : la page de paiement de l'opérateur s'ouvre dans le navigateur système intégré à l'application (Safari ou Chrome). Branché n'a pas accès à ce que vous y saisissez (carte bancaire, e-mail, etc.). L'opérateur est seul responsable de ces données ; sa propre politique de confidentialité s'applique.</li>
     </ul>
 
     <h2>5. Transferts hors de l'Union européenne</h2>
-    <p>GitHub, Render et Stripe sont établis aux États-Unis. Selon leurs politiques de confidentialité, ces trois sociétés déclarent adhérer au <a href="https://www.dataprivacyframework.gov/">Data Privacy Framework UE–États-Unis</a> (décision d'adéquation de la Commission européenne du 10 juillet 2023) et prévoient en complément des clauses contractuelles types de la Commission européenne.</p>
+    <p>GitHub, Render et Stripe sont établis aux États-Unis. Selon leurs politiques de confidentialité, ces trois sociétés déclarent adhérer au <a href="https://www.dataprivacyframework.gov/">Data Privacy Framework UE–États-Unis</a> (décision d'adéquation de la Commission européenne du 10 juillet 2023) et prévoient en complément des clauses contractuelles types de la Commission européenne. TomTom traite les données de calcul d'itinéraire dans l'Union européenne ; tout transfert hors de l'EEE par ses sous-traitants est encadré par des clauses contractuelles types.</p>
 
     <h2>6. Vos droits</h2>
-    <p>Vous disposez des droits d'accès, de rectification, d'effacement, de limitation, d'opposition (notamment au traitement fondé sur l'intérêt légitime) et de portabilité lorsqu'il s'applique (RGPD, art. 15 à 21). Comme nous ne gérons pas de compte, indiquez si possible l'identifiant de session ou la date et l'heure concernées. Écrivez à <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a> ; réponse sous un mois.</p>
-    <p>Vous pouvez retirer à tout moment l'accès à la position dans les réglages de votre appareil ou de votre navigateur ; l'application reste utilisable en déplaçant la carte manuellement.</p>
+    <p>Vous disposez des droits d'accès, de rectification, d'effacement, de limitation, d'opposition (notamment au traitement fondé sur l'intérêt légitime) et de portabilité lorsqu'il s'applique (RGPD, art. 15 à 21). Comme nous ne gérons pas de compte et que les signalements sont anonymes et effacés en 24 heures au plus, nous ne pourrons généralement pas les rattacher à vous. Indiquez si possible la date, l'heure et le lieu concernés. Écrivez à <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a> ; réponse sous un mois.</p>
+    <p>Vous pouvez retirer à tout moment l'accès à la position ou à l'appareil photo dans les réglages de votre appareil ou de votre navigateur. Sans position, vous pouvez déplacer la carte et choisir le départ à la main. Sans appareil photo, vous pouvez saisir l'identifiant de la borne à la main.</p>
     <p>Vous pouvez introduire une réclamation auprès de la CNIL : Service des plaintes, 3 place de Fontenoy, 75007 Paris, ou en ligne sur <a href="https://www.cnil.fr/fr/plaintes">cnil.fr/fr/plaintes</a>.</p>
 
     <h2>7. Sécurité et mineurs</h2>
     <p>Les échanges sont chiffrés (HTTPS). Le service ne s'adresse pas spécifiquement aux mineurs et ne leur demande aucune donnée.</p>
 
     <h2>8. Modifications</h2>
-    <p>Toute modification sera publiée sur cette page avec sa date. Un changement important (par exemple l'activation d'un paiement réel ou d'un compte utilisateur) sera signalé dans l'application avant de s'appliquer.</p>
+    <p>Toute modification sera publiée sur cette page avec sa date. Un changement important (par exemple l'activation d'un paiement réel, de la Carte Branché ou d'un compte utilisateur) sera signalé dans l'application avant de s'appliquer.</p>
   </main>
 </body>
 </html>
