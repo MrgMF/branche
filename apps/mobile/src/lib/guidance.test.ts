@@ -154,3 +154,16 @@ describe('VE', () => {
     expect(r[0].socAt).toBeGreaterThanOrEqual(8);
   });
 });
+
+import { parsePhotonClient } from './photon';
+describe('recherche Photon côté app (site sans API)', () => {
+  it('normalise et filtre hors territoire', () => {
+    const r = parsePhotonClient({
+      features: [
+        { geometry: { coordinates: [2.3589, 48.85566] }, properties: { type: 'house', housenumber: '10', street: 'Rue de Rivoli', postcode: '75004', city: 'Paris' } },
+        { geometry: { coordinates: [7.68, 45.07] }, properties: { type: 'street', name: 'Via Rivoli', city: 'Torino' } },
+      ],
+    });
+    expect(r).toEqual([{ label: '10 Rue de Rivoli', sublabel: '75004 Paris', lat: 48.85566, lon: 2.3589, kind: 'address' }]);
+  });
+});
