@@ -15,6 +15,6 @@ App tout-en-un de recharge VE (iOS, Android, web). Objectif V1 : ouvrir l'app, v
 
 ## Règles
 - Français, concis. TypeScript strict. Aucune clé payante requise.
-- Pas de déploiement proposé sous 15/20 par l'agent `critique`.
+- V2 : spécification `docs/v2-spec.md`. Trois critiques (`critique-paiement`, `critique-navigation`, `critique-ux`) : terminé seulement si chacun ≥ 18/20 et moyenne ≥ 18,5.
 - Design : `docs/design/tokens.json`, pas d'emoji, contraste AA, cibles ≥ 44 px.
 - Commandes : `npm install`, `npm test`, `npm run build` (racine).
