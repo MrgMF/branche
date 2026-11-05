@@ -34,6 +34,8 @@ const config: ExpoConfig = {
     'expo-router',
     'expo-font',
     'expo-web-browser',
+    // Rappels locaux de fin de charge et avant pénalité d'occupation (aucune notification distante)
+    ['expo-notifications', { color: '#0B7A55' }],
     ['expo-splash-screen', { image: './assets/splash-icon.png', imageWidth: 160, resizeMode: 'contain', backgroundColor: '#FFFFFF' }],
     ['expo-camera', { cameraPermission: 'Branché utilise l’appareil photo pour lire le QR code de la borne. L’image est analysée sur votre téléphone, jamais enregistrée ni envoyée.', recordAudioAndroid: false }],
     [

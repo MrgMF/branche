@@ -1,38 +1,45 @@
-// Connecteurs de paiement direct : l'utilisateur paie l'opérateur sur sa page officielle, ouverte dans l'app.
+// Connecteurs de paiement direct : l'utilisateur paie l'opérateur (lecteur de carte de la borne, ou page officielle
+// ouverte dans l'app). Branché ne voit jamais les données de carte et n'encaisse rien.
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
-import { operatorPayUrl, type Operator } from './qr';
 import { displayName, type Station } from './stations';
 import { store } from './store';
 
+export { directPayUrl, operatorLabel, operatorOf, payOptions, type PayOption } from './methods';
+
 export type ConnectorId = 'scan' | 'operator-link' | 'branche-card' | 'branche-pay';
 
-export function operatorOf(s: Station | null, ops: Operator[]): Operator | undefined {
-  return s?.ok ? ops.find((o) => o.key === s.ok) : undefined;
+function stationRef(station: Station | null) {
+  return station
+    ? { id: station.id, name: displayName(station), operator: station.o, tel: station.tel, lat: station.lat, lon: station.lon }
+    : { id: 'inconnue', name: 'Borne scannée' };
 }
 
-export function operatorLabel(s: Station | null, ops: Operator[]): string {
-  return operatorOf(s, ops)?.names[0] ?? s?.o?.split('|')[0]?.trim() ?? 'l’opérateur';
-}
-
-/** URL de paiement ad hoc connue pour cette borne (gabarit vérifié du registre). */
-export function directPayUrl(s: Station, ops: Operator[]): string | null {
-  return operatorPayUrl(operatorOf(s, ops), s.pdc?.[0]?.[0]);
-}
-
-/** Ouvre la page de paiement officielle dans le navigateur intégré, puis affiche le suivi de recharge. */
-export async function openOperatorPayment(url: string, station: Station | null, operatorName: string) {
+/** Démarre le suivi d'une recharge (avant confirmation du démarrage). */
+export function beginCharge(url: string, station: Station | null, operatorName: string) {
+  const p = store.plan();
+  const plan = p && station && p.stationId === station.id ? p : null;
   store.setDirect({
-    station: station
-      ? { id: station.id, name: displayName(station), operator: station.o, tel: station.tel }
-      : { id: 'inconnue', name: 'Borne scannée' },
+    station: stationRef(station),
     operatorName,
     url,
     openedAt: Date.now(),
     chargeStartedAt: null,
     endedAt: null,
+    ...(plan ? { plan } : {}),
   });
+}
+
+/** Paiement par carte sur le lecteur de la borne : rien à ouvrir, suivi identique dans l'app. */
+export function startReaderCharge(station: Station, operatorName: string) {
+  beginCharge('', station, operatorName);
+  router.push('/recharge');
+}
+
+/** Ouvre la page de paiement officielle dans le navigateur intégré, puis affiche le suivi de recharge. */
+export async function openOperatorPayment(url: string, station: Station | null, operatorName: string) {
+  beginCharge(url, station, operatorName);
   if (Platform.OS === 'web') {
     window.open(url, '_blank', 'noopener,noreferrer');
   } else {

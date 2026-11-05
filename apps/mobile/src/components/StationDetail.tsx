@@ -1,12 +1,14 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ApiConfig } from '../lib/api';
 import { navigationLinks, startCharge } from '../lib/charge';
 import { euros, km, kw, minutes, PAY_LABEL, PLUG_LABEL } from '../lib/format';
-import { displayName, priceInfo, type Station } from '../lib/stations';
+import { getCommunity, type Community } from '../lib/community';
+import { displayName, type Station } from '../lib/stations';
 import { store } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { TariffLines } from './Pricing';
 import { Button, Notice, Stat, Tag } from './ui';
 
 export function StationDetail(props: {
@@ -25,8 +27,16 @@ export function StationDetail(props: {
 
   const payAtStation = s.pay.filter((p) => p !== 'badge').map((p) => PAY_LABEL[p]);
   const reserved = s.acc === 'reserve';
-  const price = priceInfo(s);
   const opName = props.operatorName;
+  const [community, setCommunity] = useState<Community | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setCommunity(null);
+    getCommunity(s.id).then((c) => alive && setCommunity(c));
+    return () => {
+      alive = false;
+    };
+  }, [s.id]);
 
   async function charge() {
     setErr(null);
@@ -72,27 +82,19 @@ export function StationDetail(props: {
       {s.a ? <Text style={styles.addr}>{s.a}</Text> : null}
 
       <View style={styles.payCard}>
-        <Text style={styles.payTitle}>Payer cette borne</Text>
-        <Text style={styles.payText}>Directement sur la page officielle de {opName}, sans compte ni application à télécharger.</Text>
+        <Text style={styles.payTitle}>Recharger à cette borne</Text>
+        <Text style={styles.payText}>Sans compte ni appli : choix du point, prix estimé pour votre voiture, puis paiement direct à {opName} (carte sur la borne ou page officielle vérifiée).</Text>
         <Button
-          label="Payer depuis Branché"
+          label="Recharger ici"
           onPress={() => {
             store.setCurrent(s);
-            router.push('/payer');
+            router.push({ pathname: '/recharger', params: { station: s.id } });
           }}
-          hint="Scannez le QR code de la borne : nous vérifions qu’il mène bien au site de l’opérateur"
+          hint="Choix du point de charge, prix avant de payer et mode d’emploi"
         />
-        <View style={styles.priceRow}>
-          <Text style={styles.boxTitle}>Prix opérateur : </Text>
-          {price.url ? (
-            <Pressable accessibilityRole="link" onPress={() => Linking.openURL(price.url!)} style={styles.inlineLink}>
-              <Text style={styles.linkText}>{price.text}</Text>
-            </Pressable>
-          ) : (
-            <Text style={[styles.boxText, { flex: 1 }]}>{price.text}</Text>
-          )}
-        </View>
-        {payAtStation.length ? <Text style={styles.small}>Aussi accepté sur place : {payAtStation.join(' · ')}.</Text> : null}
+        <Text style={styles.boxTitle}>Prix opérateur</Text>
+        <TariffLines station={s} community={community} compact />
+        {payAtStation.length ? <Text style={styles.small}>Moyens acceptés sur place : {payAtStation.join(' · ')}.</Text> : null}
       </View>
 
       <Button label="Itinéraire le plus rapide" variant="secondary" onPress={props.onRoute} hint="Calcule le trajet avec le trafic en temps réel et les perturbations" />

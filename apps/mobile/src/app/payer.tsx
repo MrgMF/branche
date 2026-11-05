@@ -1,5 +1,5 @@
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +10,8 @@ import { postReport } from '../lib/navigation';
 import { directPayUrl, openOperatorPayment, operatorLabel, operatorOf } from '../lib/connectors';
 import { PAY_LABEL } from '../lib/format';
 import { verifyQr, type Operator, type QrResult } from '../lib/qr';
-import { displayName, findByEvse, loadOperators, type Station } from '../lib/stations';
+import { findStation, pointById } from '../lib/evse';
+import { displayName, loadOperators, type Station } from '../lib/stations';
 import { store } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 
@@ -37,6 +38,14 @@ export default function Payer() {
   const [confirmUnknown, setConfirmUnknown] = useState(false);
   const locked = useRef(false);
   const [reported, setReported] = useState<string | null>(null);
+  const params = useLocalSearchParams<{ from?: string }>();
+  const plan = store.plan();
+  const planPoint = station && plan?.stationId === station.id ? pointById(station, plan.pdcId) : undefined;
+
+  // Depuis le parcours « Recharger » sur téléphone : appareil photo ouvert d'office (un geste de moins)
+  useEffect(() => {
+    if (params.from === 'recharger' && Platform.OS !== 'web') startScan();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function reportQr() {
     const at = station ?? store.current();
@@ -59,18 +68,35 @@ export default function Payer() {
   const opName = operatorLabel(station, ops);
   const knownUrl = station ? directPayUrl(station, ops) : null;
 
-  function check(raw: string) {
-    const r = verifyQr(raw, station?.ok ?? null, ops, { devHosts: DEV_HOSTS });
-    if (r.kind === 'evse' && r.evse) {
-      const found = findByEvse(store.stations(), r.evse);
-      if (found && (!station || found.id === station.id)) {
-        setStation(found);
-        store.setCurrent(found);
-        r.reasons = [`Identifiant de ${displayName(found)}.`];
-      } else {
-        r.verdict = 'unknown';
-        r.reasons = [station ? 'Cet identifiant ne correspond pas à la borne sélectionnée : vérifiez la borne ou l’autocollant.' : 'Identifiant absent de la base nationale des bornes.'];
+  async function check(raw: string) {
+    let at = station;
+    // Identifiant de point dans le lien (…?evse=FR*ABC*E123) : sélectionne la station et le point
+    const inUrl = decodeURIComponent(raw).toUpperCase().match(/[A-Z]{2}\*?[A-Z0-9]{3}\*?E[A-Z0-9*]{1,40}/)?.[0];
+    if (!at && inUrl && /^https?:/i.test(raw.trim())) {
+      const f = await findStation(inUrl, store.stations());
+      if (f) {
+        at = f.station;
+        setStation(at);
+        store.setCurrent(at);
       }
+    }
+    const r = verifyQr(raw, at?.ok ?? null, ops, { devHosts: DEV_HOSTS });
+    if (r.kind === 'evse' && r.evse) {
+      const found = await findStation(r.evse, store.stations());
+      if (found) {
+        // Le QR ne contient que l'identifiant : on ouvre le parcours sur ce point, sans lien de paiement.
+        store.setCurrent(found.station);
+        setScanning(false);
+        router.replace({ pathname: '/recharger', params: { evse: r.evse, noLink: '1' } });
+        return;
+      }
+      r.verdict = 'unknown';
+      r.reasons = ['Identifiant absent de la base nationale des bornes (ou connexion coupée).'];
+    }
+    if (r.kind === 'url' && at && inUrl) {
+      const pt = pointById(at, inUrl);
+      const pl = store.plan();
+      if (pt && pl?.stationId === at.id && pl.pdcId !== pt.id) store.setPlan({ ...pl, pdcId: pt.id, pointKw: pt.kw, plugs: pt.plugs });
     }
     setConfirmUnknown(false);
     setReported(null);
@@ -105,6 +131,7 @@ export default function Payer() {
         <View style={{ flex: 1 }}>
           <Text style={styles.h1} accessibilityRole="header">Payer la borne</Text>
           {station ? <Text style={styles.sub} numberOfLines={2}>{displayName(station)} · {opName}</Text> : null}
+          {planPoint ? <Text style={styles.point}>Point …{planPoint.short}</Text> : null}
         </View>
       </View>
 
@@ -234,6 +261,7 @@ const styles = StyleSheet.create({
   back: { minHeight: MIN_TOUCH, paddingHorizontal: 14 },
   h1: { fontFamily: fonts.display, fontSize: 24, color: colors.ink },
   sub: { fontFamily: fonts.medium, fontSize: 14, color: colors.inkMuted },
+  point: { fontFamily: fonts.display, fontSize: 16, color: colors.accentPressed },
   p: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.inkMuted },
   camWrap: { height: 340, borderRadius: radius.xl, overflow: 'hidden', backgroundColor: '#000' },
   cam: { flex: 1 },

@@ -6,7 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapView, type MapHandle } from '../components/MapView';
 import type { MapOut } from '../components/mapHtml';
 import { StationDetail } from '../components/StationDetail';
+import { HereBanner } from '../components/HereBanner';
 import { TripPanel } from '../components/TripPanel';
+import { Guidance } from '../components/Guidance';
+import { SearchBar } from '../components/SearchBar';
+import { useRechargeHere } from '../lib/useRechargeHere';
 import { Chip, Notice } from '../components/ui';
 import { apiEnabled, getConfigWithRetry, type ApiConfig } from '../lib/api';
 import { DEFAULT_CENTER } from '../lib/config';
@@ -15,7 +19,7 @@ import { operatorLabel } from '../lib/connectors';
 import type { Operator } from '../lib/qr';
 import { applyFilters, displayName, distanceKm, loadAround, loadOperators, nearest, NO_FILTERS, type Filters, type Station } from '../lib/stations';
 import { store } from '../lib/store';
-import { useTrip } from '../lib/useTrip';
+import { placeDest, stationDest, useTrip } from '../lib/useTrip';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 
 type Pos = { lat: number; lon: number };
@@ -125,8 +129,11 @@ export default function MapScreen() {
   const visible = useMemo(() => applyFilters(all, filters), [all, filters]);
   const closest = useMemo(() => nearest(visible, ref, 5), [visible, ref.lat, ref.lon]);
   const selected = selectedId ? byId.get(selectedId) ?? null : null;
-  const { trip, plan, start, clear } = useTrip(map, user, Math.round(height * 0.5));
-  const sheetMax = Math.round(height * (trip ? (trip.guiding ? 0.42 : 0.55) : selected ? 0.62 : 0.46));
+  const nav = useTrip(map, user, Math.round(height * 0.55));
+  const { trip, plan } = nav;
+  const rechargeHere = useRechargeHere();
+  const [searching, setSearching] = useState(false);
+  const sheetMax = Math.round(height * (trip ? 0.58 : selected ? 0.62 : 0.46));
 
   useEffect(() => {
     store.setStations(all);
@@ -158,7 +165,10 @@ export default function MapScreen() {
     if (m.type === 'ready') {
       setMapReady(true);
       if (!user) map.current?.post({ type: 'fly', ...DEFAULT_CENTER, zoom: 12, instant: true });
-    } else if (m.type === 'tap') setSelectedId(m.id);
+    } else if (m.type === 'tapRoute' || m.type === 'tapPin') nav.onMapMessage(m);
+    else if (m.type === 'tap') {
+      if (!trip) setSelectedId(m.id);
+    }
     else if (m.type === 'moveend' && m.user) {
       setCenter({ lat: m.lat, lon: m.lon });
       if (user && distanceKm(user, m) > 2) setPanned(true);
@@ -182,8 +192,20 @@ export default function MapScreen() {
     <View style={styles.root}>
       <MapView ref={map} onMessage={onMap} />
 
-      <View style={[styles.top, { paddingTop: insets.top + 10 }, trip?.guiding ? { display: 'none' } : null]} pointerEvents="box-none">
-        <ScrollView horizontal style={{ flex: 1 }} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityLabel="Filtres">
+      <View style={[styles.top, { paddingTop: insets.top + 10 }, trip?.guiding ? { display: 'none' } : null, { flexDirection: 'column', alignItems: 'stretch', zIndex: 5 }, wide && { right: undefined, width: 440 }]} pointerEvents="box-none">
+        {!trip ? (
+          <SearchBar
+            near={user ?? (panned ? center : null)}
+            onFocusChange={setSearching}
+            onSelect={(p) => {
+              setSelectedId(null);
+              // Adresse d'une borne connue : la destination devient la borne (arrivée → recharge).
+              const st = all.find((s) => distanceKm(s, p) < 0.04);
+              plan(st ? { ...stationDest(st), name: displayName(st) } : placeDest(p));
+            }}
+          />
+        ) : null}
+        <ScrollView horizontal style={[{ flexGrow: 0 }, searching ? { display: 'none' } : null]} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityLabel="Filtres">
           <Chip label="Rapide" a11y="Rapide, 50 kW et plus" active={filters.fast} onPress={() => toggle('fast')} />
           <Chip label="CCS" active={filters.ccs} onPress={() => toggle('ccs')} />
           <Chip label="Type 2" active={filters.t2} onPress={() => toggle('t2')} />
@@ -191,7 +213,7 @@ export default function MapScreen() {
         </ScrollView>
       </View>
 
-      {user ? (
+      {user && !trip?.guiding ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Recentrer sur ma position"
@@ -202,20 +224,12 @@ export default function MapScreen() {
         </Pressable>
       ) : null}
 
-      <View style={[styles.sheet, wide && styles.sheetWide, { maxHeight: sheetMax, paddingBottom: insets.bottom + 12 }]}>
+      {trip?.guiding ? <Guidance nav={nav} onRecharge={rechargeHere} /> : null}
+      <View style={[styles.sheet, wide && styles.sheetWide, { maxHeight: sheetMax, paddingBottom: insets.bottom + 12 }, trip?.guiding ? { display: 'none' } : null]}>
         <View style={styles.grip} />
         <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 8 }} keyboardShouldPersistTaps="handled">
           {trip ? (
-            <TripPanel
-              trip={trip}
-              user={user}
-              onStart={start}
-              onStop={clear}
-              onPay={() => {
-                store.setCurrent(trip.dest);
-                router.push('/payer');
-              }}
-            />
+            <TripPanel nav={nav} />
           ) : selected ? (
             <StationDetail
               station={selected}
@@ -233,6 +247,9 @@ export default function MapScreen() {
                 <Text style={[styles.h1, { flex: 1 }]} accessibilityRole="header">
                   {panned || !user ? 'Bornes autour de la carte' : 'Bornes les plus proches'}
                 </Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="Mes recharges et dépenses" onPress={() => router.push('/historique')} style={[styles.infoBtn, { width: undefined, paddingHorizontal: 14 }]}>
+                  <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.ink }}>Mes recharges</Text>
+                </Pressable>
                 <Pressable accessibilityRole="button" accessibilityLabel="À propos et mentions légales" onPress={() => router.push('/about')} style={styles.infoBtn}>
                   <Text style={styles.roundText}>i</Text>
                 </Pressable>
@@ -241,7 +258,9 @@ export default function MapScreen() {
                 <Pressable accessibilityRole="button" onPress={() => router.push('/recharge')} style={styles.resume}>
                   <Text style={styles.resumeText}>Recharge en cours chez {resume} · Reprendre</Text>
                 </Pressable>
-              ) : null}
+              ) : (
+                <HereBanner user={user} />
+              )}
               {loc === 'denied' && !panned ? (
                 <Notice>Position non autorisée : déplacez la carte vers votre zone ou autorisez la localisation dans les réglages.</Notice>
               ) : null}

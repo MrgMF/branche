@@ -1,21 +1,42 @@
-// État partagé entre écrans ; la recharge payée chez l'opérateur est persistée
-// (l'app peut être fermée pendant que la page de paiement est ouverte).
+// État partagé entre écrans ; la recharge en cours est persistée (l'app peut être fermée pendant
+// que la page de paiement est ouverte ou pendant la charge) et reprise à la réouverture.
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Station } from './stations';
+import type { MethodId } from './history';
+import type { Plug, Station } from './stations';
+
+/** Ce que l'utilisateur a choisi dans le parcours « Recharger » (point, méthode, véhicule, tarif). */
+export interface ChargePlan {
+  stationId: string;
+  pdcId?: string;
+  pointKw: number;
+  plugs: Plug[];
+  method: MethodId;
+  /** Batterie au branchement (%), null si inconnue. */
+  socPercent: number | null;
+  vehicle: { name: string; batteryKWh: number; maxDcKW: number; maxAcKW: number } | null;
+  /** Texte IRVE `tarification` (analysé à l'affichage) et gratuité. */
+  tariffRaw?: string;
+  free?: boolean;
+}
 
 export interface DirectCharge {
-  station: { id: string; name: string; operator?: string; tel?: string };
+  station: { id: string; name: string; operator?: string; tel?: string; lat?: number; lon?: number };
   operatorName: string;
+  /** Page de paiement de l'opérateur ('' pour un paiement par carte au lecteur). */
   url: string;
   openedAt: number;
   chargeStartedAt: number | null;
   endedAt: number | null;
+  plan?: ChargePlan;
+  /** Notifications locales programmées (fin à 80 %, avant pénalité). */
+  alertIds?: string[];
 }
 
 const KEY = 'branche.direct.v1';
 let stations: Station[] = [];
 let current: Station | null = null;
 let direct: DirectCharge | null = null;
+let plan: ChargePlan | null = null;
 
 export const store = {
   setStations: (list: Station[]) => {
@@ -26,6 +47,11 @@ export const store = {
     current = s;
   },
   current: () => current,
+  /** Choix en cours dans le parcours de recharge (mémoire seulement, recopié dans DirectCharge au paiement). */
+  setPlan: (p: ChargePlan | null) => {
+    plan = p;
+  },
+  plan: () => plan,
   setDirect: (d: DirectCharge | null) => {
     direct = d;
     (d ? AsyncStorage.setItem(KEY, JSON.stringify(d)) : AsyncStorage.removeItem(KEY)).catch(() => undefined);
