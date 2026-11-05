@@ -1,7 +1,6 @@
 // Recherche d'adresse ou de lieu (TomTom Search, repli Photon), avec destinations récentes stockées sur l'appareil.
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { apiEnabled } from '../lib/api';
 import { distanceKm } from '../lib/stations';
 import { km } from '../lib/format';
 import { searchPlaces, type Place } from '../lib/navigation';
@@ -31,10 +30,6 @@ export function SearchBar(props: { near: { lat: number; lon: number } | null; on
     if (text.length < 3) {
       setResults([]);
       setBusy(false);
-      return;
-    }
-    if (!apiEnabled()) {
-      setError('Recherche d’adresse indisponible : service non configuré.');
       return;
     }
     const ctrl = new AbortController();

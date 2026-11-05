@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapView, type MapHandle } from '../components/MapView';
 import type { MapOut } from '../components/mapHtml';
 import { StationDetail } from '../components/StationDetail';
-import { HereBanner } from '../components/HereBanner';
+import { ChargeShortcuts, HereBanner } from '../components/HereBanner';
 import { TripPanel } from '../components/TripPanel';
 import { Guidance } from '../components/Guidance';
 import { SearchBar } from '../components/SearchBar';
@@ -20,6 +20,8 @@ import type { Operator } from '../lib/qr';
 import { applyFilters, displayName, distanceKm, loadAround, loadOperators, nearest, NO_FILTERS, type Filters, type Station } from '../lib/stations';
 import { store } from '../lib/store';
 import { placeDest, stationDest, useTrip } from '../lib/useTrip';
+import { useUserLocation } from '../lib/useLocation';
+import { MapControls, useMapControls } from '../components/MapControls';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 
 type Pos = { lat: number; lon: number };
@@ -31,8 +33,10 @@ export default function MapScreen() {
   const wide = width >= 768;
   const map = useRef<MapHandle>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [loc, setLoc] = useState<LocState>('pending');
-  const [user, setUser] = useState<Pos | null>(null);
+  // Position en continu (point bleu, précision, cap) — src/lib/useLocation.ts
+  const geo = useUserLocation();
+  const loc: LocState = geo.status === 'granted' || geo.coarse ? 'granted' : geo.status === 'pending' ? 'pending' : 'denied';
+  const user: Pos | null = geo.coarse;
   const [center, setCenter] = useState<Pos>(DEFAULT_CENTER);
   const [byId, setById] = useState<Map<string, Station>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -78,22 +82,6 @@ export default function MapScreen() {
     return () => sub.remove();
   }, [selectedId]);
 
-  // Localisation
-  useEffect(() => {
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') return setLoc('denied');
-        setLoc('granted');
-        const last = await Location.getLastKnownPositionAsync().catch(() => null);
-        if (last) setUser({ lat: last.coords.latitude, lon: last.coords.longitude });
-        const p = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        setUser({ lat: p.coords.latitude, lon: p.coords.longitude });
-      } catch {
-        setLoc('denied');
-      }
-    })();
-  }, []);
 
   // Centre de recherche : position, puis centre de la carte quand l'utilisateur la déplace
   const [panned, setPanned] = useState(false);
@@ -129,10 +117,11 @@ export default function MapScreen() {
   const visible = useMemo(() => applyFilters(all, filters), [all, filters]);
   const closest = useMemo(() => nearest(visible, ref, 5), [visible, ref.lat, ref.lon]);
   const selected = selectedId ? byId.get(selectedId) ?? null : null;
-  const nav = useTrip(map, user, Math.round(height * 0.55));
+  const nav = useTrip(map, geo.fix ?? user, Math.round(height * 0.55));
   const { trip, plan } = nav;
   const rechargeHere = useRechargeHere();
   const [searching, setSearching] = useState(false);
+  const controls = useMapControls(map, geo, { guiding: !!trip?.guiding, offsetY: wide ? 0 : -height * 0.18 });
   const sheetMax = Math.round(height * (trip ? 0.58 : selected ? 0.62 : 0.46));
 
   useEffect(() => {
@@ -151,9 +140,11 @@ export default function MapScreen() {
     });
   }, [visible, mapReady]);
 
+  // Premier centrage sur la position ; ensuite, recentrage/suivi via « Ma position » (MapControls).
+  const flown = useRef(false);
   useEffect(() => {
-    if (!mapReady || !user) return;
-    map.current?.post({ type: 'user', ...user });
+    if (!mapReady || !user || flown.current) return;
+    flown.current = true;
     if (!panned && !selectedId) map.current?.post({ type: 'fly', ...user, zoom: 14, offsetY: -height * 0.18 });
   }, [user, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -162,6 +153,7 @@ export default function MapScreen() {
   }, [selectedId, mapReady]);
 
   function onMap(m: MapOut) {
+    controls.onMapMessage(m);
     if (m.type === 'ready') {
       setMapReady(true);
       if (!user) map.current?.post({ type: 'fly', ...DEFAULT_CENTER, zoom: 12, instant: true });
@@ -193,19 +185,17 @@ export default function MapScreen() {
       <MapView ref={map} onMessage={onMap} />
 
       <View style={[styles.top, { paddingTop: insets.top + 10 }, trip?.guiding ? { display: 'none' } : null, { flexDirection: 'column', alignItems: 'stretch', zIndex: 5 }, wide && { right: undefined, width: 440 }]} pointerEvents="box-none">
-        {!trip ? (
-          <SearchBar
-            near={user ?? (panned ? center : null)}
-            onFocusChange={setSearching}
-            onSelect={(p) => {
-              setSelectedId(null);
-              // Adresse d'une borne connue : la destination devient la borne (arrivée → recharge).
-              const st = all.find((s) => distanceKm(s, p) < 0.04);
-              plan(st ? { ...stationDest(st), name: displayName(st) } : placeDest(p));
-            }}
-          />
-        ) : null}
-        <ScrollView horizontal style={[{ flexGrow: 0 }, searching ? { display: 'none' } : null]} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityLabel="Filtres">
+        <SearchBar
+          near={user ?? (panned ? center : null)}
+          onFocusChange={setSearching}
+          onSelect={(p) => {
+            setSelectedId(null);
+            // Adresse d'une borne connue : la destination devient la borne (arrivée → recharge).
+            const st = all.find((s) => distanceKm(s, p) < 0.04);
+            plan(st ? { ...stationDest(st), name: displayName(st) } : placeDest(p));
+          }}
+        />
+        <ScrollView horizontal style={[{ flexGrow: 0 }, searching || trip ? { display: 'none' } : null]} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityLabel="Filtres">
           <Chip label="Rapide" a11y="Rapide, 50 kW et plus" active={filters.fast} onPress={() => toggle('fast')} />
           <Chip label="CCS" active={filters.ccs} onPress={() => toggle('ccs')} />
           <Chip label="Type 2" active={filters.t2} onPress={() => toggle('t2')} />
@@ -213,15 +203,16 @@ export default function MapScreen() {
         </ScrollView>
       </View>
 
-      {user && !trip?.guiding ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Recentrer sur ma position"
-          onPress={recenter}
-          style={[styles.round, styles.recenter, { bottom: sheetMax + 16 }]}
-        >
-          <View style={styles.target} />
-        </Pressable>
+      {!trip?.guiding && !searching ? (
+        <MapControls
+          api={controls}
+          status={geo.status}
+          bottom={wide ? 24 : sheetMax + 12}
+          onLocate={() => {
+            setPanned(false);
+            setSelectedId(null);
+          }}
+        />
       ) : null}
 
       {trip?.guiding ? <Guidance nav={nav} onRecharge={rechargeHere} /> : null}
@@ -247,13 +238,11 @@ export default function MapScreen() {
                 <Text style={[styles.h1, { flex: 1 }]} accessibilityRole="header">
                   {panned || !user ? 'Bornes autour de la carte' : 'Bornes les plus proches'}
                 </Text>
-                <Pressable accessibilityRole="button" accessibilityLabel="Mes recharges et dépenses" onPress={() => router.push('/historique')} style={[styles.infoBtn, { width: undefined, paddingHorizontal: 14 }]}>
-                  <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.ink }}>Mes recharges</Text>
-                </Pressable>
                 <Pressable accessibilityRole="button" accessibilityLabel="À propos et mentions légales" onPress={() => router.push('/about')} style={styles.infoBtn}>
                   <Text style={styles.roundText}>i</Text>
                 </Pressable>
               </View>
+              <ChargeShortcuts />
               {resume ? (
                 <Pressable accessibilityRole="button" onPress={() => router.push('/recharge')} style={styles.resume}>
                   <Text style={styles.resumeText}>Recharge en cours chez {resume} · Reprendre</Text>

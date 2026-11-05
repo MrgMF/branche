@@ -90,3 +90,26 @@ const styles = StyleSheet.create({
   close: { width: MIN_TOUCH, height: MIN_TOUCH, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   closeX: { fontSize: 24, lineHeight: 26, color: colors.ink, fontFamily: fonts.medium },
 });
+
+/** Accès en un geste depuis la carte aux écrans du parcours de recharge (routes : /historique, /vehicule, /recharger). */
+export function ChargeShortcuts() {
+  return (
+    <View style={short.row}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Mes recharges" accessibilityHint="Historique, dépenses du mois, export CSV" onPress={() => router.push('/historique')} style={short.btn}>
+        <Text style={short.text}>Mes recharges</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Mon véhicule" accessibilityHint="Modèle et batterie, pour estimer durée et prix" onPress={() => router.push('/vehicule')} style={short.btn}>
+        <Text style={short.text}>Mon véhicule</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Scanner une borne" accessibilityHint="Lire le QR code de la borne pour la recharger" onPress={() => router.push('/payer')} style={short.btn}>
+        <Text style={short.text}>Scanner</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const short = StyleSheet.create({
+  row: { flexDirection: 'row', gap: 8 },
+  btn: { flex: 1, minHeight: MIN_TOUCH, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  text: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink, textAlign: 'center' },
+});

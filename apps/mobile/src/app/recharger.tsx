@@ -167,7 +167,8 @@ export default function Recharger() {
     );
   }
 
-  const vehiclePrompt = vehicle === null && !skipped;
+  // Proposé au 1er passage (au choix du point, ou directement s'il n'y a qu'un point) ; jamais bloquant
+  const vehiclePrompt = vehicle === null && !skipped && (step === 'point' || usable.length < 2);
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]}>

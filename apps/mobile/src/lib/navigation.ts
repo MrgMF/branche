@@ -1,5 +1,6 @@
 // Itinéraire le plus rapide (trafic), perturbations et zones de danger.
 import { API_URL, DATA_URL } from './config';
+import { searchPhoton } from './photon';
 
 export type LonLat = [number, number];
 
@@ -145,6 +146,8 @@ export interface SearchResponse {
 }
 /** Recherche d'adresse (POST : la saisie n'apparaît dans aucune URL). */
 export async function searchPlaces(q: string, near?: { lat: number; lon: number } | null, signal?: AbortSignal): Promise<SearchResponse> {
+  // Site statique sans API : recherche directe chez Photon (données OSM, sans clé).
+  if (!API_URL) return searchPhoton(q, near, signal);
   let res: Response;
   try {
     res = await fetch(`${API_URL}/v1/search`, {
@@ -158,6 +161,7 @@ export async function searchPlaces(q: string, near?: { lat: number; lon: number 
     throw new Error('Recherche indisponible. Vérifiez votre connexion.');
   }
   const body = (await res.json().catch(() => ({}))) as Partial<SearchResponse> & { error?: { message?: string } };
+  if (res.status === 503) return searchPhoton(q, near, signal);
   if (!res.ok) throw new Error(body.error?.message ?? 'Recherche indisponible pour le moment.');
   return { provider: body.provider ?? 'photon', attribution: body.attribution ?? '', results: body.results ?? [] };
 }
