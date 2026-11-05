@@ -14,4 +14,4 @@
 | Journaux expurgés (`req` = méthode + URL masquée) | Pas de corps, d'IP ni de coordonnées ; `bbox` arrondie à 2 décimales | Diagnostic moins riche, assumé |
 | `NODE_ENV=production` : jamais de Valhalla public ; sans clé ni `VALHALLA_URL` → 503 `routing_unavailable` + avertissement au démarrage | Revue critique : ne pas dépendre en production d'un service non commercial | Itinéraire indisponible tant que la clé n'est pas saisie sur Render |
 | Interrupteur `REPORTS_DISABLED` (zones + date de fin) : 403 `reports_disabled`, signalements de la zone masqués | Note juridique : interdiction préfectorale de diffusion possible | Changement par variable d'environnement (redéploiement) ; date avec fuseau obligatoire |
-| Type `qr_suspect`, TTL 7 jours, sévérité 3 | Prévenir la fraude au QR code sur les bornes (cohérent avec `verifyQr`) | Signalement non vérifié, affiché comme tel |
+| Type `qr_suspect`, TTL 24 h, sévérité 3, diffusé après 2 signalants distincts à < 50 m | Prévenir la fraude au QR code sans permettre à une seule personne de discréditer une borne (revue critique) | Empreinte salée en mémoire pour ce seul type ; alerte retardée jusqu'au 2e signalement |

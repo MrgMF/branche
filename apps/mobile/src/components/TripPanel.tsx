@@ -63,7 +63,17 @@ export function TripPanel(props: {
           <Text style={styles.muted}>Calcul du trajet le plus rapide avec le trafic…</Text>
         </View>
       ) : null}
-      {trip.error ? <Notice tone="error">{trip.error}</Notice> : null}
+      {trip.error ? (
+        <>
+          <Notice tone="error">{trip.error}</Notice>
+          <Text style={styles.muted}>Lancez le trajet avec :</Text>
+          <View style={styles.row}>
+            {navigationLinks(trip.dest).map((l) => (
+              <Button key={l.label} label={l.label} style={{ flex: 1 }} onPress={() => Linking.openURL(l.url)} />
+            ))}
+          </View>
+        </>
+      ) : null}
 
       {r ? (
         <>

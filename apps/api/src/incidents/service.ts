@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ReportsDisabledZone } from '../config.js';
-import { inBbox, round, type BBox } from '../lib/geo.js';
+import { haversineM, inBbox, round, type BBox } from '../lib/geo.js';
 import { fetchWithTimeout, type FetchLike } from '../lib/ttlCache.js';
 import { createDatexParser, parseDatex, type Incident, type IncidentType } from './datex.js';
 
@@ -14,7 +14,7 @@ const REPORT_TTL: Record<ReportType, number> = {
   obstacle: HOUR,
   bouchon: HOUR,
   borne_hs: 24 * HOUR,
-  qr_suspect: 7 * 24 * HOUR,
+  qr_suspect: 24 * HOUR,
 };
 const REPORT_INCIDENT: Record<ReportType, { type: IncidentType; title: string; severity: 1 | 2 | 3 }> = {
   accident: { type: 'accident', title: 'Accident signalé', severity: 3 },
@@ -26,7 +26,8 @@ const REPORT_INCIDENT: Record<ReportType, { type: IncidentType; title: string; s
 };
 
 const REPORT_DESCRIPTION: Partial<Record<ReportType, string>> = {
-  qr_suspect: 'Un usager signale un QR code possiblement frauduleux sur une borne. Ne le scannez pas : payez par l’app de l’opérateur ou par carte.',
+  qr_suspect:
+    'Un QR code suspect a été signalé ici. Vérifiez l’adresse affichée avant de payer, ou payez avec la carte sur le lecteur de la borne.',
 };
 
 /**
@@ -40,7 +41,15 @@ interface Report {
   lat: number;
   createdAt: number;
   expiresAt: number;
+  /**
+   * Uniquement pour `qr_suspect` : empreinte salée (sel aléatoire par processus, jamais persisté) servant à
+   * exiger deux signalants distincts. Ni IP ni identifiant ; illisible après redémarrage.
+   */
+  reporter?: string;
 }
+
+/** `qr_suspect` n'est diffusé qu'après 2 signalants distincts à moins de 50 m (anti-abus). */
+export const QR_CONFIRM_RADIUS_M = 50;
 
 export class ReportStore {
   private readonly byId = new Map<string, Report>();
@@ -57,7 +66,7 @@ export class ReportStore {
     return this.disabledZones.some((z) => t < z.until && lon >= z.w && lon <= z.e && lat >= z.s && lat <= z.n);
   }
 
-  add(type: ReportType, lon: number, lat: number): Report {
+  add(type: ReportType, lon: number, lat: number, reporter?: string): Report {
     this.prune();
     if (this.byId.size >= this.max) {
       const oldest = this.byId.keys().next().value;
@@ -66,13 +75,16 @@ export class ReportStore {
     const t = this.now();
     // Position arrondie à ~11 m : suffisant pour l'alerte, limite la précision stockée.
     const r: Report = { id: `cm-${randomUUID()}`, type, lon: round(lon, 4), lat: round(lat, 4), createdAt: t, expiresAt: t + REPORT_TTL[type] };
+    if (type === 'qr_suspect' && reporter) r.reporter = reporter;
     this.byId.set(r.id, r);
     return r;
   }
 
   active(): Incident[] {
     this.prune();
-    return [...this.byId.values()].filter((r) => !this.isDisabledAt(r.lon, r.lat)).map((r) => {
+    const visible = [...this.byId.values()].filter((r) => !this.isDisabledAt(r.lon, r.lat));
+    const others = visible.filter((r) => r.type !== 'qr_suspect');
+    return [...others, ...confirmedQr(visible)].map((r) => {
       const m = REPORT_INCIDENT[r.type];
       return {
         id: r.id,
@@ -89,10 +101,31 @@ export class ReportStore {
     });
   }
 
+  /** Nombre de signalements stockés (y compris `qr_suspect` en attente de confirmation). */
+  size(): number {
+    this.prune();
+    return this.byId.size;
+  }
+
   private prune(): void {
     const t = this.now();
     for (const [id, r] of this.byId) if (r.expiresAt <= t) this.byId.delete(id);
   }
+}
+
+/**
+ * `qr_suspect` confirmés : un signalement est confirmé s'il existe un autre `qr_suspect` actif d'un signalant
+ * différent à moins de 50 m. Un seul incident par grappe (le plus ancien), pour ne pas dupliquer l'alerte.
+ */
+function confirmedQr(reports: Report[]): Report[] {
+  const qr = reports.filter((r) => r.type === 'qr_suspect' && r.reporter).sort((a, b) => a.createdAt - b.createdAt);
+  const near = (a: Report, b: Report) => haversineM(a, b) <= QR_CONFIRM_RADIUS_M;
+  const out: Report[] = [];
+  for (const r of qr) {
+    const confirmed = qr.some((o) => o !== r && o.reporter !== r.reporter && near(o, r));
+    if (confirmed && !out.some((e) => near(e, r))) out.push(r);
+  }
+  return out;
 }
 
 export interface IncidentsResponse {

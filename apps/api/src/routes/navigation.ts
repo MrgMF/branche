@@ -119,7 +119,7 @@ export async function navigationRoutes(app: FastifyInstance, deps: NavigationDep
       if (deps.reports.isDisabledAt(lon, lat)) {
         throw new AppError(403, 'reports_disabled', 'Les signalements sont temporairement suspendus dans cette zone (décision des autorités).');
       }
-      const r = deps.reports.add(type as ReportType, lon, lat);
+      const r = deps.reports.add(type as ReportType, lon, lat, type === 'qr_suspect' ? hashedIp(req) : undefined);
       reply.code(201).header('cache-control', 'no-store');
       return { id: r.id, expiresAt: new Date(r.expiresAt).toISOString() };
     },

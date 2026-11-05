@@ -45,7 +45,7 @@ curl -X POST localhost:8787/v1/reports -H 'content-type: application/json' -d '{
 
 - Itinéraire en **POST** (les coordonnées ne doivent pas figurer dans les URL ni les journaux) ; `GET /v1/route` → 405. Pas de cache (conditions TomTom). Champ `attribution` à afficher sous la carte.
 - **Production** (`NODE_ENV=production`, défini dans `render.yaml`) : `TOMTOM_API_KEY` requise pour le trafic, ou un Valhalla auto-hébergé (`VALHALLA_URL`) ; sinon `POST /v1/route` répond `503 routing_unavailable`. Le serveur public FOSSGIS sert uniquement au développement.
-- Signalements : `accident`, `travaux`, `obstacle`, `bouchon` (1 h), `borne_hs` (24 h), `qr_suspect` (7 j) ; suspension par zone via `REPORTS_DISABLED` ; 10/h/IP ; mémoire seule, position arrondie à 4 décimales, aucune IP stockée (limitation par empreinte salée, en mémoire). Pas de type « police ».
+- Signalements : `accident`, `travaux`, `obstacle`, `bouchon` (1 h), `borne_hs` (24 h), `qr_suspect` (24 h, diffusé après 2 signalants distincts à < 50 m) ; suspension par zone via `REPORTS_DISABLED` ; 10/h/IP ; mémoire seule, position arrondie à 4 décimales, aucune IP stockée (limitation par empreinte salée, en mémoire). Pas de type « police ».
 
 ### Obtenir une clé TomTom gratuite
 

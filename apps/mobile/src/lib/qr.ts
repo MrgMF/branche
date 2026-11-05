@@ -164,7 +164,11 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
 
   const platform = PAYMENT_PLATFORMS[domain];
   if (platform) {
-    return { ...base, verdict: 'payment-platform', reasons: [`Plateforme de paiement reconnue (${platform}). Vérifiez que la page affiche bien le nom de l’opérateur de la borne.`] };
+    return {
+      ...base,
+      verdict: 'payment-platform',
+      reasons: [`Paiement via ${platform} : n’importe qui peut créer ce type de lien. Vérifiez que le bénéficiaire affiché est bien ${stationOp?.names[0] ?? 'l’opérateur de la borne'}.`],
+    };
   }
 
   // Imitation d'un domaine connu : distance d'édition 1 (libellé court) ou 2 (≥ 6 caractères)
@@ -177,11 +181,15 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
         return { ...base, verdict: 'dangerous', reasons: [`Ce lien se fait passer pour ${o.names[0]} (${d}) : le site réel est ${domain}.`] };
       }
       if (lbl === known) {
-        return { ...base, verdict: 'unknown', reasons: [`Ce site porte le nom de ${o.names[0]} mais n’est pas son domaine connu (${d}).`] };
+        // Fraude documentée : même nom, autre extension (izivia.site). Les domaines secondaires réels sont déclarés dans le registre.
+        return { ...base, verdict: 'dangerous', reasons: [`Ce site porte le nom de ${o.names[0]} mais n’est pas son domaine (${d}).`] };
+      }
+      const minLen = Math.min(known.length, lbl.length);
+      if (minLen === 5 && editDistance(lbl, known, 1) <= 1) {
+        return { ...base, verdict: 'unknown', reasons: [`Ce domaine ressemble à celui de ${o.names[0]} (${d}) sans l’être.`] };
       }
       // Libellés courts : seules les substitutions de caractères sosies comptent (0/o, 1/l, rn/m…)
-      const close =
-        Math.min(known.length, lbl.length) >= 6 ? editDistance(lbl, known, 2) <= 2 : lbl !== known && lookalike(lbl) === lookalike(known);
+      const close = minLen >= 6 ? editDistance(lbl, known, 2) <= 2 : lbl !== known && lookalike(lbl) === lookalike(known);
       const contains = known.length >= 5 && lbl.includes(known);
       if (close || contains) {
         return { ...base, verdict: 'dangerous', reasons: [`Ce domaine imite celui de ${o.names[0]} (${d}).`] };

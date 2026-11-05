@@ -14,13 +14,13 @@ import { displayName, findByEvse, loadOperators, type Station } from '../lib/sta
 import { store } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 
-const PAYABLE = new Set<QrResult['verdict']>(['official', 'known-operator', 'payment-platform']);
+const PAYABLE = new Set<QrResult['verdict']>(['official', 'known-operator']);
 const WARN = { bg: colors.warnSoft, fg: '#7A3E06' };
 const OK = { bg: colors.accentSoft, fg: colors.accentPressed };
 const TONE: Record<QrResult['verdict'], { bg: string; fg: string; title: string }> = {
   official: { ...OK, title: 'Domaine de l’opérateur (base IRVE)' },
   'known-operator': { ...OK, title: 'Opérateur reconnu (base IRVE)' },
-  'payment-platform': { ...OK, title: 'Plateforme de paiement reconnue' },
+  'payment-platform': { ...WARN, title: 'Plateforme de paiement : bénéficiaire à vérifier' },
   'other-operator': { ...WARN, title: 'Autre opérateur que celui de la borne' },
   unknown: { ...WARN, title: 'Lien non vérifié' },
   dangerous: { bg: '#FDECEC', fg: colors.danger, title: 'QR code suspect — paiement bloqué' },
@@ -158,7 +158,9 @@ export default function Payer() {
 
       {result && tone ? (
         <View style={[styles.result, { backgroundColor: tone.bg }]} accessibilityLiveRegion="polite">
-          <Text style={[styles.resultTitle, { color: tone.fg }]}>{result.kind === 'evse' ? 'Borne identifiée' : tone.title}</Text>
+          <Text style={[styles.resultTitle, { color: tone.fg }]}>
+            {result.kind === 'evse' ? (result.verdict === 'unknown' ? 'Identifiant différent de la borne sélectionnée' : 'Borne identifiée') : tone.title}
+          </Text>
           {result.host ? <Text style={[styles.domain, { color: tone.fg }]}>{result.host}</Text> : null}
           {result.reasons.map((r) => (
             <Text key={r} style={[styles.reason, { color: tone.fg }]}>
@@ -173,7 +175,7 @@ export default function Payer() {
             <Button label={`Payer sur la page ${payName}`} onPress={() => openOperatorPayment(result.url!, station, payName)} />
           ) : null}
 
-          {result.kind === 'url' && (result.verdict === 'unknown' || result.verdict === 'other-operator') && result.url ? (
+          {result.kind === 'url' && (result.verdict === 'unknown' || result.verdict === 'other-operator' || result.verdict === 'payment-platform') && result.url ? (
             <>
               <Text style={[styles.reason, { color: tone.fg }]}>
                 Avant de payer, vérifiez que le QR code n’est pas un autocollant ajouté par-dessus l’original et que la page affiche bien le nom de l’opérateur.

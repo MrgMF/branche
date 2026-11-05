@@ -45,8 +45,16 @@ describe('verifyQr', () => {
     (raw) => expect(verifyQr(raw, 'izivia', [...OPS, { key: 'watt', names: ['Watt'], domains: ['watt.fr'], payUrl: null }, { key: 'lidl', names: ['Lidl'], domains: ['lidl.fr'], payUrl: null }]).verdict).not.toBe('dangerous'),
   );
 
-  it('même nom, autre extension → avertissement, pas blocage', () => {
-    expect(verifyQr('https://izivia.site/pay', 'izivia', OPS).verdict).toBe('unknown');
+  it('même nom, autre extension → bloqué (fraude documentée)', () => {
+    expect(verifyQr('https://izivia.site/pay', 'izivia', OPS).verdict).toBe('dangerous');
+    expect(verifyQr('https://metropolis-recharge.com/', 'izivia', OPS).verdict).toBe('dangerous');
+  });
+
+  it('faute de frappe sur un nom de 5 lettres → avertissement nommant l’opérateur', () => {
+    const ops = [...OPS, { key: 'tesla', names: ['Tesla'], domains: ['tesla.com'], payUrl: null }];
+    const r = verifyQr('https://teslla.com/x', 'izivia', ops);
+    expect(r.verdict).toBe('unknown');
+    expect(r.reasons[0]).toContain('Tesla');
   });
 
   it('plateforme de paiement reconnue', () => {

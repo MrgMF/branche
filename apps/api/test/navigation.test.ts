@@ -564,20 +564,77 @@ describe('suspension des signalements (REPORTS_DISABLED)', () => {
   );
 });
 
-describe('signalement qr_suspect', () => {
-  it('TTL 7 jours, titre « QR code suspect signalé », servi dans /v1/incidents', async () => {
-    const { app: a, clock } = await makeApp({}, { fetch: () => Promise.resolve(xml('<d2LogicalModel/>')) });
+describe('signalement qr_suspect (anti-abus)', () => {
+  const emptyFeed = () => Promise.resolve(xml('<d2LogicalModel/>'));
+  const qr = (a: FastifyInstance, lon: number, lat: number, ip: string) =>
+    a.inject({ method: 'POST', url: '/v1/reports', payload: { type: 'qr_suspect', lon, lat }, remoteAddress: ip });
+  const list = async (a: FastifyInstance) => (await a.inject('/v1/incidents?bbox=2.3,48.8,2.4,48.9')).json().incidents;
+  const DESC = 'Un QR code suspect a été signalé ici. Vérifiez l’adresse affichée avant de payer, ou payez avec la carte sur le lecteur de la borne.';
+
+  it('stocké mais non diffusé tant qu’un seul signalant ; diffusé après un 2e signalant à < 50 m', async () => {
+    const { app: a, clock } = await makeApp({}, { fetch: emptyFeed });
     app = a;
-    const res = await app.inject({ method: 'POST', url: '/v1/reports', payload: { type: 'qr_suspect', lon: 2.35, lat: 48.86 } });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().expiresAt).toBe(new Date(clock.t + 7 * 24 * 3600_000).toISOString());
-    const list = async () => (await app.inject('/v1/incidents?bbox=2.3,48.8,2.4,48.9')).json().incidents;
-    expect(await list()).toEqual([
-      expect.objectContaining({ type: 'autre', title: 'QR code suspect signalé', severity: 3, source: 'communaute', lon: 2.35, lat: 48.86 }),
+    const first = await qr(app, 2.35, 48.86, '198.51.100.1');
+    expect(first.statusCode).toBe(201);
+    expect(first.json().expiresAt).toBe(new Date(clock.t + 24 * 3600_000).toISOString());
+    expect(await list(app)).toEqual([]);
+    clock.advance(60_000);
+    // ≈ 22 m plus loin (0,0002° de latitude), autre signalant.
+    expect((await qr(app, 2.35, 48.8602, '198.51.100.2')).statusCode).toBe(201);
+    expect(await list(app)).toEqual([
+      {
+        id: first.json().id,
+        type: 'autre',
+        title: 'QR code suspect signalé',
+        description: DESC,
+        lon: 2.35,
+        lat: 48.86,
+        start: new Date(clock.t - 60_000).toISOString(),
+        end: first.json().expiresAt,
+        severity: 3,
+        source: 'communaute',
+      },
     ]);
-    clock.advance(7 * 24 * 3600_000 - 1);
-    expect(await list()).toHaveLength(1);
+    // Un 3e signalant dans la grappe ne duplique pas l'alerte.
+    await qr(app, 2.3501, 48.8601, '198.51.100.3');
+    expect(await list(app)).toHaveLength(1);
+  });
+
+  it('le même signalant deux fois ne suffit pas', async () => {
+    ({ app } = await makeApp({}, { fetch: emptyFeed }));
+    await qr(app, 2.35, 48.86, '198.51.100.1');
+    await qr(app, 2.35, 48.86, '198.51.100.1');
+    expect(await list(app)).toEqual([]);
+  });
+
+  it('deux signalants à plus de 50 m ne se confirment pas', async () => {
+    ({ app } = await makeApp({}, { fetch: emptyFeed }));
+    await qr(app, 2.35, 48.86, '198.51.100.1');
+    // ≈ 67 m (0,0006° de latitude).
+    await qr(app, 2.35, 48.8606, '198.51.100.2');
+    expect(await list(app)).toEqual([]);
+  });
+
+  it('TTL 24 h : l’alerte disparaît quand il ne reste plus deux signalements actifs', async () => {
+    const { app: a, clock } = await makeApp({}, { fetch: emptyFeed });
+    app = a;
+    await qr(app, 2.35, 48.86, '198.51.100.1');
+    clock.advance(3600_000);
+    await qr(app, 2.35, 48.86, '198.51.100.2');
+    expect(await list(app)).toHaveLength(1);
+    clock.advance(23 * 3600_000 - 1);
+    expect(await list(app)).toHaveLength(1);
     clock.advance(1);
-    expect(await list()).toHaveLength(0);
+    expect(await list(app)).toEqual([]);
+  });
+
+  it('l’empreinte n’est conservée que pour qr_suspect et ne contient pas l’IP', async () => {
+    const { ReportStore } = await import('../src/incidents/service.js');
+    const store = new ReportStore(() => 0);
+    expect(store.add('accident', 2.35, 48.86, 'x')).not.toHaveProperty('reporter');
+    ({ app } = await makeApp({}, { fetch: emptyFeed }));
+    const res = await qr(app, 2.35, 48.86, '198.51.100.1');
+    expect(res.body).not.toContain('198.51.100');
+    expect(Object.keys(res.json()).sort()).toEqual(['expiresAt', 'id']);
   });
 });
