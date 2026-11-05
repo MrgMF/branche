@@ -29,7 +29,9 @@ Parcours démo : `POST /v1/sessions` → ouvrir `checkoutUrl` → « Autoriser 5
 | `TRUST_PROXY` | `false` | `1` derrière Render (IP réelle pour le rate-limit) |
 | `LOG_LEVEL` | `info` | Logs pino (sans corps, IP ni coordonnées ; `bbox` arrondie à 2 décimales) |
 | `TOMTOM_API_KEY` | — | Itinéraire avec trafic (TomTom Routing). Serveur uniquement, jamais renvoyée |
-| `VALHALLA_URL` | `https://valhalla1.openstreetmap.de/route` | Repli sans clé TomTom. Le défaut public FOSSGIS est **non commercial et non prévu pour la production** |
+| `NODE_ENV` | — | `production` : le Valhalla public FOSSGIS n'est jamais utilisé (sans clé ni `VALHALLA_URL` → `/v1/route` 503) |
+| `VALHALLA_URL` | `https://valhalla1.openstreetmap.de/route` hors production, aucun en production | Repli sans clé TomTom. Le défaut public FOSSGIS est **non commercial et non prévu pour la production** |
+| `REPORTS_DISABLED` | — | Zones où les signalements sont suspendus : `w,s,e,n\|2026-12-31T23:59:59+01:00;…` → 403 et signalements masqués |
 | `INCIDENTS_URL` | flux data.gouv « Événements RRN non concédé » (temps réel) | DATEX II Bison Futé, cache 2 min |
 
 ## Navigation (contrat V1.1)
@@ -42,8 +44,8 @@ curl -X POST localhost:8787/v1/reports -H 'content-type: application/json' -d '{
 ```
 
 - Itinéraire en **POST** (les coordonnées ne doivent pas figurer dans les URL ni les journaux) ; `GET /v1/route` → 405. Pas de cache (conditions TomTom). Champ `attribution` à afficher sous la carte.
-- **Production** : définir `TOMTOM_API_KEY` ou un Valhalla auto-hébergé (`VALHALLA_URL`). Le serveur public FOSSGIS sert uniquement au développement et à la démo.
-- Signalements : `accident`, `travaux`, `obstacle`, `bouchon` (1 h), `borne_hs` (24 h) ; 10/h/IP ; mémoire seule, position arrondie à 4 décimales, aucune IP stockée (limitation par empreinte salée, en mémoire). Pas de type « police ».
+- **Production** (`NODE_ENV=production`, défini dans `render.yaml`) : `TOMTOM_API_KEY` requise pour le trafic, ou un Valhalla auto-hébergé (`VALHALLA_URL`) ; sinon `POST /v1/route` répond `503 routing_unavailable`. Le serveur public FOSSGIS sert uniquement au développement.
+- Signalements : `accident`, `travaux`, `obstacle`, `bouchon` (1 h), `borne_hs` (24 h), `qr_suspect` (7 j) ; suspension par zone via `REPORTS_DISABLED` ; 10/h/IP ; mémoire seule, position arrondie à 4 décimales, aucune IP stockée (limitation par empreinte salée, en mémoire). Pas de type « police ».
 
 ### Obtenir une clé TomTom gratuite
 

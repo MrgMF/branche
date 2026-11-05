@@ -11,6 +11,17 @@ const PUBLIC_MAIL = new Set([
 // Toutes extensions : gmail.*, hotmail.*, yahoo.*, gmx.*…
 const PUBLIC_MAIL_LABEL = new Set(['gmail', 'googlemail', 'hotmail', 'outlook', 'live', 'msn', 'yahoo', 'ymail', 'aol', 'icloud', 'gmx', 'wanadoo', 'protonmail', 'yandex']);
 
+/** Hébergeurs, réseaux sociaux et raccourcisseurs génériques : n'importe qui peut y publier une page. */
+const GENERIC_HOSTS = new Set([
+  'google.com', 'google.fr', 'goo.gl', 'forms.gle', 'wix.com', 'wixsite.com', 'editorx.io', 'wordpress.com', 'wordpress.org',
+  'blogspot.com', 'blogger.com', 'facebook.com', 'fb.com', 'fb.me', 'instagram.com', 'linkedin.com', 'twitter.com', 'x.com',
+  'youtube.com', 'youtu.be', 'tiktok.com', 'linktr.ee', 'bit.ly', 'tinyurl.com', 't.co', 'ow.ly', 'is.gd', 'buff.ly', 'rebrand.ly',
+  'cutt.ly', 'shorturl.at', 'jimdo.com', 'jimdofree.com', 'jimdosite.com', 'weebly.com', 'squarespace.com', 'webflow.io',
+  'canva.site', 'my.canva.site', 'github.io', 'gitlab.io', 'netlify.app', 'vercel.app', 'pages.dev', 'notion.site', 'carrd.co',
+  'sharepoint.com', 'dropbox.com', 'free-h.fr', 'e-monsite.com', 'over-blog.com', 'webnode.fr', 'site123.me', 'strikingly.com',
+]);
+export const isGenericHost = (domain) => GENERIC_HOSTS.has(String(domain ?? '').toLowerCase());
+
 /** Suffixes publics à deux niveaux (base : pas de liste PSL complète embarquée). */
 const SECOND_LEVEL = new Set([
   'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'me.uk', 'ltd.uk', 'plc.uk', 'com.fr', 'asso.fr', 'gouv.fr', 'nom.fr', 'tm.fr',
@@ -63,7 +74,7 @@ function urlHosts(s) {
 
 function add(set, host) {
   const d = registrableDomain(host.replace(/[.,;:]+$/, ''));
-  if (d && !isPublicMail(d)) set.add(d);
+  if (d && !isPublicMail(d) && !isGenericHost(d)) set.add(d);
 }
 
 const LEGAL = new Set(['sas', 'sasu', 'sarl', 'sa', 'eurl', 'sci', 'gmbh', 'ag', 'bv', 'nv', 'srl', 'spa', 'sl', 'ltd', 'limited', 'inc', 'llc', 'plc', 'france']);
@@ -119,7 +130,7 @@ export function createOperatorRegistry({ minStations = DOMAIN_MIN_STATIONS } = {
   const ops = new Map();
   const get = (key) => {
     let o = ops.get(key);
-    if (!o) ops.set(key, (o = { stations: new Set(), names: new Map(), domains: new Map(), tarif: new Set() }));
+    if (!o) ops.set(key, (o = { stations: new Set(), names: new Map(), domains: new Map() }));
     return o;
   };
   const bump = (map, k) => map.set(k, (map.get(k) ?? 0) + 1);
@@ -136,14 +147,14 @@ export function createOperatorRegistry({ minStations = DOMAIN_MIN_STATIONS } = {
     }
     // contact_amenageur seulement si l'aménageur EST l'opérateur : sinon ce sont des domaines de clients (hôtels, parkings…).
     const cols = slug(properName(row.nom_amenageur)) === key ? ['contact_operateur', 'contact_amenageur'] : ['contact_operateur'];
-    for (const col of cols) {
-      for (const d of contactDomains(row[col])) {
-        let set = o.domains.get(d);
-        if (!set) o.domains.set(d, (set = new Set()));
-        set.add(stationKey);
-      }
+    const found = new Set(urlDomains(row.tarification));
+    for (const col of cols) for (const d of contactDomains(row[col])) found.add(d);
+    // Même seuil pour toutes les origines : une seule ligne IRVE ne suffit jamais à rendre un domaine « officiel ».
+    for (const d of found) {
+      let set = o.domains.get(d);
+      if (!set) o.domains.set(d, (set = new Set()));
+      set.add(stationKey);
     }
-    for (const d of urlDomains(row.tarification)) o.tarif.add(d);
   }
 
   function build() {
@@ -161,9 +172,8 @@ export function createOperatorRegistry({ minStations = DOMAIN_MIN_STATIONS } = {
         names.push(n);
         if (names.length >= 6) break;
       }
-      const domains = new Set(o.tarif);
-      for (const [d, st] of o.domains) if (st.size >= minStations) domains.add(d);
-      operators.push({ key, names, domains: [...domains].sort(), payUrl: null, stations: o.stations.size });
+      const domains = [...o.domains].filter(([, st]) => st.size >= minStations).map(([d]) => d);
+      operators.push({ key, names, domains: domains.sort(), payUrl: null, stations: o.stations.size });
     }
     operators.sort((a, b) => b.stations - a.stations || a.key.localeCompare(b.key));
     return { v: 1, operators };

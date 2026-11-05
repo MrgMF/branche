@@ -30,8 +30,31 @@ describe('verifyQr', () => {
     expect(r.operatorKey).toBe('izivia');
   });
 
-  it('opérateur connu mais différent de la borne sélectionnée', () => {
-    expect(verifyQr('https://izivia.com/x', 'metropolis', OPS).verdict).toBe('known-operator');
+  it('opérateur connu mais différent de la borne sélectionnée → avertissement', () => {
+    expect(verifyQr('https://izivia.com/x', 'metropolis', OPS).verdict).toBe('other-operator');
+    expect(verifyQr('https://izivia.com/x', null, OPS).verdict).toBe('known-operator');
+  });
+
+  it.each(['https://izivia.com.evil.site/pay', 'https://metropolis-recharge.fr.evil.site/', 'https://pay.izivia.evil.site/', 'https://evil.com/izivia.com/pay', 'https://evil.com/?r=metropolis-recharge.fr'])(
+    'sous-domaine ou chemin piégé : %s',
+    (raw) => expect(verifyQr(raw, 'izivia', OPS).verdict).toBe('dangerous'),
+  );
+
+  it.each(['https://monta.app/pay', 'https://virta.fi/x', 'https://wait.fr', 'https://idea.fr', 'https://reed.fr', 'https://evway.net', 'https://lidi.fr'])(
+    'pas de faux positif : %s',
+    (raw) => expect(verifyQr(raw, 'izivia', [...OPS, { key: 'watt', names: ['Watt'], domains: ['watt.fr'], payUrl: null }, { key: 'lidl', names: ['Lidl'], domains: ['lidl.fr'], payUrl: null }]).verdict).not.toBe('dangerous'),
+  );
+
+  it('même nom, autre extension → avertissement, pas blocage', () => {
+    expect(verifyQr('https://izivia.site/pay', 'izivia', OPS).verdict).toBe('unknown');
+  });
+
+  it('plateforme de paiement reconnue', () => {
+    expect(verifyQr('https://checkout.stripe.com/c/pay/cs_123', 'izivia', OPS).verdict).toBe('payment-platform');
+  });
+
+  it('expose l’hôte complet', () => {
+    expect(verifyQr('https://sites.google.com/view/borne', null, OPS).host).toBe('sites.google.com');
   });
 
   it('domaine inconnu', () => {
@@ -49,6 +72,7 @@ describe('verifyQr', () => {
     'https://bit.ly/3abc',
     'https://izivla.com/pay',
     'https://izivia-paiement.com/pay',
+    'https://izivia.com.fr/pay',
     'https://1zivia.com/',
     'not a url',
     '',

@@ -38,6 +38,8 @@ export interface Trip {
   nextStep: { instruction: string; inM: number } | null;
   alert: { text: string; tone: 'danger' | 'incident' } | null;
   arrived: boolean;
+  feedOk?: boolean;
+  feedUpdatedAt?: string | null;
 }
 
 const OFF_ROUTE_M = 80;
@@ -86,8 +88,11 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
         stepsAlong.current = route.steps.map((s) => progressOnRoute(s, line).along);
         map.current?.post({ type: 'route', coords: line });
         if (!keepGuiding) map.current?.post({ type: 'fit', bounds: bboxOf(line, 0.002), top: 90, bottom: sheetH + 30 });
-        const [inc, zones] = await Promise.all([getIncidents(bboxOf(line)).catch(() => [] as Incident[]), loadDangerZones()]);
-        const onRouteInc = alongRoute(inc, line, 250);
+        const [feed, zones] = await Promise.all([
+          getIncidents(bboxOf(line)).catch(() => ({ incidents: [] as Incident[], feedOk: false, updatedAt: null })),
+          loadDangerZones(),
+        ]);
+        const onRouteInc = alongRoute(feed.incidents, line, 250);
         const onRouteZones = alongRoute(zones, line, (z) => z.radiusM);
         map.current?.post({
           type: 'incidents',
@@ -96,7 +101,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
         map.current?.post({ type: 'zones', polys: onRouteZones.map((z) => circle(z)) });
         setTrip((t) =>
           t && t.dest.id === dest.id
-            ? { ...t, route, loading: false, incidents: onRouteInc, zones: onRouteZones, total: progressOnRoute(dest, line).total }
+            ? { ...t, route, loading: false, incidents: onRouteInc, zones: onRouteZones, feedOk: feed.feedOk, feedUpdatedAt: feed.updatedAt, total: progressOnRoute(dest, line).total }
             : t,
         );
       } catch (e) {
@@ -149,7 +154,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
   // Guidage : progression, consigne suivante, alertes, recalcul hors trajet
   useEffect(() => {
     const p = gpsPos;
-    if (!p || !trip?.guiding || !trip.route) return;
+    if (!p || !trip?.guiding || !trip.route || trip.arrived) return;
     const line = trip.route.geometry;
     const prog = progressOnRoute(p, line);
     const heading = prevPos.current && metersBetween(prevPos.current, p) > 3 ? bearing(prevPos.current, p) : undefined;
@@ -195,7 +200,13 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     }
     const remaining = prog.total - prog.along;
     const arrived = remaining < 30 || metersBetween(p, trip.dest) < 40;
-    if (arrived && !trip.arrived) speak(`Vous êtes arrivé. Vous pouvez payer la borne depuis Branché.`);
+    if (arrived && !trip.arrived) {
+      speak('Vous êtes arrivé. Vous pouvez payer la borne depuis Branché.');
+      // Fin du guidage : on coupe le GPS (plus de recalcul si l'on s'éloigne de la borne)
+      watch.current?.remove();
+      watch.current = null;
+      map.current?.post({ type: 'unfollow' });
+    }
     setTrip((t) => (t ? { ...t, along: prog.along, total: prog.total, nextStep, alert, arrived } : t));
   }, [gpsPos]); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -8,7 +8,7 @@ export interface Operator {
   stations?: number;
 }
 
-export type Verdict = 'official' | 'known-operator' | 'unknown' | 'dangerous';
+export type Verdict = 'official' | 'known-operator' | 'other-operator' | 'payment-platform' | 'unknown' | 'dangerous';
 
 export interface QrResult {
   kind: 'url' | 'evse' | 'invalid';
@@ -16,6 +16,7 @@ export interface QrResult {
   evse?: string;
   verdict: Verdict;
   domain?: string;
+  host?: string;
   operatorKey?: string;
   reasons: string[];
 }
@@ -29,6 +30,19 @@ const SHORTENERS = new Set([
   'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly', 'rebrand.ly', 'cutt.ly', 'shorturl.at', 'qrco.de',
   'qr-code-generator.com', 'me-qr.com', 'linktr.ee', 'tiny.cc', 'rb.gy', 'v.gd', 's.id', 'u.to',
 ]);
+
+// Plateformes de paiement en ligne reconnues, utilisées par certains opérateurs pour leur paiement ad hoc.
+export const PAYMENT_PLATFORMS: Record<string, string> = {
+  'stripe.com': 'Stripe',
+  'sumup.com': 'SumUp',
+  'payzen.eu': 'PayZen (Lyra)',
+  'lyra.com': 'Lyra',
+  'paypal.com': 'PayPal',
+  'adyen.com': 'Adyen',
+  'mollie.com': 'Mollie',
+  'chargemap.com': 'Chargemap',
+  'plugsurfing.com': 'Plugsurfing',
+};
 
 // Suffixes publics à deux niveaux les plus courants (domaine enregistrable).
 const TWO_LEVEL = new Set(['co.uk', 'com.fr', 'gouv.fr', 'asso.fr', 'co.jp', 'com.au', 'co.nz', 'com.br', 'com.es', 'co.za']);
@@ -70,6 +84,14 @@ export function normalizeEvse(raw: string): string | null {
 }
 
 const label = (d: string) => d.split('.')[0];
+const lookalike = (x: string) => x.replace(/rn/g, 'm').replace(/vv/g, 'w').replace(/0/g, 'o').replace(/[1|]/g, 'l').replace(/3/g, 'e').replace(/5/g, 's');
+const safeDecode = (x: string) => {
+  try {
+    return decodeURIComponent(x);
+  } catch {
+    return x;
+  }
+};
 
 export function verifyQr(raw: string, stationOperatorKey: string | null, operators: Operator[], opts: VerifyOptions = {}): QrResult {
   const text = (raw ?? '').trim();
@@ -94,7 +116,7 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
   const host = u.hostname.toLowerCase();
   const isDevHost = (opts.devHosts ?? []).includes(u.host.toLowerCase());
   const domain = registrableDomain(host);
-  const base: QrResult = { kind: 'url', url: u.toString(), verdict: 'unknown', domain, reasons };
+  const base: QrResult = { kind: 'url', url: u.toString(), verdict: 'unknown', domain, host: u.host.toLowerCase(), reasons };
 
   if (u.protocol !== 'https:' && !(isDevHost && u.protocol === 'http:')) reasons.push('Le lien n’est pas sécurisé (pas de https).');
   if (u.username || u.password) reasons.push('Le lien contient des identifiants cachés.');
@@ -103,30 +125,70 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
   if (SHORTENERS.has(domain) || SHORTENERS.has(host)) reasons.push('Lien raccourci : la destination réelle est masquée.');
   if (reasons.length) return { ...base, verdict: 'dangerous' };
 
-  const byDomain = (d: string) => operators.find((o) => o.domains.some((x) => x === d));
-  const owner = isDevHost ? operators.find((o) => o.domains.includes(u.host.toLowerCase())) : byDomain(domain);
+  const owner = isDevHost ? operators.find((o) => o.domains.includes(u.host.toLowerCase())) : operators.find((o) => o.domains.includes(domain));
+  const stationOp = stationOperatorKey ? operators.find((o) => o.key === stationOperatorKey) : undefined;
 
   if (owner) {
-    if (stationOperatorKey && owner.key === stationOperatorKey) {
-      return { ...base, verdict: 'official', operatorKey: owner.key, reasons: [`Domaine officiel de ${owner.names[0]}.`] };
+    if (!stationOperatorKey || owner.key === stationOperatorKey) {
+      return {
+        ...base,
+        verdict: stationOperatorKey ? 'official' : 'known-operator',
+        operatorKey: owner.key,
+        reasons: [`Domaine de ${owner.names[0]} selon la base nationale IRVE.`],
+      };
     }
-    return { ...base, verdict: 'known-operator', operatorKey: owner.key, reasons: [`Domaine de l’opérateur ${owner.names[0]}.`] };
+    return {
+      ...base,
+      verdict: 'other-operator',
+      operatorKey: owner.key,
+      reasons: [`Ce QR code mène à ${owner.names[0]}, pas à l’opérateur de cette borne${stationOp ? ` (${stationOp.names[0]})` : ''}.`],
+    };
   }
 
-  // Imitation d'un domaine connu (izivia-pay.com, 1zivia.com, izivla.com…)
+  // Domaine connu caché dans le sous-domaine (izivia.com.evil.site) ou dans le chemin (evil.com/izivia.com)
+  const sub = host.length > domain.length ? host.slice(0, host.length - domain.length - 1) : '';
+  const subLabels = sub.split('.').filter(Boolean);
+  const rest = safeDecode(`${u.pathname}${u.search}`).toLowerCase();
+  for (const o of operators) {
+    for (const d of o.domains) {
+      if (d.includes(':')) continue;
+      const known = label(d);
+      if (sub.includes(d) || (known.length >= 5 && subLabels.includes(known))) {
+        return { ...base, verdict: 'dangerous', reasons: [`Ce lien se fait passer pour ${o.names[0]} (${d}) : le site réel est ${domain}.`] };
+      }
+      if (rest.includes(d)) {
+        return { ...base, verdict: 'dangerous', reasons: [`Le nom de ${o.names[0]} (${d}) apparaît dans le lien, mais le site réel est ${domain}.`] };
+      }
+    }
+  }
+
+  const platform = PAYMENT_PLATFORMS[domain];
+  if (platform) {
+    return { ...base, verdict: 'payment-platform', reasons: [`Plateforme de paiement reconnue (${platform}). Vérifiez que la page affiche bien le nom de l’opérateur de la borne.`] };
+  }
+
+  // Imitation d'un domaine connu : distance d'édition 1 (libellé court) ou 2 (≥ 6 caractères)
   const lbl = label(domain);
   for (const o of operators) {
     for (const d of o.domains) {
       const known = label(d);
-      if (known.length < 4) continue;
-      const close = editDistance(lbl, known, 2) <= 2;
-      const contains = lbl !== known && lbl.includes(known);
+      if (known.length < 4 || d.includes(':')) continue;
+      if (domain.startsWith(`${d}.`)) {
+        return { ...base, verdict: 'dangerous', reasons: [`Ce lien se fait passer pour ${o.names[0]} (${d}) : le site réel est ${domain}.`] };
+      }
+      if (lbl === known) {
+        return { ...base, verdict: 'unknown', reasons: [`Ce site porte le nom de ${o.names[0]} mais n’est pas son domaine connu (${d}).`] };
+      }
+      // Libellés courts : seules les substitutions de caractères sosies comptent (0/o, 1/l, rn/m…)
+      const close =
+        Math.min(known.length, lbl.length) >= 6 ? editDistance(lbl, known, 2) <= 2 : lbl !== known && lookalike(lbl) === lookalike(known);
+      const contains = known.length >= 5 && lbl.includes(known);
       if (close || contains) {
         return { ...base, verdict: 'dangerous', reasons: [`Ce domaine imite celui de ${o.names[0]} (${d}).`] };
       }
     }
   }
-  return { ...base, verdict: 'unknown', reasons: ['Domaine inconnu de notre registre d’opérateurs.'] };
+  return { ...base, verdict: 'unknown', reasons: ['Domaine absent de la base des opérateurs.'] };
 }
 
 /** URL de paiement d'un opérateur à partir de son gabarit vérifié. */

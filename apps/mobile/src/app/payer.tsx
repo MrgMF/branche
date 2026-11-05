@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Notice } from '../components/ui';
+import { apiEnabled } from '../lib/api';
 import { DEV_HOSTS } from '../lib/config';
+import { postReport } from '../lib/navigation';
 import { directPayUrl, openOperatorPayment, operatorLabel, operatorOf } from '../lib/connectors';
 import { PAY_LABEL } from '../lib/format';
 import { verifyQr, type Operator, type QrResult } from '../lib/qr';
@@ -12,10 +14,15 @@ import { displayName, findByEvse, loadOperators, type Station } from '../lib/sta
 import { store } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 
+const PAYABLE = new Set<QrResult['verdict']>(['official', 'known-operator', 'payment-platform']);
+const WARN = { bg: colors.warnSoft, fg: '#7A3E06' };
+const OK = { bg: colors.accentSoft, fg: colors.accentPressed };
 const TONE: Record<QrResult['verdict'], { bg: string; fg: string; title: string }> = {
-  official: { bg: colors.accentSoft, fg: colors.accentPressed, title: 'Page de paiement officielle' },
-  'known-operator': { bg: colors.accentSoft, fg: colors.accentPressed, title: 'Opérateur reconnu' },
-  unknown: { bg: colors.warnSoft, fg: '#7A3E06', title: 'Lien non vérifié' },
+  official: { ...OK, title: 'Domaine de l’opérateur (base IRVE)' },
+  'known-operator': { ...OK, title: 'Opérateur reconnu (base IRVE)' },
+  'payment-platform': { ...OK, title: 'Plateforme de paiement reconnue' },
+  'other-operator': { ...WARN, title: 'Autre opérateur que celui de la borne' },
+  unknown: { ...WARN, title: 'Lien non vérifié' },
   dangerous: { bg: '#FDECEC', fg: colors.danger, title: 'QR code suspect — paiement bloqué' },
 };
 
@@ -29,6 +36,21 @@ export default function Payer() {
   const [result, setResult] = useState<QrResult | null>(null);
   const [confirmUnknown, setConfirmUnknown] = useState(false);
   const locked = useRef(false);
+  const [reported, setReported] = useState<string | null>(null);
+
+  async function reportQr() {
+    const at = station ?? store.current();
+    if (!at || !apiEnabled()) {
+      setReported('Prévenez l’opérateur : son numéro figure sur la borne.');
+      return;
+    }
+    try {
+      await postReport('qr_suspect', at);
+      setReported('Merci : le QR suspect est signalé aux autres utilisateurs.');
+    } catch {
+      setReported('Signalement impossible pour le moment.');
+    }
+  }
 
   useEffect(() => {
     loadOperators().then(setOps);
@@ -41,12 +63,17 @@ export default function Payer() {
     const r = verifyQr(raw, station?.ok ?? null, ops, { devHosts: DEV_HOSTS });
     if (r.kind === 'evse' && r.evse) {
       const found = findByEvse(store.stations(), r.evse);
-      if (found) {
+      if (found && (!station || found.id === station.id)) {
         setStation(found);
         store.setCurrent(found);
+        r.reasons = [`Identifiant de ${displayName(found)}.`];
+      } else {
+        r.verdict = 'unknown';
+        r.reasons = [station ? 'Cet identifiant ne correspond pas à la borne sélectionnée : vérifiez la borne ou l’autocollant.' : 'Identifiant absent de la base nationale des bornes.'];
       }
     }
     setConfirmUnknown(false);
+    setReported(null);
     setResult(r);
     setScanning(false);
   }
@@ -82,7 +109,7 @@ export default function Payer() {
       </View>
 
       <Text style={styles.p}>
-        Vous payez directement {opName} sur sa page officielle, ouverte dans Branché : sans compte, sans télécharger son application. Branché ne voit pas votre carte.
+        Vous payez directement {opName} sur sa page de paiement, ouverte dans Branché et vérifiée avec la base nationale IRVE : sans compte, sans télécharger son application. Branché ne voit pas votre carte.
       </Text>
 
       {knownUrl ? (
@@ -132,21 +159,21 @@ export default function Payer() {
       {result && tone ? (
         <View style={[styles.result, { backgroundColor: tone.bg }]} accessibilityLiveRegion="polite">
           <Text style={[styles.resultTitle, { color: tone.fg }]}>{result.kind === 'evse' ? 'Borne identifiée' : tone.title}</Text>
-          {result.domain ? <Text style={[styles.domain, { color: tone.fg }]}>{result.domain}</Text> : null}
+          {result.host ? <Text style={[styles.domain, { color: tone.fg }]}>{result.host}</Text> : null}
           {result.reasons.map((r) => (
             <Text key={r} style={[styles.reason, { color: tone.fg }]}>
               {r}
             </Text>
           ))}
 
-          {result.kind === 'url' && (result.verdict === 'official' || result.verdict === 'known-operator') && result.url ? (
+          {result.kind === 'url' && PAYABLE.has(result.verdict) && result.url ? (
             <Text style={[styles.reason, { color: tone.fg }]}>Vérifiez que le QR code est imprimé sur la borne, pas collé par-dessus. Branché ne voit pas votre carte et n’encaisse rien.</Text>
           ) : null}
-          {result.kind === 'url' && (result.verdict === 'official' || result.verdict === 'known-operator') && result.url ? (
+          {result.kind === 'url' && PAYABLE.has(result.verdict) && result.url ? (
             <Button label={`Payer sur la page ${payName}`} onPress={() => openOperatorPayment(result.url!, station, payName)} />
           ) : null}
 
-          {result.kind === 'url' && result.verdict === 'unknown' && result.url ? (
+          {result.kind === 'url' && (result.verdict === 'unknown' || result.verdict === 'other-operator') && result.url ? (
             <>
               <Text style={[styles.reason, { color: tone.fg }]}>
                 Avant de payer, vérifiez que le QR code n’est pas un autocollant ajouté par-dessus l’original et que la page affiche bien le nom de l’opérateur.
@@ -161,7 +188,7 @@ export default function Payer() {
                 <View style={[styles.box, confirmUnknown && styles.boxOn]} />
                 <Text style={styles.checkText}>J’ai vérifié la borne et je veux continuer</Text>
               </Pressable>
-              <Button label="Continuer vers ce site" variant="secondary" disabled={!confirmUnknown} onPress={() => openOperatorPayment(result.url!, station, result.domain ?? 'site inconnu')} />
+              <Button label="Continuer vers ce site" variant="secondary" disabled={!confirmUnknown} onPress={() => openOperatorPayment(result.url!, station, result.host ?? 'site inconnu')} />
             </>
           ) : null}
 
@@ -173,9 +200,13 @@ export default function Payer() {
 
           {result.kind === 'evse' ? (
             <Text style={[styles.reason, { color: tone.fg }]}>
-              {station ? `Il s’agit de ${displayName(station)}. ` : ''}
-              Cet identifiant ne contient pas de lien de paiement : scannez le QR code de paiement de la borne ou payez sur son lecteur de carte.
+              Un identifiant ne contient pas de lien de paiement : scannez le QR code de paiement de la borne ou payez sur son lecteur de carte.
             </Text>
+          ) : null}
+          {result.verdict !== 'official' && result.verdict !== 'known-operator' ? (
+            <Pressable accessibilityRole="button" onPress={reportQr} style={styles.link} disabled={!!reported}>
+              <Text style={[styles.linkText, { color: tone.fg }]}>{reported ?? 'Signaler un faux QR code sur cette borne'}</Text>
+            </Pressable>
           ) : null}
         </View>
       ) : null}

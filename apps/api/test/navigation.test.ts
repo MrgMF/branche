@@ -479,3 +479,105 @@ describe('POST /v1/reports', () => {
     expect([r.lon, r.lat]).toEqual([2.3512, 48.8612]);
   });
 });
+
+describe('production sans fournisseur d’itinéraire', () => {
+  it('NODE_ENV=production sans clé ni VALHALLA_URL : 503 routing_unavailable, aucun appel à FOSSGIS, avertissement au démarrage', async () => {
+    const lines: string[] = [];
+    const f = fakeFetch(() => json(VALHALLA));
+    ({ app } = await makeApp({ NODE_ENV: 'production' }, { fetch: f.fn, logger: { level: 'warn', stream: { write: (m: string) => lines.push(m) } } }));
+    const res = await postRoute(app, { from: PARIS, to: VERSAILLES });
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({
+      error: { code: 'routing_unavailable', message: 'Le calcul d’itinéraire n’est pas disponible sur ce serveur pour le moment.' },
+    });
+    expect(f.calls).toHaveLength(0);
+    expect(lines.join('\n')).toMatch(/TOMTOM_API_KEY/);
+  });
+
+  it('NODE_ENV=production avec VALHALLA_URL explicite ou clé TomTom : itinéraire servi', async () => {
+    const v = fakeFetch(() => json(VALHALLA));
+    ({ app } = await makeApp({ NODE_ENV: 'production', VALHALLA_URL: 'https://valhalla.interne.example/route' }, { fetch: v.fn }));
+    expect((await postRoute(app, { from: PARIS, to: VERSAILLES })).statusCode).toBe(200);
+    expect(v.calls[0]!.url).toBe('https://valhalla.interne.example/route');
+    await app.close();
+    const t = fakeFetch(() => json(TOMTOM));
+    ({ app } = await makeApp({ NODE_ENV: 'production', TOMTOM_API_KEY: KEY }, { fetch: t.fn }));
+    expect((await postRoute(app, { from: PARIS, to: VERSAILLES })).json().provider).toBe('tomtom');
+  });
+
+  it('hors production, le défaut public reste utilisé', () => {
+    expect(loadConfig({}).valhallaUrl).toBe('https://valhalla1.openstreetmap.de/route');
+    expect(loadConfig({ NODE_ENV: 'production' }).valhallaUrl).toBeNull();
+  });
+});
+
+describe('suspension des signalements (REPORTS_DISABLED)', () => {
+  // Zone autour de Paris centre, suspendue jusqu'au 05/11/2026 18:00 heure de Paris (17:00 UTC). Horloge à 12:00 UTC.
+  const ZONE = '2.30,48.84,2.40,48.88|2026-11-05T18:00:00+01:00';
+  const inside = { type: 'accident', lon: 2.35, lat: 48.86 };
+  const outside = { type: 'accident', lon: 2.2, lat: 48.8 };
+  const emptyFeed = () => Promise.resolve(xml('<d2LogicalModel/>'));
+  const count = async (a: FastifyInstance) => (await a.inject('/v1/incidents?bbox=2.1,48.7,2.5,48.95')).json().incidents.length;
+
+  it('403 reports_disabled dans la zone, accepté hors zone, levé après la date de fin', async () => {
+    const { app: a, clock } = await makeApp({ REPORTS_DISABLED: ZONE }, { fetch: emptyFeed });
+    app = a;
+    const res = await app.inject({ method: 'POST', url: '/v1/reports', payload: inside });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toEqual({
+      code: 'reports_disabled',
+      message: 'Les signalements sont temporairement suspendus dans cette zone (décision des autorités).',
+    });
+    expect((await app.inject({ method: 'POST', url: '/v1/reports', payload: outside })).statusCode).toBe(201);
+    clock.t = Date.parse('2026-11-05T17:00:00Z');
+    expect((await app.inject({ method: 'POST', url: '/v1/reports', payload: inside })).statusCode).toBe(201);
+  });
+
+  it('les signalements existants de la zone ne sont plus servis pendant la suspension', async () => {
+    const { app: a, clock } = await makeApp({ REPORTS_DISABLED: '2.30,48.84,2.40,48.88|2026-11-06T00:00:00Z' }, { fetch: emptyFeed });
+    app = a;
+    // Signalements borne_hs (24 h) déposés à la fin de la suspension, puis horloge ramenée pendant celle-ci.
+    clock.t = Date.parse('2026-11-06T00:00:00Z');
+    await app.inject({ method: 'POST', url: '/v1/reports', payload: { type: 'borne_hs', lon: 2.35, lat: 48.86 } });
+    await app.inject({ method: 'POST', url: '/v1/reports', payload: { type: 'borne_hs', lon: 2.2, lat: 48.8 } });
+    expect(await count(app)).toBe(2);
+    clock.t = Date.parse('2026-11-05T23:00:00Z');
+    expect(await count(app)).toBe(1);
+    clock.t = Date.parse('2026-11-06T00:00:00Z');
+    expect(await count(app)).toBe(2);
+  });
+
+  it('plusieurs zones ; les incidents Bison Futé ne sont pas concernés', async () => {
+    const env = { REPORTS_DISABLED: `${ZONE};4.9,49.6,5.1,49.8|2026-12-01T00:00:00Z` };
+    const { app: a, clock } = await makeApp(env, { fetch: () => Promise.resolve(xml(BISON)) });
+    app = a;
+    clock.t = Date.UTC(2026, 9, 6, 10, 0, 0);
+    expect((await app.inject({ method: 'POST', url: '/v1/reports', payload: { type: 'bouchon', lon: 5.0, lat: 49.7 } })).statusCode).toBe(403);
+    expect((await app.inject('/v1/incidents?bbox=4.9,49.6,5.1,49.8')).json().incidents).toHaveLength(8);
+  });
+
+  it.each(['2.3,48.8,2.4|2026-11-06T00:00:00Z', '2.3,48.8,2.4,48.9', '2.3,48.8,2.4,48.9|demain', '2.3,48.8,2.4,48.9|2026-11-06T00:00:00', '2.4,48.8,2.3,48.9|2026-11-06T00:00:00Z'])(
+    'REPORTS_DISABLED invalide « %s » → erreur au démarrage',
+    (raw) => {
+      expect(() => loadConfig({ REPORTS_DISABLED: raw })).toThrow(/REPORTS_DISABLED/);
+    },
+  );
+});
+
+describe('signalement qr_suspect', () => {
+  it('TTL 7 jours, titre « QR code suspect signalé », servi dans /v1/incidents', async () => {
+    const { app: a, clock } = await makeApp({}, { fetch: () => Promise.resolve(xml('<d2LogicalModel/>')) });
+    app = a;
+    const res = await app.inject({ method: 'POST', url: '/v1/reports', payload: { type: 'qr_suspect', lon: 2.35, lat: 48.86 } });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().expiresAt).toBe(new Date(clock.t + 7 * 24 * 3600_000).toISOString());
+    const list = async () => (await app.inject('/v1/incidents?bbox=2.3,48.8,2.4,48.9')).json().incidents;
+    expect(await list()).toEqual([
+      expect.objectContaining({ type: 'autre', title: 'QR code suspect signalé', severity: 3, source: 'communaute', lon: 2.35, lat: 48.86 }),
+    ]);
+    clock.advance(7 * 24 * 3600_000 - 1);
+    expect(await list()).toHaveLength(1);
+    clock.advance(1);
+    expect(await list()).toHaveLength(0);
+  });
+});

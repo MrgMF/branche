@@ -21,10 +21,47 @@ export interface Config {
   checkoutTtlMs: number;
   /** Clé TomTom (serveur uniquement, jamais renvoyée). Absente → Valhalla sans trafic. */
   tomtomApiKey: string | null;
-  /** Instance Valhalla (`/route`). Défaut : serveur public FOSSGIS, non commercial, pas pour la production. */
-  valhallaUrl: string;
+  /**
+   * Instance Valhalla (`/route`). Défaut hors production : serveur public FOSSGIS (non commercial).
+   * `null` = aucun itinéraire possible (production sans clé TomTom ni VALHALLA_URL explicite) → 503.
+   */
+  valhallaUrl: string | null;
+  production: boolean;
+  /** Zones où les signalements sont suspendus (interdiction préfectorale), jusqu'à `until` (ms). */
+  reportsDisabled: ReportsDisabledZone[];
   /** Flux DATEX II Bison Futé (événements RRN non concédé). */
   incidentsUrl: string;
+}
+
+export interface ReportsDisabledZone {
+  w: number;
+  s: number;
+  e: number;
+  n: number;
+  until: number;
+}
+
+/** REPORTS_DISABLED = « w,s,e,n|ISO-fin;w,s,e,n|ISO-fin… » (date ISO 8601 avec fuseau). */
+export function parseReportsDisabled(raw: string | undefined): ReportsDisabledZone[] {
+  if (!raw || !raw.trim()) return [];
+  return raw
+    .split(';')
+    .map((z) => z.trim())
+    .filter((z) => z.length > 0)
+    .map((z) => {
+      const err = () => new Error(`Variable REPORTS_DISABLED invalide : « ${z} » (attendu « ouest,sud,est,nord|2026-12-31T23:59:59+01:00 »).`);
+      const [box, end, extra] = z.split('|');
+      if (!box || !end || extra !== undefined) throw err();
+      const nums = box.split(',').map((x) => x.trim());
+      if (nums.length !== 4 || nums.some((x) => !/^-?\d{1,3}(?:\.\d+)?$/.test(x))) throw err();
+      const [w, s, e, n] = nums.map(Number) as [number, number, number, number];
+      if (w < -180 || e > 180 || s < -90 || n > 90 || w >= e || s >= n) throw err();
+      // Fuseau obligatoire : une date ambiguë ne doit pas lever l'interdiction trop tôt.
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(end.trim())) throw err();
+      const until = Date.parse(end.trim());
+      if (Number.isNaN(until)) throw err();
+      return { w, s, e, n, until };
+    });
 }
 
 export const DEFAULT_VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
@@ -116,6 +153,9 @@ export function loadConfig(env: Env = process.env): Config {
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
 
+  const production = env.NODE_ENV?.trim() === 'production';
+  const tomtomApiKey = env.TOMTOM_API_KEY?.trim() || null;
+
   return {
     port,
     host: env.HOST?.trim() || '0.0.0.0',
@@ -133,8 +173,11 @@ export function loadConfig(env: Env = process.env): Config {
     rateLimitMax: int(env, 'RATE_LIMIT_MAX', 60, 1),
     trustProxy: trustProxy(env.TRUST_PROXY?.trim()),
     checkoutTtlMs: 30 * 60 * 1000,
-    tomtomApiKey: env.TOMTOM_API_KEY?.trim() || null,
-    valhallaUrl: httpUrl(env, 'VALHALLA_URL', DEFAULT_VALHALLA_URL),
+    tomtomApiKey,
+    // En production, jamais le serveur public FOSSGIS (non commercial) : il faut une URL explicite.
+    valhallaUrl: env.VALHALLA_URL?.trim() || !production ? httpUrl(env, 'VALHALLA_URL', DEFAULT_VALHALLA_URL) : null,
+    production,
+    reportsDisabled: parseReportsDisabled(env.REPORTS_DISABLED),
     incidentsUrl: httpUrl(env, 'INCIDENTS_URL', DEFAULT_INCIDENTS_URL),
   };
 }

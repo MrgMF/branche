@@ -13,6 +13,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # Production : le serveur Valhalla public (FOSSGIS) n'est jamais utilisé ; sans TOMTOM_API_KEY ni VALHALLA_URL, /v1/route → 503.
+      - key: NODE_ENV
+        value: production
       - key: PAYMENT_PROVIDER
         value: mock
       - key: CHARGER_ADAPTER
@@ -40,13 +43,17 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
-      # Itinéraire avec trafic (serveur uniquement, jamais renvoyée). Clé gratuite : developer.tomtom.com.
-      # Sans clé : repli Valhalla sans trafic (le serveur public FOSSGIS n'est pas prévu pour la production).
+      # REQUISE pour l'itinéraire avec trafic (serveur uniquement, jamais renvoyée). Clé gratuite : developer.tomtom.com.
+      # Sans elle (et sans VALHALLA_URL), l'itinéraire est désactivé en production (503 routing_unavailable).
       - key: TOMTOM_API_KEY
         sync: false
-      # Instance Valhalla auto-hébergée recommandée en production (défaut : serveur public FOSSGIS).
+      # Repli sans trafic : instance Valhalla auto-hébergée uniquement (le serveur public FOSSGIS est exclu en production).
       - key: VALHALLA_URL
         sync: false
       # Flux DATEX II Bison Futé, événements RRN non concédé (Licence Ouverte 2.0).
       - key: INCIDENTS_URL
         value: https://www.data.gouv.fr/api/1/datasets/r/d16c8cb6-0123-44e7-b8b1-f99fc6a59497
+      # Suspension des signalements (interdiction préfectorale) : « ouest,sud,est,nord|fin ISO avec fuseau » séparés par « ; ».
+      # Ex. : 2.25,48.81,2.42,48.90|2026-12-31T23:59:59+01:00
+      - key: REPORTS_DISABLED
+        sync: false

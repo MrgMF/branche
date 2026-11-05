@@ -36,10 +36,10 @@ export interface AppDeps {
   router?: RouteProvider;
 }
 
-function buildRouter(config: Config, fetchFn: FetchLike): RouteProvider {
-  return config.tomtomApiKey
-    ? new TomTomRouteProvider(config.tomtomApiKey, fetchFn)
-    : new ValhallaRouteProvider(config.valhallaUrl, fetchFn);
+function buildRouter(config: Config, fetchFn: FetchLike): RouteProvider | null {
+  if (config.tomtomApiKey) return new TomTomRouteProvider(config.tomtomApiKey, fetchFn);
+  if (config.valhallaUrl) return new ValhallaRouteProvider(config.valhallaUrl, fetchFn);
+  return null;
 }
 
 /** Journaux sans corps, sans IP ni coordonnées précises (voir lib/logRedact.ts). */
@@ -149,9 +149,14 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
   await app.register(async (scope) => webhookRoutes(scope, ctx));
 
   const fetchFn: FetchLike = deps.fetch ?? ((input, init) => fetch(input, init));
-  const reports = new ReportStore(now);
+  const reports = new ReportStore(now, config.reportsDisabled);
   const incidents = new IncidentService({ url: config.incidentsUrl, fetchFn, now, reports, log: app.log });
   const router = deps.router ?? buildRouter(config, fetchFn);
+  if (!router) {
+    app.log.warn(
+      'Itinéraire désactivé : en production, définir TOMTOM_API_KEY (trafic) ou VALHALLA_URL (instance auto-hébergée). POST /v1/route répondra 503.',
+    );
+  }
   await app.register(async (scope) => navigationRoutes(scope, { router, incidents, reports }));
 
   return app;

@@ -20,7 +20,7 @@ export interface Route {
   alternativesConsidered?: number;
   attribution?: string;
 }
-export type IncidentType = 'accident' | 'travaux' | 'fermeture' | 'bouchon' | 'obstacle' | 'meteo' | 'autre' | 'borne_hs';
+export type IncidentType = 'accident' | 'travaux' | 'fermeture' | 'bouchon' | 'obstacle' | 'meteo' | 'autre' | 'borne_hs' | 'qr_suspect';
 export interface Incident {
   id: string;
   type: IncidentType;
@@ -64,8 +64,15 @@ export const getRoute = (from: { lat: number; lon: number }, to: { lat: number; 
     body: JSON.stringify({ from: { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon } }),
   });
 
+export interface IncidentFeed {
+  incidents: Incident[];
+  feedOk: boolean;
+  updatedAt: string | null;
+}
 export const getIncidents = (b: [number, number, number, number]) =>
-  get<{ incidents: Incident[]; updatedAt?: string }>(`${API_URL}/v1/incidents?bbox=${b.map((x) => x.toFixed(4)).join(',')}`).then((r) => r.incidents);
+  get<Partial<IncidentFeed>>(`${API_URL}/v1/incidents?bbox=${b.map((x) => x.toFixed(4)).join(',')}`).then(
+    (r): IncidentFeed => ({ incidents: r.incidents ?? [], feedOk: r.feedOk !== false, updatedAt: r.updatedAt ?? null }),
+  );
 
 export async function postReport(type: IncidentType, at: { lat: number; lon: number }) {
   const res = await fetch(`${API_URL}/v1/reports`, {
@@ -171,6 +178,7 @@ export const INCIDENT_LABEL: Record<IncidentType, string> = {
   meteo: 'Météo',
   autre: 'Perturbation',
   borne_hs: 'Borne hors service',
+  qr_suspect: 'QR code suspect',
 };
 
 export const durationText = (s: number) => {

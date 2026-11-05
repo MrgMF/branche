@@ -6,7 +6,8 @@ import { REPORT_TYPES, type IncidentService, type ReportStore, type ReportType }
 import { RouteProviderError, type RouteProvider } from '../navigation/route.js';
 
 export interface NavigationDeps {
-  router: RouteProvider;
+  /** null : aucun fournisseur configuré (production sans clé) → 503. */
+  router: RouteProvider | null;
   incidents: IncidentService;
   reports: ReportStore;
 }
@@ -60,6 +61,10 @@ export async function navigationRoutes(app: FastifyInstance, deps: NavigationDep
     '/v1/route',
     { schema: { body: routeBody }, config: { rateLimit: { max: 20, timeWindow: 60_000, keyGenerator: hashedIp } } },
     async (req, reply) => {
+      const { router } = deps;
+      if (!router) {
+        throw new AppError(503, 'routing_unavailable', 'Le calcul d’itinéraire n’est pas disponible sur ce serveur pour le moment.');
+      }
       const { from, to } = req.body;
       validPoint(from, 'départ');
       validPoint(to, 'arrivée');
@@ -70,12 +75,12 @@ export async function navigationRoutes(app: FastifyInstance, deps: NavigationDep
       // Pas de cache partagé : les conditions TomTom l'interdisent ; réponse privée et non stockée.
       reply.header('cache-control', 'no-store');
       try {
-        return await deps.router.route(from, to);
+        return await router.route(from, to);
       } catch (err) {
         if (err instanceof RouteProviderError) {
           req.log.warn({ provider: err.provider, reason: err.reason }, 'échec du fournisseur d’itinéraire');
         } else {
-          req.log.warn({ provider: deps.router.name }, 'erreur inattendue du fournisseur d’itinéraire');
+          req.log.warn({ provider: router.name }, 'erreur inattendue du fournisseur d’itinéraire');
         }
         throw new AppError(502, 'route_provider_error', 'Le service d’itinéraire est indisponible, réessayez dans quelques instants.');
       }
@@ -111,6 +116,9 @@ export async function navigationRoutes(app: FastifyInstance, deps: NavigationDep
         throw badRequest('invalid_report_type', `Type de signalement non pris en charge. Types acceptés : ${REPORT_TYPES.join(', ')}.`);
       }
       validPoint({ lat, lon }, 'signalement');
+      if (deps.reports.isDisabledAt(lon, lat)) {
+        throw new AppError(403, 'reports_disabled', 'Les signalements sont temporairement suspendus dans cette zone (décision des autorités).');
+      }
       const r = deps.reports.add(type as ReportType, lon, lat);
       reply.code(201).header('cache-control', 'no-store');
       return { id: r.id, expiresAt: new Date(r.expiresAt).toISOString() };

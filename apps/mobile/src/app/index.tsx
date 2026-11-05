@@ -40,6 +40,11 @@ export default function MapScreen() {
   const [apiLoading, setApiLoading] = useState(apiEnabled());
   const loadedFor = useRef<string>('');
   const [ops, setOps] = useState<Operator[]>([]);
+  const [resume, setResume] = useState<string | null>(null);
+
+  useEffect(() => {
+    store.loadDirect().then((d) => setResume(d && !d.endedAt ? d.operatorName : null));
+  }, []);
 
   useEffect(() => {
     loadOperators().then(setOps);
@@ -232,6 +237,11 @@ export default function MapScreen() {
                   <Text style={styles.roundText}>i</Text>
                 </Pressable>
               </View>
+              {resume ? (
+                <Pressable accessibilityRole="button" onPress={() => router.push('/recharge')} style={styles.resume}>
+                  <Text style={styles.resumeText}>Recharge en cours chez {resume} · Reprendre</Text>
+                </Pressable>
+              ) : null}
               {loc === 'denied' && !panned ? (
                 <Notice>Position non autorisée : déplacez la carte vers votre zone ou autorisez la localisation dans les réglages.</Notice>
               ) : null}
@@ -316,6 +326,8 @@ const styles = StyleSheet.create({
   grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: '#C9D3D0', marginBottom: 10 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   infoBtn: { width: MIN_TOUCH, height: MIN_TOUCH, borderRadius: 22, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  resume: { minHeight: MIN_TOUCH, borderRadius: radius.md, backgroundColor: colors.ink, justifyContent: 'center', paddingHorizontal: 14 },
+  resumeText: { fontFamily: fonts.semibold, fontSize: 15, color: '#FFFFFF' },
   h1: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   loading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   muted: { fontFamily: fonts.medium, fontSize: 14, color: colors.inkMuted },

@@ -30,14 +30,17 @@ Résultat `{ kind: 'url'|'evse'|'invalid', url?, evse?, verdict: 'official'|'kno
 | POST | `/v1/route` — corps `{ "from": { "lat", "lon" }, "to": { "lat", "lon" } }` | `{ provider: "tomtom"\|"valhalla", traffic: boolean, durationS, trafficDelayS, distanceM, geometry: [[lon,lat]…], steps: [{ instruction, distanceM, lon, lat }], alternativesConsidered, attribution }` — trajet le plus rapide (min durée avec trafic) parmi les alternatives |
 | GET | `/v1/route` | `405` + message (les coordonnées ne passent jamais dans l'URL) |
 | GET | `/v1/incidents?bbox=w,s,e,n` | `{ updatedAt, source, feedOk, incidents: [{ id, type: "accident"\|"travaux"\|"fermeture"\|"bouchon"\|"obstacle"\|"meteo"\|"autre", title, description, lon, lat, start, end, severity: 1-3, source: "bison-fute"\|"communaute" }] }` |
-| POST | `/v1/reports` | in `{ type, lon, lat }` (types : accident, travaux, obstacle, bouchon, borne_hs) → `201 { id, expiresAt }` ; TTL 1 h (borne_hs 24 h) ; limite 10/h/IP |
+| POST | `/v1/reports` | in `{ type, lon, lat }` (types : accident, travaux, obstacle, bouchon, borne_hs, qr_suspect) → `201 { id, expiresAt }` ; TTL 1 h (borne_hs 24 h, qr_suspect 7 j) ; limite 10/h/IP |
 
-- Itinéraire : `TOMTOM_API_KEY` côté serveur uniquement (jamais renvoyée) ; sans clé → Valhalla (`VALHALLA_URL`, défaut public FOSSGIS, `traffic:false`). Le serveur public FOSSGIS est non commercial et non prévu pour la production : en production, clé TomTom ou Valhalla auto-hébergé.
+- Itinéraire : `TOMTOM_API_KEY` côté serveur uniquement (jamais renvoyée) ; sans clé → Valhalla (`VALHALLA_URL`, défaut public FOSSGIS, `traffic:false`). Le serveur public FOSSGIS est non commercial et non prévu pour la production : avec `NODE_ENV=production`, il n'est jamais utilisé ; sans `TOMTOM_API_KEY` ni `VALHALLA_URL` explicite, `POST /v1/route` → `503 routing_unavailable` et un avertissement est journalisé au démarrage.
 - `attribution` (à afficher) : « © TomTom » ou « © contributeurs OpenStreetMap, Valhalla ».
 - **Aucun cache** des itinéraires (conditions TomTom : pas de cache partagé) ; `cache-control: no-store`.
 - Validation : départ et arrivée dans le même territoire (métropole + Corse, Antilles, Guyane, Réunion, Mayotte ; rectangles larges), distance à vol d'oiseau ≤ 1500 km. Erreurs `400` `invalid_body` \| `invalid_coordinates` \| `out_of_area` \| `too_far` \| `same_point` ; `502 route_provider_error` si le fournisseur échoue.
 - Incidents : DATEX II Bison Futé (RRN non concédé, Licence Ouverte 2.0) mis en cache 2 min, `INCIDENTS_URL` configurable ; copie périmée servie si le flux tombe, sinon `feedOk:false` (signalements seuls). Événements terminés (`end` passé) exclus. `bbox` ≤ 20° de côté, sinon `400 invalid_bbox` \| `bbox_too_large`.
-- Signalements : pas de type « police » (décision juridique en attente) ; `400 invalid_report_type` ; `429 rate_limited`. Stockés en mémoire : type, position arrondie à 4 décimales, dates. Aucune IP ni identifiant.
+- Signalements : pas de type « police » (décision juridique en attente) ; `400 invalid_report_type` ; `429 rate_limited`.
+  - `qr_suspect` (faux QR code sur une borne) : servi dans `/v1/incidents` en `type:"autre"`, `title:"QR code suspect signalé"`, `severity:3`, TTL 7 jours.
+  - Suspension par zone (interdiction préfectorale) : `REPORTS_DISABLED` = `w,s,e,n|fin ISO 8601 avec fuseau` séparés par `;`. Jusqu'à la date de fin, `POST /v1/reports` dans la zone → `403 reports_disabled`, et les signalements existants de la zone ne sont plus servis par `/v1/incidents` (les incidents Bison Futé restent servis). Valeur invalide → refus de démarrer.
+  - Stockés en mémoire : type, position arrondie à 4 décimales, dates. Aucune IP ni identifiant.
 - Journaux : ni corps de requête, ni IP, ni coordonnées ; `bbox` arrondie à 2 décimales.
 
 ## 3. Zones de danger `data/danger-zones.json` (pipeline)

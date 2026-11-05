@@ -43,6 +43,16 @@ test('messageries publiques exclues', () => {
   assert.deepEqual(contactDomains('mairie@wanadoo.fr ; sav@izivia.com'), ['izivia.com']);
 });
 
+test('hébergeurs génériques exclus', () => {
+  const tarif = 'https://sites.google.com/view/borne https://monop.wixsite.com/tarifs https://monop.wordpress.com '
+    + 'https://www.facebook.com/monop https://linktr.ee/monop https://bit.ly/3xYz https://monop.github.io/prix https://www.monop.fr/tarifs';
+  assert.deepEqual(urlDomains(tarif), ['monop.fr']);
+  assert.deepEqual(contactDomains('contact@monop.wixsite.com'), []);
+  const r = createOperatorRegistry();
+  for (const st of ['s1', 's2', 's3']) r.observe({ nom_operateur: 'Monop', tarification: tarif }, 'monop', st);
+  assert.deepEqual(r.build().operators[0].domains, ['monop.fr']);
+});
+
 test('domaine enregistrable', () => {
   assert.equal(registrableDomain('support.izivia.com'), 'izivia.com');
   assert.equal(registrableDomain('support.emobility.fr.group-indigo.com'), 'group-indigo.com');
@@ -55,15 +65,17 @@ test('domaine enregistrable', () => {
   assert.deepEqual(urlDomains('Voir https://www.e-vadea.fr/fr/tarifs ou www.oscea64.fr.'), ['e-vadea.fr', 'oscea64.fr']);
 });
 
-test('seuil : domaine de contact gardé à partir de 3 stations, tarification toujours', () => {
+test('seuil : domaine (contact ou tarification) gardé à partir de 3 stations', () => {
   const r = createOperatorRegistry();
   const row = (contact, tarif = '') => ({ nom_operateur: 'Op Test', contact_operateur: contact, contact_amenageur: '', tarification: tarif });
   for (const st of ['s1', 's2', 's3']) r.observe(row('sav@support.optest.fr'), 'op-test', st);
   r.observe(row('a@optest.fr'), 'op-test', 's3'); // même station : ne compte pas deux fois
   for (const st of ['s1', 's2']) r.observe(row('x@rare.fr'), 'op-test', st);
-  r.observe(row('', 'https://pay.tarifs-op.com/grille'), 'op-test', 's4');
+  r.observe(row('', 'https://pay.tarifs-op.com/grille'), 'op-test', 's4'); // une seule station : insuffisant
+  for (const st of ['s4', 's5']) r.observe(row('', 'Tarifs : https://pay.tarifs-op.com/grille'), 'op-test', st);
+  for (const st of ['s1', 's2', 's3', 's4', 's5']) r.observe(row('', 'Voir https://www.grille-op.fr/tarifs'), 'op-test', st);
   const op = r.build().operators[0];
-  assert.deepEqual(op, { key: 'op-test', names: ['Op Test'], domains: ['optest.fr', 'tarifs-op.com'], payUrl: null, stations: 4 });
+  assert.deepEqual(op, { key: 'op-test', names: ['Op Test'], domains: ['grille-op.fr', 'optest.fr'], payUrl: null, stations: 5 });
 });
 
 test('contact_amenageur pris en compte uniquement si l’aménageur a le slug de l’opérateur', () => {

@@ -105,7 +105,10 @@ export function TripPanel(props: {
           {!trip.guiding ? (
             <>
               <Text style={styles.section}>Sur le trajet</Text>
-              {trip.incidents.length === 0 && trip.zones.length === 0 ? (
+              {trip.feedOk === false ? (
+                <Notice>Perturbations Bison Futé momentanément indisponibles : seuls les signalements des utilisateurs sont affichés.</Notice>
+              ) : null}
+              {trip.incidents.length === 0 && trip.zones.length === 0 && trip.feedOk !== false ? (
                 <Text style={styles.muted}>Aucune perturbation signalée sur ce trajet.</Text>
               ) : null}
               {trip.incidents.slice(0, 5).map((i) => (
@@ -154,7 +157,7 @@ export function TripPanel(props: {
             </>
           )}
           <Text style={styles.small}>
-            {r.provider === 'tomtom' ? 'Itinéraire et trafic © TomTom.' : 'Itinéraire © contributeurs OpenStreetMap, Valhalla.'} Perturbations : Bison Futé (DIR, Licence Ouverte 2.0) et communauté. Zones de danger © contributeurs OpenStreetMap.
+            {r.provider === 'tomtom' ? 'Itinéraire et trafic © TomTom.' : 'Itinéraire © contributeurs OpenStreetMap, Valhalla.'} Perturbations : Bison Futé (DIR, Licence Ouverte 2.0){trip.feedUpdatedAt ? `, à jour de ${new Date(trip.feedUpdatedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : ''} et communauté. Zones de danger © contributeurs OpenStreetMap.
           </Text>
         </>
       ) : null}

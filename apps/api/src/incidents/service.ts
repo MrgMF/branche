@@ -1,19 +1,32 @@
 import { randomUUID } from 'node:crypto';
+import type { ReportsDisabledZone } from '../config.js';
 import { inBbox, round, type BBox } from '../lib/geo.js';
 import { fetchWithTimeout, type FetchLike } from '../lib/ttlCache.js';
 import { createDatexParser, parseDatex, type Incident, type IncidentType } from './datex.js';
 
-export const REPORT_TYPES = ['accident', 'travaux', 'obstacle', 'bouchon', 'borne_hs'] as const;
+export const REPORT_TYPES = ['accident', 'travaux', 'obstacle', 'bouchon', 'borne_hs', 'qr_suspect'] as const;
 export type ReportType = (typeof REPORT_TYPES)[number];
 
 const HOUR = 3600_000;
-const REPORT_TTL: Record<ReportType, number> = { accident: HOUR, travaux: HOUR, obstacle: HOUR, bouchon: HOUR, borne_hs: 24 * HOUR };
+const REPORT_TTL: Record<ReportType, number> = {
+  accident: HOUR,
+  travaux: HOUR,
+  obstacle: HOUR,
+  bouchon: HOUR,
+  borne_hs: 24 * HOUR,
+  qr_suspect: 7 * 24 * HOUR,
+};
 const REPORT_INCIDENT: Record<ReportType, { type: IncidentType; title: string; severity: 1 | 2 | 3 }> = {
   accident: { type: 'accident', title: 'Accident signalé', severity: 3 },
   travaux: { type: 'travaux', title: 'Travaux signalés', severity: 1 },
   obstacle: { type: 'obstacle', title: 'Obstacle signalé', severity: 2 },
   bouchon: { type: 'bouchon', title: 'Bouchon signalé', severity: 2 },
   borne_hs: { type: 'autre', title: 'Borne hors service signalée', severity: 1 },
+  qr_suspect: { type: 'autre', title: 'QR code suspect signalé', severity: 3 },
+};
+
+const REPORT_DESCRIPTION: Partial<Record<ReportType, string>> = {
+  qr_suspect: 'Un usager signale un QR code possiblement frauduleux sur une borne. Ne le scannez pas : payez par l’app de l’opérateur ou par carte.',
 };
 
 /**
@@ -34,8 +47,15 @@ export class ReportStore {
 
   constructor(
     private readonly now: () => number,
+    private readonly disabledZones: ReportsDisabledZone[] = [],
     private readonly max = 5000,
   ) {}
+
+  /** Vrai si un point est dans une zone où les signalements sont suspendus (à l'instant présent). */
+  isDisabledAt(lon: number, lat: number): boolean {
+    const t = this.now();
+    return this.disabledZones.some((z) => t < z.until && lon >= z.w && lon <= z.e && lat >= z.s && lat <= z.n);
+  }
 
   add(type: ReportType, lon: number, lat: number): Report {
     this.prune();
@@ -52,13 +72,13 @@ export class ReportStore {
 
   active(): Incident[] {
     this.prune();
-    return [...this.byId.values()].map((r) => {
+    return [...this.byId.values()].filter((r) => !this.isDisabledAt(r.lon, r.lat)).map((r) => {
       const m = REPORT_INCIDENT[r.type];
       return {
         id: r.id,
         type: m.type,
         title: m.title,
-        description: 'Signalement d’un usager de Branché, non vérifié.',
+        description: REPORT_DESCRIPTION[r.type] ?? 'Signalement d’un usager de Branché, non vérifié.',
         lon: r.lon,
         lat: r.lat,
         start: new Date(r.createdAt).toISOString(),

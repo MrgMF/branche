@@ -29,7 +29,9 @@ export async function openOperatorPayment(url: string, station: Station | null, 
       : { id: 'inconnue', name: 'Borne scannée' },
     operatorName,
     url,
-    startedAt: Date.now(),
+    openedAt: Date.now(),
+    chargeStartedAt: null,
+    endedAt: null,
   });
   if (Platform.OS === 'web') {
     window.open(url, '_blank', 'noopener,noreferrer');
