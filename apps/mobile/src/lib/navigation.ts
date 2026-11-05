@@ -3,11 +3,59 @@ import { API_URL, DATA_URL } from './config';
 
 export type LonLat = [number, number];
 
+/** Manœuvre normalisée par l'API (docs/api-contract-v2-navigation.md). */
+export type Maneuver =
+  | 'depart' | 'straight' | 'turn-left' | 'turn-right' | 'slight-left' | 'slight-right' | 'sharp-left' | 'sharp-right'
+  | 'uturn' | 'roundabout' | 'exit-left' | 'exit-right' | 'keep-left' | 'keep-right' | 'merge' | 'ferry' | 'waypoint' | 'arrive';
+export type LaneDir =
+  | 'straight' | 'slight-left' | 'left' | 'sharp-left' | 'uturn-left' | 'slight-right' | 'right' | 'sharp-right' | 'uturn-right' | 'merge-left' | 'merge-right';
+export interface Lane {
+  directions: LaneDir[];
+  active: boolean;
+}
+
 export interface RouteStep {
   instruction: string;
   distanceM: number;
   lon: number;
   lat: number;
+  // V2 (absents d'une API V1.1 : valeurs par défaut côté app)
+  maneuver?: Maneuver;
+  street?: string;
+  exit?: number;
+  exitNumber?: string;
+  towards?: string;
+  angle?: number;
+  offsetM?: number;
+  pointIndex?: number;
+  lanes?: Lane[];
+}
+export interface TrafficSection {
+  startIndex: number;
+  endIndex: number;
+  delayS: number;
+  magnitude: number;
+}
+export interface SpeedLimitSection {
+  startIndex: number;
+  endIndex: number;
+  kmh: number;
+}
+export interface RouteOption {
+  id: string;
+  durationS: number;
+  trafficDelayS: number;
+  distanceM: number;
+  hasTolls: boolean;
+  hasMotorways: boolean;
+  geometry: LonLat[];
+  steps: RouteStep[];
+  trafficSections: TrafficSection[];
+  speedLimits?: SpeedLimitSection[];
+}
+export interface RouteOptions {
+  avoidTolls: boolean;
+  avoidMotorways: boolean;
 }
 export interface Route {
   provider: 'tomtom' | 'valhalla';
@@ -19,7 +67,17 @@ export interface Route {
   steps: RouteStep[];
   alternativesConsidered?: number;
   attribution?: string;
+  hasTolls?: boolean;
+  routes?: RouteOption[];
+  options?: RouteOptions;
 }
+
+/** Liste des trajets d'une réponse (V2 : routes[] ; V1.1 : le trajet racine seul). */
+export function routeOptions(r: Route): RouteOption[] {
+  if (r.routes?.length) return r.routes;
+  return [{ id: 'r0', durationS: r.durationS, trafficDelayS: r.trafficDelayS, distanceM: r.distanceM, hasTolls: !!r.hasTolls, hasMotorways: false, geometry: r.geometry, steps: r.steps, trafficSections: [] }];
+}
+
 export type IncidentType = 'accident' | 'travaux' | 'fermeture' | 'bouchon' | 'obstacle' | 'meteo' | 'autre' | 'borne_hs' | 'qr_suspect';
 export interface Incident {
   id: string;
@@ -57,12 +115,52 @@ async function get<T>(url: string, ms = 20000, init?: RequestInit): Promise<T> {
 }
 
 // POST : les coordonnées ne figurent pas dans les URL (journaux serveur).
-export const getRoute = (from: { lat: number; lon: number }, to: { lat: number; lon: number }) =>
+export const getRoute = (
+  from: { lat: number; lon: number },
+  to: { lat: number; lon: number },
+  extra: { via?: { lat: number; lon: number }[]; options?: RouteOptions } = {},
+) =>
   get<Route>(`${API_URL}/v1/route`, 25000, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ from: { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon } }),
+    body: JSON.stringify({
+      from: { lat: from.lat, lon: from.lon },
+      to: { lat: to.lat, lon: to.lon },
+      ...(extra.via?.length ? { via: extra.via.map((v) => ({ lat: v.lat, lon: v.lon })) } : {}),
+      ...(extra.options ? { options: extra.options } : {}),
+    }),
   });
+
+export interface Place {
+  label: string;
+  sublabel: string;
+  lat: number;
+  lon: number;
+  kind?: 'address' | 'street' | 'poi' | 'city';
+}
+export interface SearchResponse {
+  provider: 'tomtom' | 'photon';
+  attribution: string;
+  results: Place[];
+}
+/** Recherche d'adresse (POST : la saisie n'apparaît dans aucune URL). */
+export async function searchPlaces(q: string, near?: { lat: number; lon: number } | null, signal?: AbortSignal): Promise<SearchResponse> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/v1/search`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ q, ...(near ? { near: { lat: near.lat, lon: near.lon } } : {}) }),
+      signal,
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === 'AbortError') throw e;
+    throw new Error('Recherche indisponible. Vérifiez votre connexion.');
+  }
+  const body = (await res.json().catch(() => ({}))) as Partial<SearchResponse> & { error?: { message?: string } };
+  if (!res.ok) throw new Error(body.error?.message ?? 'Recherche indisponible pour le moment.');
+  return { provider: body.provider ?? 'photon', attribution: body.attribution ?? '', results: body.results ?? [] };
+}
 
 export interface IncidentFeed {
   incidents: Incident[];
@@ -121,13 +219,13 @@ function projectOnSegment(p: { lat: number; lon: number }, a: LonLat, b: LonLat)
 
 /** Position de l'utilisateur rapportée à l'itinéraire : écart (m) et distance parcourue (m). */
 export function progressOnRoute(p: { lat: number; lon: number }, line: LonLat[]) {
-  let best = { off: Infinity, along: 0 };
+  let best = { off: Infinity, along: 0, seg: 0 };
   let acc = 0;
   for (let i = 0; i < line.length - 1; i++) {
     const a = line[i], b = line[i + 1];
     const seg = metersBetween({ lon: a[0], lat: a[1] }, { lon: b[0], lat: b[1] });
     const { d, t } = projectOnSegment(p, a, b);
-    if (d < best.off) best = { off: d, along: acc + t * seg };
+    if (d < best.off) best = { off: d, along: acc + t * seg, seg: i };
     acc += seg;
   }
   return { ...best, total: acc };
