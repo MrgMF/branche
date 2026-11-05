@@ -161,14 +161,11 @@ export default function MapScreen() {
 
       <View style={[styles.top, { paddingTop: insets.top + 10 }]} pointerEvents="box-none">
         <ScrollView horizontal style={{ flex: 1 }} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityLabel="Filtres">
-          <Chip label="Rapide ≥ 50 kW" active={filters.fast} onPress={() => toggle('fast')} />
+          <Chip label="Rapide" a11y="Rapide, 50 kW et plus" active={filters.fast} onPress={() => toggle('fast')} />
           <Chip label="CCS" active={filters.ccs} onPress={() => toggle('ccs')} />
           <Chip label="Type 2" active={filters.t2} onPress={() => toggle('t2')} />
           <Chip label="Accès libre" active={filters.open} onPress={() => toggle('open')} />
         </ScrollView>
-        <Pressable accessibilityRole="button" accessibilityLabel="À propos et mentions légales" onPress={() => router.push('/about')} style={styles.round}>
-          <Text style={styles.roundText}>i</Text>
-        </Pressable>
       </View>
 
       {user ? (
@@ -196,9 +193,14 @@ export default function MapScreen() {
             />
           ) : (
             <>
-              <Text style={styles.h1} accessibilityRole="header">
-                {panned || !user ? 'Bornes autour de la carte' : 'Bornes les plus proches'}
-              </Text>
+              <View style={styles.titleRow}>
+                <Text style={[styles.h1, { flex: 1 }]} accessibilityRole="header">
+                  {panned || !user ? 'Bornes autour de la carte' : 'Bornes les plus proches'}
+                </Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="À propos et mentions légales" onPress={() => router.push('/about')} style={styles.infoBtn}>
+                  <Text style={styles.roundText}>i</Text>
+                </Pressable>
+              </View>
               {loc === 'denied' && !panned ? (
                 <Notice>Position non autorisée : déplacez la carte vers votre zone ou autorisez la localisation dans les réglages.</Notice>
               ) : null}
@@ -281,6 +283,8 @@ const styles = StyleSheet.create({
   },
   sheetWide: { right: undefined, width: 440, left: 16, bottom: 16, borderRadius: radius.xl },
   grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: '#C9D3D0', marginBottom: 10 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  infoBtn: { width: MIN_TOUCH, height: MIN_TOUCH, borderRadius: 22, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   h1: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   loading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   muted: { fontFamily: fonts.medium, fontSize: 14, color: colors.inkMuted },

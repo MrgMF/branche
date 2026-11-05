@@ -142,7 +142,9 @@ export default function SessionScreen() {
 
 function duration(a: string | null, b: string | null) {
   if (!a || !b) return '—';
-  const min = Math.max(0, Math.round((Date.parse(b) - Date.parse(a)) / 60000));
+  const sec = Math.max(0, Math.round((Date.parse(b) - Date.parse(a)) / 1000));
+  if (sec < 60) return `${sec} s`;
+  const min = Math.round(sec / 60);
   return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
 }
 

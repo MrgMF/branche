@@ -46,13 +46,13 @@ export function Button(props: {
   );
 }
 
-export function Chip(props: { label: string; active: boolean; onPress: () => void }) {
+export function Chip(props: { label: string; a11y?: string; active: boolean; onPress: () => void }) {
   return (
     <Pressable
       role="switch"
       aria-checked={props.active}
       accessibilityState={{ checked: props.active }}
-      accessibilityLabel={props.label}
+      accessibilityLabel={props.a11y ?? props.label}
       onPress={props.onPress}
       style={[styles.chip, props.active ? styles.chipOn : styles.chipOff]}
     >

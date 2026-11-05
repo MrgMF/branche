@@ -29,9 +29,9 @@ services:
         value: "50"
       - key: SIM_SPEED
         value: "20"
-      # Anti open-redirect : remplacer OWNER par votre identifiant GitHub.
+      # Anti open-redirect, à saisir sur Render : branche://,https://<votre-identifiant>.github.io/branche/app/
       - key: ALLOWED_RETURN_PREFIXES
-        value: "branche://,https://OWNER.github.io/branche/app/"
+        sync: false
       # URL publique (par défaut : RENDER_EXTERNAL_URL fourni par Render).
       - key: PUBLIC_URL
         sync: false
