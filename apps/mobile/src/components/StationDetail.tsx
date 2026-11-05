@@ -126,17 +126,6 @@ export function StationDetail(props: {
         ))}
       </View>
 
-      {api ? (
-        <View style={styles.demoBox}>
-          <Text style={styles.boxTitle}>Paiement Branché (itinérance, en préparation)</Text>
-          <Button label="Essayer en démo" variant="light" onPress={charge} loading={busy} hint="Paiement et borne simulés, aucun débit" style={styles.demoBtn} />
-          <Text style={styles.small}>
-            Démo : aucun débit. {euros(api.priceCentsPerKwh)}/kWh + {euros(api.feeCents)} de frais, pré-autorisation de {euros(api.preauthCents)}.
-          </Text>
-        </View>
-      ) : props.apiLoading ? (
-        <Text style={styles.small}>Connexion au service Branché…</Text>
-      ) : null}
       {err ? <Notice tone="error">{err}</Notice> : null}
 
       {s.tel ? (

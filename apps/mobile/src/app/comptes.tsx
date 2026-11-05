@@ -1,0 +1,178 @@
+// « Mes comptes de recharge » et « Mes badges » : l'utilisateur se connecte sur le SITE OFFICIEL de l'opérateur,
+// ouvert dans le navigateur intégré de Branché (la session reste dans ce navigateur). Branché ne voit, ne stocke ni ne
+// transmet aucun identifiant, mot de passe, numéro de badge ou carte : il retient seulement « compte X connecté le … ».
+import { router, useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import { useEffect, useMemo, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button, Notice } from '../components/ui';
+import { BADGES, forgetAccount, loadWallet, markConnected, setBadges, type Wallet } from '../lib/accounts';
+import { loadPortals, type Portals } from '../lib/portals';
+import type { Operator } from '../lib/qr';
+import { loadOperators } from '../lib/stations';
+import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+
+interface Site {
+  key: string;
+  name: string;
+  url: string;
+  /** Démarrage d'une charge depuis le site connu. */
+  canStart: boolean;
+}
+
+const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '');
+const day = (t: number) => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+export default function Comptes() {
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ op?: string }>();
+  const [portals, setPortals] = useState<Portals>({});
+  const [ops, setOps] = useState<Operator[]>([]);
+  const [wallet, setWallet] = useState<Wallet>({ accounts: [], badges: [] });
+  const [q, setQ] = useState('');
+  const [pending, setPending] = useState<Site | null>(null);
+  const [other, setOther] = useState('');
+
+  useEffect(() => {
+    loadPortals().then(setPortals);
+    loadOperators().then(setOps);
+    loadWallet().then(setWallet);
+  }, []);
+
+  // Sites officiels : portails publiés, sinon domaine déclaré par l'opérateur dans la base IRVE
+  const sites = useMemo(() => {
+    const out = new Map<string, Site>();
+    for (const [key, p] of Object.entries(portals)) if (p.webPortal) out.set(key, { key, name: p.name, url: p.webPortal, canStart: !!p.webStart?.url });
+    for (const o of [...ops].sort((a, b) => (b.stations ?? 0) - (a.stations ?? 0)))
+      if (!out.has(o.key) && o.domains[0] && !o.domains[0].includes(':')) out.set(o.key, { key: o.key, name: o.names[0], url: `https://${o.domains[0]}`, canStart: false });
+    return [...out.values()];
+  }, [portals, ops]);
+
+  const shown = useMemo(() => {
+    const f = fold(q.trim());
+    const list = f ? sites.filter((s) => fold(s.name).includes(f)) : sites.slice(0, 12);
+    const first = params.op ? sites.find((s) => s.key === params.op) : undefined;
+    return first ? [first, ...list.filter((s) => s.key !== first.key)] : list;
+  }, [sites, q, params.op]);
+
+  async function connect(s: Site) {
+    setPending(s);
+    if (Platform.OS === 'web') window.open(s.url, '_blank', 'noopener,noreferrer');
+    else await WebBrowser.openBrowserAsync(s.url, { showTitle: true, enableBarCollapsing: true }).catch(() => undefined);
+  }
+
+  const connected = (key: string) => wallet.accounts.find((a) => a.operatorKey === key);
+  const toggleBadge = async (b: string) => setWallet(await setBadges(wallet.badges.includes(b) ? wallet.badges.filter((x) => x !== b) : [...wallet.badges, b]));
+
+  return (
+    <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled">
+      <View style={styles.head}>
+        <Button label="Retour" variant="ghost" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={styles.back} />
+        <Text style={styles.h1} accessibilityRole="header">
+          Mes badges et comptes
+        </Text>
+      </View>
+      <Text style={styles.p}>Par défaut, Branché vous fait payer sans aucun compte. Quelques opérateurs imposent un compte : ajoutez-le une fois ici ou directement à la borne, Branché le réutilisera.</Text>
+      <Notice>Branché ne voit jamais vos identifiants, mot de passe ni carte : la connexion se fait sur le site de l’opérateur et reste dans le navigateur de Branché. Branché retient seulement « compte connecté le … », sur ce téléphone.</Notice>
+
+      {pending ? (
+        <View style={styles.confirm} accessibilityLiveRegion="polite">
+          <Text style={styles.cardTitle}>Connecté au site de {pending.name} ?</Text>
+          <Text style={styles.p}>Si vous avez pu vous connecter, Branché retient que ce compte est disponible.</Text>
+          <Button
+            label="Oui, je suis connecté"
+            onPress={async () => {
+              setWallet(await markConnected(pending.key, pending.name));
+              setPending(null);
+            }}
+          />
+          <Button label="Pas maintenant" variant="ghost" onPress={() => setPending(null)} />
+        </View>
+      ) : null}
+
+      <Text style={styles.h2} accessibilityRole="header">
+        Comptes opérateurs
+      </Text>
+      <TextInput value={q} onChangeText={setQ} placeholder="Opérateur : Ionity, Izivia, Freshmile…" placeholderTextColor="#6B7773" aria-label="Rechercher un opérateur" style={styles.input} autoCorrect={false} />
+      {!sites.length ? <Text style={styles.p}>Liste des opérateurs indisponible (connexion ?). Réessayez plus tard.</Text> : null}
+      {shown.map((s) => {
+        const c = connected(s.key);
+        return (
+          <View key={s.key} style={[styles.item, c && styles.itemOn]}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.itemTitle}>{s.name}</Text>
+              <Text style={styles.small} numberOfLines={2}>
+                {c ? `Connecté le ${day(c.connectedAt)}` : s.url.replace(/^https:\/\//, '')}
+                {s.canStart ? ' · démarrage depuis le site' : ''}
+              </Text>
+            </View>
+            {c ? (
+              <Pressable accessibilityRole="button" accessibilityLabel={`Oublier le compte ${s.name}`} onPress={async () => setWallet(await forgetAccount(s.key))} style={styles.small2}>
+                <Text style={styles.linkDanger}>Oublier</Text>
+              </Pressable>
+            ) : (
+              <Pressable accessibilityRole="button" accessibilityLabel={`Se connecter sur le site de ${s.name}`} onPress={() => connect(s)} style={styles.small2}>
+                <Text style={styles.linkText}>Se connecter</Text>
+              </Pressable>
+            )}
+          </View>
+        );
+      })}
+      {!q && sites.length > shown.length ? <Text style={styles.small}>{sites.length} opérateurs : tapez un nom pour trouver le vôtre.</Text> : null}
+
+      <Text style={styles.h2} accessibilityRole="header">
+        Mes badges
+      </Text>
+      <Text style={styles.p}>Indiquez les badges que vous avez (le nom suffit, jamais le numéro) : Branché vous dit sur chaque borne s’ils sont acceptés.</Text>
+      <View style={styles.chips}>
+        {[...BADGES, ...wallet.badges.filter((b) => !BADGES.includes(b))].map((b) => {
+          const on = wallet.badges.includes(b);
+          return (
+            <Pressable key={b} role="checkbox" aria-checked={on} accessibilityState={{ checked: on }} accessibilityLabel={b} onPress={() => toggleBadge(b)} style={[styles.chip, on && styles.chipOn]}>
+              <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>{b}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={styles.row}>
+        <TextInput value={other} onChangeText={setOther} placeholder="Autre badge (nom)" placeholderTextColor="#6B7773" aria-label="Autre badge" style={[styles.input, { flex: 1 }]} />
+        <Button
+          label="Ajouter"
+          variant="ghost"
+          disabled={!other.trim()}
+          onPress={async () => {
+            setWallet(await setBadges([...wallet.badges, other]));
+            setOther('');
+          }}
+          style={{ minHeight: 50, paddingHorizontal: 16 }}
+        />
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface },
+  body: { paddingHorizontal: 16, gap: 12, maxWidth: 600, width: '100%', alignSelf: 'center' },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  back: { minHeight: MIN_TOUCH, paddingHorizontal: 14 },
+  h1: { flex: 1, fontFamily: fonts.display, fontSize: 22, color: colors.ink },
+  h2: { fontFamily: fonts.bold, fontSize: 17, color: colors.ink, marginTop: 6 },
+  p: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.inkMuted },
+  small: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17, color: colors.inkMuted },
+  cardTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.ink },
+  confirm: { borderWidth: 2, borderColor: colors.accent, borderRadius: radius.lg, padding: 14, gap: 8 },
+  input: { minHeight: 50, borderRadius: radius.md, borderWidth: 1, borderColor: '#C9D3D0', paddingHorizontal: 14, fontFamily: fonts.medium, fontSize: 16, color: colors.ink },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 64, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  itemOn: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+  itemTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
+  small2: { minHeight: MIN_TOUCH, minWidth: MIN_TOUCH, justifyContent: 'center', paddingHorizontal: 6 },
+  linkText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.accent },
+  linkDanger: { fontFamily: fonts.semibold, fontSize: 15, color: colors.danger },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { minHeight: MIN_TOUCH, paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderColor: '#C9D3D0', justifyContent: 'center' },
+  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chipText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
+  row: { flexDirection: 'row', gap: 8 },
+});

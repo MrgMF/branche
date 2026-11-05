@@ -248,7 +248,7 @@ export default function MapScreen() {
                   <Text style={styles.resumeText}>Recharge en cours chez {resume} · Reprendre</Text>
                 </Pressable>
               ) : (
-                <HereBanner user={user} />
+                <HereBanner user={user} onPick={select} />
               )}
               {loc === 'denied' && !panned ? (
                 <Notice>Position non autorisée : déplacez la carte vers votre zone ou autorisez la localisation dans les réglages.</Notice>

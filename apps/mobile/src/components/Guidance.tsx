@@ -51,7 +51,8 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
   const over = isOverSpeed(trip.speedKmh, trip.limitKmh);
   const remainingS = trip.remainingS || trip.route.durationS;
   const remainingM = trip.remainingM || trip.route.distanceM;
-  const soc = trip.battery?.[trip.route.id];
+  // Avec une étape de recharge, la batterie utile est celle en arrivant à la borne.
+  const soc = trip.via.length && typeof trip.viaSoc === 'number' ? trip.viaSoc : trip.battery?.[trip.route.id];
   const station = trip.arrivedAtVia?.station ?? (trip.arrived ? trip.dest.station : undefined);
   const exitTxt = next?.step.exit ? `, sortie ${next.step.exit}` : '';
 

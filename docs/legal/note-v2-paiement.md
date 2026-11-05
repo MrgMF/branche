@@ -14,5 +14,6 @@ Brouillon de l'équipe « dev paiement » à relire par l'agent `juridique` puis
 
 ## Paiement
 - Branché ne voit, ne transmet ni ne stocke aucune donnée de carte : l'utilisateur paie l'opérateur (lecteur de la borne ou page officielle ouverte dans un navigateur intégré isolé). Pas de service de paiement au sens DSP2 fourni par Branché.
-- « Préparer ma recharge » ne débite rien : le débit se fait à la borne, chez l'opérateur. Le prépaiement réel nécessitera un partenaire (eMSP / établissement de paiement) — affiché honnêtement dans l'app.
+- « Préparer ma recharge » ne débite rien : le débit se fait à la borne, chez l'opérateur, en un geste depuis Branché (affiché honnêtement dans l'app).
+- Comptes opérateurs : proposés seulement quand l'opérateur l'impose ; connexion sur le site officiel dans le navigateur intégré (session conservée par ce navigateur). Branché retient uniquement « compte X connecté le … » sur l'appareil ; badges : nom seulement. [À VÉRIFIER : CGU des opérateurs sur l'ouverture de leur site depuis une app tierce].
 - Prix affichés : tarif déclaré par l'opérateur dans la base IRVE, **analysé automatiquement** et présenté comme estimation ; la borne et l'opérateur font foi (AFIR art. 5 : prix ad hoc affiché par l'opérateur).

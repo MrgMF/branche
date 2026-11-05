@@ -58,6 +58,10 @@ def setup_data():
         'pdc': [['FR*TST*E0001', 22, ['t2']], ['FR*TST*E0002', 22, ['t2']]],
     })
     json.dump(tile, open(tile_path, 'w'))
+    # Portail de l'opérateur de test (format de pipeline/data/operator-portals.json)
+    json.dump({'v': 1, 'operators': {'test': {'name': 'Opérateur Test', 'webPortal': 'http://localhost:8090/pay', 'webStart': {'status': 'inconnu', 'url': None},
+                                               'adhocWeb': True, 'cardReader': False, 'appOnly': False, 'roamingBadgesAccepted': ['Chargemap Pass'], 'sources': ['test']}}},
+              open(os.path.join(data, 'operator-portals.json'), 'w'))
     for i in ['FRTSTP0001', 'FRTSTE0001', 'FRTSTE0002']:
         p = os.path.join(data, 'evse', f'{fnv_bucket(i)}.json')
         idx = json.load(open(p)) if os.path.exists(p) else {'v': 1, 'm': {}}
@@ -238,7 +242,7 @@ try:
         assert com['checkins'] == 1 and com['okCount'] == 1 and com['recentPrices'][0]['pricePaid'] == 9.8, com
         ok('retour anonyme reçu par l’API (fiabilité 1/1, prix constaté 9,80 €)')
         page.goto(f'{BASE}/app/recharger?station=FRTSTP0001', wait_until='networkidle')
-        page.wait_for_selector('text=Fiabilité : 1 recharge réussie sur 1', timeout=15000)
+        page.wait_for_selector('text=1 recharge réussie sur 1', timeout=15000)
         shot(page, 'a11-fiabilite-hub')
         ok('fiabilité communautaire affichée dans le parcours')
         assert not errors, errors
@@ -259,7 +263,8 @@ try:
         shot(page, 'b2-vehicule-propose')
         page.get_by_role('button', name='Choisir').click()
         page.get_by_role('heading', name='Votre véhicule', exact=True).wait_for()
-        page.get_by_label('Rechercher un modèle').fill('megane')
+        assert page.get_by_role('button', name='Prendre en photo').count() == 0  # API absente : bouton masqué
+        page.get_by_label('Rechercher un modèle').fill('megnae')  # faute de frappe tolérée
         page.get_by_role('radio', name='Renault Mégane E-Tech 60 kWh', exact=False).click()
         page.get_by_role('radio', name='30 %').click()
         shot(page, 'b3-vehicule')
@@ -322,6 +327,63 @@ try:
         # Même appareil (même IP) et même station dans les 6 h : l'API ignore le doublon (anti-abus)
         assert com['checkins'] == 1 and com['lastFailAt'] is None, com
         ok('second retour du même appareil pour la même borne ignoré (anti-doublon)')
+        assert not errors, errors
+        ctx.close()
+
+        # ---------- D. Préparer à l'avance, arrivée → « Payer maintenant » en 1 geste, fin automatique au départ ----------
+        AWAY = {'latitude': 48.7520, 'longitude': 2.2980}  # ~850 m de la borne de test
+        ctx = new_ctx(b, AWAY)
+        ctx.route('**/v1/availability**', lambda r: r.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin': '*'},
+                  body=json.dumps({'updatedAt': '2026-11-05T18:00:00Z', 'source': 'test', 'items': {
+                      'FR*TST*E0001': {'status': 'occupe', 'at': '2026-11-05T18:00:00Z'}, 'FR*TST*E0002': {'status': 'libre', 'at': '2026-11-05T18:00:00Z'}}})))
+        page = ctx.new_page()
+        errors = []
+        page.on('pageerror', lambda e: errors.append(str(e)))
+        page.goto(f'{BASE}/app/', wait_until='networkidle')
+        page.get_by_text('Borne conseillée', exact=False).first.wait_for(timeout=20000)
+        shot(page, 'd1-conseillee')
+        ok('ouverture : borne conseillée affichée sans aucun geste')
+        page.get_by_role('button', name='Borne de test (CPO local)', exact=False).first.click()
+        page.wait_for_selector('text=1 point libre sur 2')
+        shot(page, 'd2-fiche-dispo')
+        ok('disponibilité temps réel dans la fiche (1 libre sur 2)')
+        page.get_by_role('button', name='Préparer ma recharge').click()
+        page.wait_for_selector('text=Choisissez votre point de charge')
+        page.get_by_text('Libre', exact=True).first.wait_for()
+        page.get_by_role('button', name='Passer').first.click()
+        page.get_by_role('button', name='Point se terminant par 0 0 0 2', exact=False).click()
+        page.get_by_role('button', name='Enregistrer pour mon arrivée').click()
+        page.wait_for_selector('text=Tout est prêt')
+        shot(page, 'd3-pret')
+        ok('recharge préparée à l’avance (point …0002 libre, méthode, prix), rien débité')
+        ctx.set_geolocation(TEST_POS)
+        page.goto(f'{BASE}/app/', wait_until='networkidle')
+        page.wait_for_selector('text=Tout est prêt', timeout=20000)
+        shot(page, 'd4-arrivee')
+        page.get_by_role('button', name='Payer maintenant').click()
+        page.get_by_text('Point …0002', exact=True).wait_for()
+        ok('arrivée : « Payer maintenant » ouvre directement le paiement du bon point (1 geste)')
+        page.get_by_placeholder('ex. FR*ABC*E1234 ou https://…').fill('http://localhost:8090/pay?evse=FR*TST*E0002')
+        page.get_by_role('button', name='Vérifier').click()
+        with ctx.expect_page() as pop:
+            page.get_by_role('button', name='Payer sur la page Opérateur Test').click()
+        pop.value.close()
+        page.get_by_role('button', name='La charge a démarré').click()
+        page.wait_for_selector('text=Coût estimé')
+        ctx.set_geolocation({'latitude': 48.7700, 'longitude': 2.3035})  # ~1,3 km : départ en voiture
+        try:
+            page.wait_for_selector('text=Départ de la borne détecté', timeout=25000)
+            how = 'pendant le suivi'
+        except Exception:
+            page.goto(f'{BASE}/app/', wait_until='networkidle')
+            page.wait_for_selector('text=Noter le prix (2 secondes)', timeout=20000)
+            page.get_by_role('button', name='Noter le prix (2 secondes)').click()
+            page.wait_for_selector('text=Départ de la borne détecté', timeout=10000)
+            how = 'à la réouverture'
+        shot(page, 'd5-fin-auto')
+        page.goto(f'{BASE}/app/historique', wait_until='networkidle')
+        page.get_by_text('Borne de test (CPO local)').first.wait_for()
+        ok(f'fin automatique au départ ({how}) : reçu déjà dans l’historique sans aucun geste')
         assert not errors, errors
         ctx.close()
         b.close()

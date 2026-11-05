@@ -8,7 +8,7 @@ import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, Vi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TariffLines } from '../components/Pricing';
 import { Button, Notice, Tag } from '../components/ui';
-import { getCommunity, preauthText, type Community } from '../lib/community';
+import { getCommunity, preauthText, reliabilityText, type Community } from '../lib/community';
 import { operatorLabel, payOptions, runPlan, type PayOption } from '../lib/connectors';
 import { AVAIL_LABEL, getAvailability, type AvailItem } from '../lib/availability';
 import { clearPrepared, loadPrepared, savePrepared, type Prepared } from '../lib/prepared';
@@ -231,6 +231,7 @@ export default function Recharger() {
           <Text style={styles.muted} numberOfLines={1}>
             {opName}
           </Text>
+          {step === 'point' && reliabilityText(community) ? <Text style={styles.small}>Fiabilité : {reliabilityText(community)}</Text> : null}
         </View>
       </View>
 
@@ -343,7 +344,7 @@ export default function Recharger() {
             <View style={[styles.card, { borderColor: colors.busy }]}>
               <Text style={styles.cardTitle} accessibilityRole="header">Pas de paiement possible ici depuis Branché</Text>
               <Text style={styles.p}>
-                {opName} n’accepte que son application ou un badge d’abonnement{portal?.roamingBadgesAccepted?.length ? ` (${portal.roamingBadgesAccepted.join(', ')})` : ''}. Ajoutez votre badge dans « Mes comptes et badges » si vous en avez un.
+                Pour cette borne, {opName} ne déclare ni paiement sans compte, ni lecteur de carte, ni site de compte utilisable{portal?.roamingBadgesAccepted?.length ? ` ; badges acceptés : ${portal.roamingBadgesAccepted.join(', ')}` : ''}. Si vous avez un badge, ajoutez-le dans « Mes badges ».
               </Text>
               {alternative ? (
                 <Button
@@ -355,7 +356,7 @@ export default function Recharger() {
                   }}
                 />
               ) : null}
-              <Button label="Mes comptes et badges" variant="ghost" onPress={() => router.push('/comptes')} />
+              <Button label="Mes badges" variant="ghost" onPress={() => router.push('/comptes')} />
             </View>
           ) : null}
           {/* Méthode recommandée + mode d'emploi */}
@@ -383,11 +384,6 @@ export default function Recharger() {
             </View>
           ) : null}
 
-          {portal?.webPortal && !accountConnected ? (
-            <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/comptes', params: { op: station.ok } })} style={styles.link}>
-              <Text style={styles.linkText}>Vous avez un compte {opName} ? Connectez-le une fois dans Branché</Text>
-            </Pressable>
-          ) : null}
           <Text style={styles.h3}>Autres méthodes</Text>
           {options
             .filter((o) => o.id !== chosen?.id)

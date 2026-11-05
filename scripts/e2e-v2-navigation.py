@@ -198,7 +198,7 @@ def shot(page, name):
 
 
 def search_and_preview(page):
-    page.goto(f'{BASE}/app/', wait_until='networkidle')
+    page.goto(f'{BASE}/app/', wait_until='load')
     page.wait_for_selector('text=Bornes les plus proches', timeout=20000)
     page.wait_for_timeout(1200)
     box = page.get_by_label('Rechercher une adresse ou un lieu')
@@ -220,7 +220,7 @@ with sync_playwright() as p:
     page.clock.install()
 
     # ---------------------------------------------------------------- Carte : commandes, point bleu, marqueurs
-    page.goto(f'{BASE}/app/', wait_until='networkidle')
+    page.goto(f'{BASE}/app/', wait_until='load')
     page.wait_for_selector('text=Bornes les plus proches', timeout=20000)
     page.wait_for_timeout(2500)
     mapf = page.frames[1]
@@ -420,7 +420,7 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, locale='fr-FR')
     setup(ctx, None)
     page = ctx.new_page()
-    page.goto(f'{BASE}/app/', wait_until='networkidle')
+    page.goto(f'{BASE}/app/', wait_until='load')
     page.wait_for_timeout(2500)
     box = page.get_by_label('Rechercher une adresse ou un lieu')
     box.click()

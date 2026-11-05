@@ -4,11 +4,12 @@ import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { displayName, type Station } from './stations';
+import { markConnected } from './accounts';
 import { store, type ChargePlan } from './store';
 
 export { directPayUrl, operatorLabel, operatorOf, payOptions, type PayOption } from './methods';
 
-export type ConnectorId = 'scan' | 'operator-link' | 'branche-card' | 'branche-pay';
+export type ConnectorId = 'scan' | 'operator-link' | 'account' | 'reader' | 'badge';
 
 function stationRef(station: Station | null) {
   return station
@@ -57,6 +58,8 @@ export async function openOperatorPayment(url: string, station: Station | null, 
 export function runPlan(station: Station, plan: ChargePlan, operatorName: string, url?: string) {
   store.setCurrent(station);
   store.setPlan(plan);
+  // Compte imposé par l'opérateur : ajouté une fois (sur son site, dans le navigateur intégré), réutilisé ensuite
+  if (plan.method === 'account' && station.ok) markConnected(station.ok, operatorName);
   if (plan.method === 'reader' || plan.method === 'badge') startReaderCharge(station, operatorName);
   else if ((plan.method === 'operator-link' || plan.method === 'account') && url) openOperatorPayment(url, station, operatorName);
   else router.push({ pathname: '/payer', params: { from: 'recharger' } });

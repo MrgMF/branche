@@ -97,6 +97,8 @@ export interface Trip {
   /** Batterie estimée à l'arrivée par trajet (id → %), si un véhicule est enregistré. */
   battery: Record<string, number> | null;
   vehicleName: string | null;
+  /** Batterie estimée en arrivant à l'étape de recharge. */
+  viaSoc?: number | null;
   chargers: ChargerSuggestion[];
   rerouting: boolean;
 }
@@ -205,12 +207,14 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     let chargers: ChargerSuggestion[] = [];
     if (v) {
       battery = Object.fromEntries(t.routes.map((x) => [x.id, arrivalSoc(v, socAfter, x.distanceM, x.durationS)]));
-      if ((battery[r.id] ?? 100) < LOW_SOC && !t.guiding) {
+      if ((battery[r.id] ?? 100) < LOW_SOC && !t.guiding && !t.via.length) {
         const lists = await Promise.all(tileProbes(line).map((p) => loadAround(p, 0).catch(() => [] as Station[])));
         chargers = chargersOnRoute(lists.flat(), line, v, socAfter, r.distanceM).filter((c) => !t.via.some((x) => x.id === c.station.id));
       }
     }
-    return { ...t, incidents, zones, battery, vehicleName: v?.name ?? null, chargers, total: progressOnRoute(t.dest, line).total };
+    const via = t.via[0];
+    const viaSoc = v && via ? arrivalSoc(v, socAfter, progressOnRoute(via, line).along, r.durationS * (progressOnRoute(via, line).along / Math.max(1, r.distanceM))) : null;
+    return { ...t, incidents, zones, battery, viaSoc, vehicleName: v?.name ?? null, chargers, total: progressOnRoute(t.dest, line).total };
   }, []);
 
   const commit = useCallback(

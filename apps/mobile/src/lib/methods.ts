@@ -39,9 +39,10 @@ export interface PayContext {
 }
 
 /**
- * Méthodes classées, tout dans Branché, sans contrat :
- * (1) compte opérateur connecté avec démarrage web ; (2) paiement ponctuel sans compte (QR vérifié, lien connu) ;
- * (3) carte bancaire au lecteur ; (4) badge accepté ; (5) QR éventuel non déclaré. Mode d'emploi adapté à la borne.
+ * Méthodes classées, tout dans Branché, sans contrat ni compte par défaut :
+ * (1) paiement ponctuel sans compte (QR vérifié, lien connu) ; (2) carte bancaire au lecteur ; (3) badge accepté ;
+ * (4) compte opérateur — seulement si l'opérateur l'impose (« Ajouter mon compte X une fois », puis réutilisé) ;
+ * (5) QR éventuel non déclaré. Mode d'emploi adapté à la borne.
  */
 export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[], ctx: PayContext = {}): PayOption[] {
   const op = operatorLabel(s, ops);
@@ -49,8 +50,8 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
   const plugs = point?.plugs ?? s.c;
   const kw = point?.kw ?? s.kw;
   const dc = isDc(kw, plugs);
-  const pt = point ? `le point …${point.short}` : 'le point choisi';
-  const nearPt = point ? `du point …${point.short}` : 'du point choisi';
+  const pt = point ? `le point …\u2060${point.short}` : 'le point choisi';
+  const nearPt = point ? `du point …\u2060${point.short}` : 'du point choisi';
   const plugName = plugs.filter((p) => p !== 'ef').map((p) => PLUG_LABEL[p]).join(' ou ') || 'de la borne';
   const cable = dc || s.cab ? `le câble ${plugName} de la borne` : 'votre câble Type 2';
   const order: PayOption['order'] = dc ? 'plug-first' : 'pay-first';
@@ -65,28 +66,33 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
   const accepted = acceptedBadges(myBadges, portal?.roamingBadgesAccepted);
   const badgeMaybe = !accepted.length && !portal?.roamingBadgesAccepted?.length && s.pay.includes('badge') && myBadges.length > 0;
 
+  // Règle produit : sans compte d'abord. Un compte n'est proposé que si l'opérateur l'impose (aucune voie sans compte).
+  const noAccountWay = declaredAdHoc || !!link || reader;
+  const accountUrl = startUrl ?? portal?.webPortal ?? null;
   const ranked: { rank: number; o: PayOption }[] = [];
+  if (!noAccountWay && accountUrl) {
+    ranked.push({
+      rank: account ? 2.5 : 3.5,
+      o: {
+        id: 'account',
+        label: account ? `Démarrer avec mon compte ${account.name}` : `Ajouter mon compte ${op} une fois`,
+        available: true,
+        why: account
+          ? `${op} impose un compte. Le vôtre est déjà connecté dans Branché : la page officielle s’ouvre directement.`
+          : `${op} impose un compte. Créez-le ou connectez-vous une seule fois sur son site officiel, dans Branché ; ensuite Branché le réutilise automatiquement.`,
+        order,
+        steps: account
+          ? dc
+            ? [`Branchez ${cable} sur votre voiture.`, `Sur la page officielle de ${op}, vérifiez ${pt} et lancez la charge.`, 'Revenez dans Branché : le suivi démarre.']
+            : [`Sur la page officielle de ${op}, vérifiez ${pt} et lancez la charge.`, `Branchez ${cable}.`, 'Revenez dans Branché : le suivi démarre.']
+          : [`Sur le site officiel de ${op}, ouvert dans Branché, créez votre compte ou connectez-vous.`, `Lancez la charge sur ${pt}${dc ? ' après avoir branché le câble' : ', puis branchez'}.`, 'Revenez dans Branché : le suivi démarre, et le compte sera réutilisé la prochaine fois.'],
+        cta: account ? `Démarrer avec mon compte ${account.name}` : `Ajouter mon compte ${op}`,
+        url: accountUrl,
+      },
+    });
+  }
   ranked.push({
-    rank: 1,
-    o: {
-      id: 'account',
-      label: `Démarrer avec mon compte ${account?.name ?? op}`,
-      available: !!account && !!startUrl,
-      why: account
-        ? startUrl
-          ? `Votre compte ${account.name} est connecté dans Branché : la page de démarrage officielle s’ouvre déjà connectée.`
-          : `Votre compte ${account.name} est connecté, mais aucune page de démarrage web n’est connue pour cette borne.`
-        : `Aucun compte ${op} connecté dans Branché.`,
-      order,
-      steps: dc
-        ? [`Branchez ${cable} sur votre voiture.`, `Sur la page officielle de ${op}, vérifiez ${pt} et lancez la charge.`, 'Revenez dans Branché : le suivi démarre.']
-        : [`Sur la page officielle de ${op}, vérifiez ${pt} et lancez la charge.`, `Branchez ${cable}.`, 'Revenez dans Branché : le suivi démarre.'],
-      cta: `Démarrer avec mon compte ${account?.name ?? op}`,
-      url: startUrl ?? undefined,
-    },
-  });
-  ranked.push({
-    rank: declaredAdHoc ? 2 : 5,
+    rank: declaredAdHoc ? 1 : 5,
     o: {
       id: 'scan',
       label: 'QR code de la borne, vérifié par Branché',
@@ -102,7 +108,7 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
     },
   });
   ranked.push({
-    rank: 2.5,
+    rank: 1.5,
     o: {
       id: 'operator-link',
       label: `Page de paiement ${op}`,
@@ -117,7 +123,7 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
     },
   });
   ranked.push({
-    rank: 3,
+    rank: 2,
     o: {
       id: 'reader',
       label: contactless ? 'Carte bancaire sans contact sur la borne' : 'Carte bancaire sur la borne',
@@ -134,7 +140,7 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
   });
   const badgeName = accepted[0] ?? myBadges[0] ?? 'de recharge';
   ranked.push({
-    rank: accepted.length ? 4 : 4.5,
+    rank: accepted.length ? 3 : 4.5,
     o: {
       id: 'badge',
       label: `Mon badge ${badgeName}`,

@@ -238,7 +238,7 @@ export default function Recharge() {
   const idleAt = tariff?.idle && endAt ? endAt + tariff.idle.afterMin * 60_000 : null;
   const span = Math.max(1, est.toSoc - est.fromSoc);
   const pct = Math.min(1, Math.max(0, (prog.soc - est.fromSoc) / span));
-  const pointText = d.plan?.pdcId ? ` · point …${d.plan.pdcId.slice(-4)}` : '';
+  const pointText = d.plan?.pdcId ? ` · point …\u2060${d.plan.pdcId.slice(-4)}` : '';
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">

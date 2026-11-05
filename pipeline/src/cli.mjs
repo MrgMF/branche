@@ -1,7 +1,7 @@
 // Usage : node src/cli.mjs [--input fichier.csv] [--out dossier]
 // Sans --input : télécharge la base nationale IRVE consolidée (data.gouv.fr).
 import { createReadStream } from 'node:fs';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { join, resolve } from 'node:path';
 import { parse } from 'csv-parse';
@@ -48,6 +48,15 @@ const meta = {
   evseBuckets: index.size,
 };
 await writeFile(join(outDir, 'meta.json'), JSON.stringify(meta));
+// Portails des opérateurs (site officiel, démarrage web, paiement ponctuel, badges) : publié tel quel s'il existe.
+const portalsSrc = resolve(import.meta.dirname, '..', 'data', 'operator-portals.json');
+try {
+  const portals = JSON.parse(await readFile(portalsSrc, 'utf8'));
+  if (portals?.v === 1 && portals.operators && typeof portals.operators === 'object') await writeFile(join(outDir, 'operator-portals.json'), JSON.stringify(portals));
+  else console.warn('operator-portals.json ignoré : format inattendu.');
+} catch {
+  console.warn('operator-portals.json absent : l’app utilise la base IRVE seule.');
+}
 const registry = agg.operators();
 await writeFile(join(outDir, 'operators.json'), JSON.stringify(registry));
 console.log(`OK : ${st.rows} lignes, ${st.skipped} ignorées, ${st.stations} stations, ${st.pdc} points, ${tiles.size} tuiles, ${registry.operators.length} opérateurs → ${outDir}`);

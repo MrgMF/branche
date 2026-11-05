@@ -243,7 +243,6 @@ export default function Payer() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Autres moyens</Text>
         <Text style={styles.p}>{atStation.length ? `Lecteur de la borne : ${atStation.join(' et ').toLowerCase()} accepté${atStation.length > 1 ? 's' : 'e'}.` : 'Lecteur de carte : obligatoire sur toutes les bornes rapides (≥ 50 kW) à partir de 2027.'}</Text>
-        <Text style={styles.p}>Carte Branché dans votre Wallet : bientôt. Une seule carte, acceptée sur tous les lecteurs CB.</Text>
         {station?.tel ? (
           <Pressable accessibilityRole="link" style={styles.link} onPress={() => Linking.openURL(`tel:${station.tel!.replace(/[^+\d]/g, '')}`)}>
             <Text style={styles.linkText}>Problème ? Appeler {opName}</Text>

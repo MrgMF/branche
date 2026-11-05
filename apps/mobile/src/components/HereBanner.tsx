@@ -13,7 +13,8 @@ import { clearPrepared, loadPrepared, type Prepared } from '../lib/prepared';
 import { compatible, loadVehicle, type Vehicle } from '../lib/vehicle';
 import { nearbyStation } from '../lib/proximity';
 import { displayName, distanceKm, loadAround, nearest, type Station } from '../lib/stations';
-import { store } from '../lib/store';
+import { autoFinish, departed } from '../lib/autoEnd';
+import { store, type DirectCharge } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { Button } from './ui';
 
@@ -181,25 +182,69 @@ const styles = StyleSheet.create({
   closeX: { fontSize: 24, lineHeight: 26, color: colors.ink, fontFamily: fonts.medium },
 });
 
-/** Accès en un geste depuis la carte aux écrans du parcours de recharge (routes : /historique, /vehicule, /recharger). */
+/**
+ * Accès en un geste depuis la carte (routes /historique, /vehicule, /comptes, /payer) et fin automatique constatée
+ * à l'ouverture : si une recharge suivie est en cours et que l'on est loin de la borne, elle est terminée et
+ * déjà dans l'historique ; il ne reste qu'à noter le prix (facultatif).
+ */
 export function ChargeShortcuts() {
+  const [ended, setEnded] = useState<DirectCharge | null>(null);
+
+  useEffect(() => {
+    const check = async () => {
+      const d = await store.loadDirect();
+      if (d?.endedAt) return setEnded(d.autoEnded ? d : null);
+      if (!d?.chargeStartedAt) return setEnded(null);
+      try {
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (!perm.granted) return;
+        const p = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (departed(d, { lat: p.coords.latitude, lon: p.coords.longitude, speed: p.coords.speed ?? null, at: Date.now() }, true)) {
+          const next = await autoFinish(d);
+          store.setDirect(next);
+          setEnded(next);
+        }
+      } catch {
+        /* position indisponible */
+      }
+    };
+    check();
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && check());
+    return () => sub.remove();
+  }, []);
+
   return (
-    <View style={short.row}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Mes recharges" accessibilityHint="Historique, dépenses du mois, export CSV" onPress={() => router.push('/historique')} style={short.btn}>
-        <Text style={short.text}>Mes recharges</Text>
-      </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Mon véhicule" accessibilityHint="Modèle et batterie, pour estimer durée et prix" onPress={() => router.push('/vehicule')} style={short.btn}>
-        <Text style={short.text}>Mon véhicule</Text>
-      </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Scanner une borne" accessibilityHint="Lire le QR code de la borne pour la recharger" onPress={() => router.push('/payer')} style={short.btn}>
-        <Text style={short.text}>Scanner</Text>
-      </Pressable>
-    </View>
+    <>
+      {ended ? (
+        <View style={styles.card} accessibilityRole="summary">
+          <Text style={styles.kicker}>Recharge terminée</Text>
+          <Text style={styles.title} numberOfLines={2}>
+            {ended.station.name}
+          </Text>
+          <Text style={styles.sub}>Départ détecté : le reçu est déjà dans votre historique.</Text>
+          <Button label="Noter le prix (2 secondes)" onPress={() => router.push('/recharge')} />
+        </View>
+      ) : null}
+      <View style={short.row}>
+        {[
+          { label: 'Recharges', a11y: 'Mes recharges : historique, dépenses, export', to: '/historique' },
+          { label: 'Véhicule', a11y: 'Mon véhicule et ma batterie', to: '/vehicule' },
+          { label: 'Badges', a11y: 'Mes badges et comptes de recharge', to: '/comptes' },
+          { label: 'Scanner', a11y: 'Scanner le QR code d’une borne', to: '/payer' },
+        ].map((b) => (
+          <Pressable key={b.to} accessibilityRole="button" accessibilityLabel={b.a11y} onPress={() => router.push(b.to as never)} style={short.btn}>
+            <Text style={short.text} numberOfLines={1}>
+              {b.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </>
   );
 }
 
 const short = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 8 },
-  btn: { flex: 1, minHeight: MIN_TOUCH, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
-  text: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink, textAlign: 'center' },
+  row: { flexDirection: 'row', gap: 6 },
+  btn: { flex: 1, minHeight: MIN_TOUCH, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  text: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink, textAlign: 'center' },
 });

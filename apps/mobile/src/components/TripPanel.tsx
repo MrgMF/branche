@@ -112,7 +112,11 @@ export function TripPanel({ nav }: { nav: TripApi }) {
             </View>
           ))}
 
-          {typeof soc === 'number' ? (
+          {trip.via.length && typeof trip.viaSoc === 'number' ? (
+            <Text style={styles.meta}>
+              Batterie en arrivant à l’étape ≈ {Math.max(0, trip.viaSoc)} % ({trip.vehicleName}), puis recharge.
+            </Text>
+          ) : typeof soc === 'number' ? (
             soc < LOW_SOC ? (
               <View style={{ gap: 8 }}>
                 <Notice tone="error">
