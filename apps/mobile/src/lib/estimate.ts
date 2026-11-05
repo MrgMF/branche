@@ -4,6 +4,7 @@
 import type { Plug } from './stations';
 import { ttcFactor, type Tariff } from './tariff';
 import { GENERIC_VEHICLE, type VehicleModel } from './vehicle';
+import { durationMin } from '../i18n/format';
 
 export interface EstimateInput {
   vehicle: Pick<VehicleModel, 'batteryKWh' | 'maxDcKW' | 'maxAcKW'> | null;
@@ -156,7 +157,4 @@ const round1 = (x: number) => Math.round(x * 10) / 10;
 const round2 = (x: number) => Math.round(x * 100) / 100;
 
 /** Durée lisible : « 42 min », « 1 h 05 ». */
-export function durationLabel(min: number): string {
-  const m = Math.max(0, Math.round(min));
-  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
-}
+export const durationLabel = durationMin;

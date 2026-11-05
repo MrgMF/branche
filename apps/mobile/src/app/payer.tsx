@@ -8,26 +8,30 @@ import { apiEnabled } from '../lib/api';
 import { DEV_HOSTS } from '../lib/config';
 import { postReport } from '../lib/navigation';
 import { directPayUrl, openOperatorPayment, operatorLabel, operatorOf } from '../lib/connectors';
-import { PAY_LABEL } from '../lib/format';
+import { payLabel } from '../lib/format';
 import { verifyQr, type Operator, type QrResult } from '../lib/qr';
 import { findStation, pointById } from '../lib/evse';
 import { displayName, loadOperators, type Station } from '../lib/stations';
 import { store } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { ScreenHeader } from '../components/Screen';
+import { useT } from '../i18n';
 
 const PAYABLE = new Set<QrResult['verdict']>(['official', 'known-operator']);
 const WARN = { bg: colors.warnSoft, fg: '#7A3E06' };
 const OK = { bg: colors.accentSoft, fg: colors.accentPressed };
-const TONE: Record<QrResult['verdict'], { bg: string; fg: string; title: string }> = {
-  official: { ...OK, title: 'Domaine de l’opérateur (base IRVE)' },
-  'known-operator': { ...OK, title: 'Opérateur reconnu (base IRVE)' },
-  'payment-platform': { ...WARN, title: 'Plateforme de paiement : bénéficiaire à vérifier' },
-  'other-operator': { ...WARN, title: 'Autre opérateur que celui de la borne' },
-  unknown: { ...WARN, title: 'Lien non vérifié' },
-  dangerous: { bg: '#FDECEC', fg: colors.danger, title: 'QR code suspect — paiement bloqué' },
+const TONE: Record<QrResult['verdict'], { bg: string; fg: string }> = {
+  official: OK,
+  'known-operator': OK,
+  'payment-platform': WARN,
+  'other-operator': WARN,
+  unknown: WARN,
+  dangerous: { bg: '#FDECEC', fg: colors.danger },
 };
 
 export default function Payer() {
+  const t = useT();
+  const P = t.payer;
   const insets = useSafeAreaInsets();
   const [station, setStation] = useState<Station | null>(store.current());
   const [ops, setOps] = useState<Operator[]>([]);
@@ -50,14 +54,14 @@ export default function Payer() {
   async function reportQr() {
     const at = station ?? store.current();
     if (!at || !apiEnabled()) {
-      setReported('Prévenez l’opérateur : son numéro figure sur la borne.');
+      setReported(P.reportPhone);
       return;
     }
     try {
       await postReport('qr_suspect', at);
-      setReported('Merci : le QR suspect est signalé aux autres utilisateurs.');
+      setReported(P.reportOk);
     } catch {
-      setReported('Signalement impossible pour le moment.');
+      setReported(P.reportFail);
     }
   }
 
@@ -91,7 +95,7 @@ export default function Payer() {
         return;
       }
       r.verdict = 'unknown';
-      r.reasons = ['Identifiant absent de la base nationale des bornes (ou connexion coupée).'];
+      r.reasons = [t.qr.evseUnknown];
     }
     if (r.kind === 'url' && at && inUrl) {
       const pt = pointById(at, inUrl);
@@ -122,71 +126,63 @@ export default function Payer() {
 
   const payName = result?.operatorKey ? (ops.find((o) => o.key === result.operatorKey)?.names[0] ?? opName) : opName;
   const tone = result ? TONE[result.verdict] : null;
-  const atStation = station?.pay.filter((p) => p === 'cb' || p === 'sans_contact').map((p) => PAY_LABEL[p]) ?? [];
+  const atStation = station?.pay.filter((p) => p === 'cb' || p === 'sans_contact').map((p) => payLabel(p)) ?? [];
 
   return (
     <ScrollView style={{ backgroundColor: colors.surface }} contentContainerStyle={[styles.body, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 }]}>
-      <View style={styles.head}>
-        <Button label="Retour" variant="ghost" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={styles.back} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.h1} accessibilityRole="header">Payer la borne</Text>
-          {station ? <Text style={styles.sub} numberOfLines={2}>{displayName(station)} · {opName}</Text> : null}
-          {planPoint ? <Text style={styles.point}>Point …{planPoint.short}</Text> : null}
-        </View>
-      </View>
+      <ScreenHeader title={t.titles.payer} sub={station ? `${displayName(station)} · ${opName}` : undefined} />
+      {planPoint ? <Text style={styles.point}>{t.common.point(planPoint.short)}</Text> : null}
 
-      <Text style={styles.p}>
-        Vous payez directement {opName} sur sa page de paiement, ouverte dans Branché et vérifiée avec la base nationale IRVE : sans compte, sans télécharger son application. Branché ne voit pas votre carte.
-      </Text>
+      <Text style={styles.p}>{P.intro(opName)}</Text>
 
       {knownUrl ? (
-        <Button label={`Ouvrir le paiement ${opName}`} onPress={() => openOperatorPayment(knownUrl, station, opName)} hint="Page de paiement officielle de l’opérateur" />
+        <Button label={P.openPay(opName)} onPress={() => openOperatorPayment(knownUrl, station, opName)} hint={P.openPayHint} />
       ) : null}
 
       {scanning ? (
         <View style={styles.camWrap}>
           <CameraView style={styles.cam} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={onScan} />
           <View pointerEvents="none" style={styles.frame} />
-          <Button label="Arrêter le scan" variant="light" onPress={() => setScanning(false)} style={styles.stop} />
+          <Button label={P.stopScan} variant="light" onPress={() => setScanning(false)} style={styles.stop} />
         </View>
       ) : (
         <Button
-          label="Scanner le QR code de la borne"
+          label={t.recharger.scanQr}
           variant={knownUrl ? 'secondary' : 'primary'}
           onPress={startScan}
-          hint="Ouvre l’appareil photo pour lire le QR code collé sur la borne"
+          hint={P.scanHint}
         />
       )}
       {perm && !perm.granted && !perm.canAskAgain ? (
-        <Notice tone="error">Appareil photo refusé : autorisez-le dans les réglages, ou saisissez le code ci-dessous.</Notice>
+        <Notice tone="error">{P.camDenied}</Notice>
       ) : null}
 
       <View style={styles.manual}>
         <Text style={styles.label} nativeID="manual-label">
-          Ou saisissez le lien ou l’identifiant inscrit sur la borne
+          {P.manualLabel}
         </Text>
         <View style={styles.row}>
           <TextInput
             value={manual}
             onChangeText={setManual}
-            placeholder="ex. FR*ABC*E1234 ou https://…"
+            placeholder={P.manualPh}
             placeholderTextColor="#7A8682"
             autoCapitalize="none"
             autoCorrect={false}
             accessibilityLabelledBy="manual-label"
-            aria-label="Lien ou identifiant de la borne"
+            aria-label={P.manualA11y}
             style={styles.input}
             onSubmitEditing={() => manual.trim() && check(manual)}
             returnKeyType="go"
           />
-          <Button label="Vérifier" variant="ghost" onPress={() => check(manual)} disabled={!manual.trim()} style={styles.verify} />
+          <Button label={P.verify} variant="ghost" onPress={() => check(manual)} disabled={!manual.trim()} style={styles.verify} />
         </View>
       </View>
 
       {result && tone ? (
         <View style={[styles.result, { backgroundColor: tone.bg }]} accessibilityLiveRegion="polite">
           <Text style={[styles.resultTitle, { color: tone.fg }]}>
-            {result.kind === 'evse' ? (result.verdict === 'unknown' ? 'Identifiant différent de la borne sélectionnée' : 'Borne identifiée') : tone.title}
+            {result.kind === 'evse' ? (result.verdict === 'unknown' ? P.evseDiff : P.evseOk) : P.tone[result.verdict]}
           </Text>
           {result.host ? <Text style={[styles.domain, { color: tone.fg }]}>{result.host}</Text> : null}
           {result.reasons.map((r) => (
@@ -196,16 +192,16 @@ export default function Payer() {
           ))}
 
           {result.kind === 'url' && PAYABLE.has(result.verdict) && result.url ? (
-            <Text style={[styles.reason, { color: tone.fg }]}>Vérifiez que le QR code est imprimé sur la borne, pas collé par-dessus. Branché ne voit pas votre carte et n’encaisse rien.</Text>
+            <Text style={[styles.reason, { color: tone.fg }]}>{P.printed}</Text>
           ) : null}
           {result.kind === 'url' && PAYABLE.has(result.verdict) && result.url ? (
-            <Button label={`Payer sur la page ${payName}`} onPress={() => openOperatorPayment(result.url!, station, payName)} />
+            <Button label={P.payOn(payName)} onPress={() => openOperatorPayment(result.url!, station, payName)} />
           ) : null}
 
           {result.kind === 'url' && (result.verdict === 'unknown' || result.verdict === 'other-operator' || result.verdict === 'payment-platform') && result.url ? (
             <>
               <Text style={[styles.reason, { color: tone.fg }]}>
-                Avant de payer, vérifiez que le QR code n’est pas un autocollant ajouté par-dessus l’original et que la page affiche bien le nom de l’opérateur.
+                {P.checkSticker}
               </Text>
               <Pressable
                 role="checkbox"
@@ -215,41 +211,41 @@ export default function Payer() {
                 style={styles.check}
               >
                 <View style={[styles.box, confirmUnknown && styles.boxOn]} />
-                <Text style={styles.checkText}>J’ai vérifié la borne et je veux continuer</Text>
+                <Text style={styles.checkText}>{P.confirm}</Text>
               </Pressable>
-              <Button label="Continuer vers ce site" variant="secondary" disabled={!confirmUnknown} onPress={() => openOperatorPayment(result.url!, station, result.host ?? 'site inconnu')} />
+              <Button label={P.continue} variant="secondary" disabled={!confirmUnknown} onPress={() => openOperatorPayment(result.url!, station, result.host ?? P.unknownSite)} />
             </>
           ) : null}
 
           {result.verdict === 'dangerous' ? (
             <Text style={[styles.reason, { color: tone.fg }]}>
-              Ne saisissez pas votre carte sur ce lien. {atStation.length ? `Payez plutôt sur le lecteur de la borne (${atStation.join(', ')}).` : 'Payez plutôt sur le lecteur de la borne ou prévenez l’opérateur.'}
+              {P.dangerous(atStation.length ? atStation.join(', ') : null)}
             </Text>
           ) : null}
 
           {result.kind === 'evse' ? (
             <Text style={[styles.reason, { color: tone.fg }]}>
-              Un identifiant ne contient pas de lien de paiement : scannez le QR code de paiement de la borne ou payez sur son lecteur de carte.
+              {P.evseNoLink}
             </Text>
           ) : null}
           {result.verdict !== 'official' && result.verdict !== 'known-operator' ? (
             <Pressable accessibilityRole="button" onPress={reportQr} style={styles.link} disabled={!!reported}>
-              <Text style={[styles.linkText, { color: tone.fg }]}>{reported ?? 'Signaler un faux QR code sur cette borne'}</Text>
+              <Text style={[styles.linkText, { color: tone.fg }]}>{reported ?? P.reportFake}</Text>
             </Pressable>
           ) : null}
         </View>
       ) : null}
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Autres moyens</Text>
-        <Text style={styles.p}>{atStation.length ? `Lecteur de la borne : ${atStation.join(' et ').toLowerCase()} accepté${atStation.length > 1 ? 's' : 'e'}.` : 'Lecteur de carte : obligatoire sur toutes les bornes rapides (≥ 50 kW) à partir de 2027.'}</Text>
+        <Text style={styles.cardTitle}>{P.others}</Text>
+        <Text style={styles.p}>{atStation.length ? P.reader(atStation) : P.reader2027}</Text>
         {station?.tel ? (
           <Pressable accessibilityRole="link" style={styles.link} onPress={() => Linking.openURL(`tel:${station.tel!.replace(/[^+\d]/g, '')}`)}>
-            <Text style={styles.linkText}>Problème ? Appeler {opName}</Text>
+            <Text style={styles.linkText}>{P.call(opName)}</Text>
           </Pressable>
         ) : null}
       </View>
-      {Platform.OS === 'web' ? <Text style={styles.small}>Sur ordinateur, la page de l’opérateur s’ouvre dans un nouvel onglet.</Text> : null}
+      {Platform.OS === 'web' ? <Text style={styles.small}>{P.webTab}</Text> : null}
     </ScrollView>
   );
 }

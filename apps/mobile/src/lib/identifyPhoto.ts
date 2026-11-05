@@ -3,6 +3,7 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { API_URL } from './config';
+import { tr } from '../i18n';
 
 export type PhotoResult = { vehicleId: string | null; confidence: 'haute' | 'moyenne' | 'faible' } | { error: string } | null;
 
@@ -19,14 +20,14 @@ export async function photoIdentify(): Promise<PhotoResult> {
     base64: true,
   });
   const image = (small.base64 ?? '').replace(/^data:image\/\w+;base64,/, '');
-  if (!image) return { error: 'Photo illisible.' };
-  if ((image.length * 3) / 4 > 1.5 * 1024 * 1024) return { error: 'Photo trop lourde.' };
+  if (!image) return { error: tr().vehicle.photoUnreadable };
+  if ((image.length * 3) / 4 > 1.5 * 1024 * 1024) return { error: tr().vehicle.photoTooBig };
   try {
     const r = await fetch(`${API_URL}/v1/vehicle/identify`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image, mediaType: 'image/jpeg' }) });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) return { error: (j as { error?: { message?: string } }).error?.message ?? 'Reconnaissance impossible.' };
+    if (!r.ok) return { error: (j as { error?: { message?: string } }).error?.message ?? tr().vehicle.photoFailed };
     return j as PhotoResult;
   } catch {
-    return { error: 'Connexion impossible : choisissez votre modèle dans la liste.' };
+    return { error: tr().vehicle.photoOffline };
   }
 }

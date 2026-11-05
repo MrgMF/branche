@@ -1,5 +1,4 @@
 // Choix du véhicule et du % de batterie — facultatif, jamais bloquant, enregistré sur l'appareil seulement.
-import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,13 +8,18 @@ import { getFeatures } from '../lib/features';
 import { photoIdentify } from '../lib/identifyPhoto';
 import { modelsOfBrand } from '../lib/vehicleApps';
 import { searchVehicles } from '../lib/vehicleSearch';
-import { PLUG_LABEL } from '../lib/format';
-import { loadVehicle, saveVehicle, VEHICLE_SOURCE_NOTE, VEHICLES, type VehicleModel } from '../lib/vehicle';
+import { plugLabel } from '../lib/format';
+import { loadVehicle, saveVehicle, VEHICLES, type VehicleModel } from '../lib/vehicle';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { goBack, ScreenHeader } from '../components/Screen';
+import { useT } from '../i18n';
+import { num } from '../i18n/format';
 
 const PRESETS = [10, 20, 30, 50, 70];
 
 export default function VehiculeScreen() {
+  const t = useT();
+  const V = t.vehicle;
   const insets = useSafeAreaInsets();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<VehicleModel | null>(null);
@@ -38,13 +42,13 @@ export default function VehiculeScreen() {
       const r = await photoIdentify();
       if (!r) return;
       if ('error' in r) setPhotoMsg(r.error);
-      else if (!r.vehicleId) setPhotoMsg('Modèle non reconnu : cherchez-le dans la liste.');
+      else if (!r.vehicleId) setPhotoMsg(V.notRecognized);
       else {
         const m = VEHICLES.find((x) => x.id === r.vehicleId);
         if (m) {
           setSel(m);
           setQ('');
-          setPhotoMsg(`Reconnu : ${m.name}. Vérifiez puis enregistrez.`);
+          setPhotoMsg(V.recognized(m.name));
         }
       }
     } finally {
@@ -66,7 +70,7 @@ export default function VehiculeScreen() {
     return sel && !q && !found.some((m) => m.id === sel.id) ? [sel, ...found] : found;
   }, [q, brandOnly, sel]);
 
-  const done = () => (router.canGoBack() ? router.back() : router.replace('/'));
+  const done = goBack;
   async function save() {
     if (sel) await saveVehicle({ ...sel, socPercent: soc, socUpdatedAt: Date.now() });
     done();
@@ -74,28 +78,25 @@ export default function VehiculeScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 12 }]}>
-      <View style={styles.head}>
-        <Text style={styles.h1} accessibilityRole="header">Votre véhicule</Text>
-        <Button label="Passer" variant="ghost" onPress={done} style={styles.skip} hint="Continuer sans véhicule : estimation pour un véhicule moyen" />
-      </View>
-      <Text style={styles.p}>Pour afficher les prises compatibles et estimer durée et prix. Facultatif, gardé sur ce téléphone.</Text>
+      <ScreenHeader title={t.titles.vehicule} right={<Button label={t.common.skip} variant="ghost" onPress={done} style={styles.skip} hint={V.skipHint} />} />
+      <Text style={styles.p}>{V.why}</Text>
       {brands.length && !sel ? (
         <View style={styles.brand}>
-          <Text style={styles.brandText}>Nous avons vu l’appli {brands.map((b) => b.brand).join(', ')} sur ce téléphone : est-ce votre voiture ?</Text>
+          <Text style={styles.brandText}>{V.brandSeen(brands.map((b) => b.brand).join(', '))}</Text>
           <View style={styles.brandRow}>
             {brands.map((b) => (
               <Button key={b.prefix} label={b.brand} variant="secondary" onPress={() => setBrandOnly(b.prefix)} style={styles.brandBtn} />
             ))}
-            {brandOnly ? <Button label="Toutes les marques" variant="ghost" onPress={() => setBrandOnly(null)} style={styles.brandBtn} /> : null}
+            {brandOnly ? <Button label={V.allBrands} variant="ghost" onPress={() => setBrandOnly(null)} style={styles.brandBtn} /> : null}
           </View>
-          <Text style={styles.small}>Vérifié uniquement sur ce téléphone, jamais envoyé.</Text>
+          <Text style={styles.small}>{V.localOnly}</Text>
         </View>
       ) : null}
       {canPhoto ? (
-        <Button label="Prendre en photo" variant="secondary" onPress={photo} loading={photoBusy} hint="La photo est envoyée pour reconnaître le modèle puis oubliée, jamais conservée" />
+        <Button label={V.photo} variant="secondary" onPress={photo} loading={photoBusy} hint={V.photoHint} />
       ) : null}
       {photoMsg ? <Notice>{photoMsg}</Notice> : null}
-      <TextInput value={q} onChangeText={setQ} placeholder="Modèle : megane, model 3, zoe…" placeholderTextColor="#6B7773" aria-label="Rechercher un modèle" style={styles.input} autoCorrect={false} />
+      <TextInput value={q} onChangeText={setQ} placeholder={V.searchPh} placeholderTextColor="#6B7773" aria-label={V.searchA11y} style={styles.input} autoCorrect={false} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 8, paddingBottom: 12 }} keyboardShouldPersistTaps="handled">
         {list.map((m) => (
           <Pressable
@@ -103,25 +104,25 @@ export default function VehiculeScreen() {
             role="radio"
             aria-checked={sel?.id === m.id}
             accessibilityState={{ checked: sel?.id === m.id }}
-            accessibilityLabel={`${m.name}, batterie ${m.batteryKWh} kWh, charge rapide ${m.maxDcKW} kW`}
+            accessibilityLabel={V.itemA11y(m.name, m.batteryKWh, m.maxDcKW)}
             onPress={() => setSel(m)}
             style={[styles.item, sel?.id === m.id && styles.itemOn]}
           >
             <Text style={styles.itemTitle}>{m.name}</Text>
             <Text style={styles.small}>
-              {m.batteryKWh.toLocaleString('fr-FR')} kWh · rapide {m.maxDcKW} kW · normal {m.maxAcKW.toLocaleString('fr-FR')} kW · {m.plugs.map((p) => PLUG_LABEL[p]).join(', ')}
+              {V.itemMeta(num(m.batteryKWh), m.maxDcKW, num(m.maxAcKW), m.plugs.map((p) => plugLabel(p)).join(', '))}
             </Text>
           </Pressable>
         ))}
-        {!list.length ? <Text style={styles.p}>Modèle absent de la liste : passez, l’estimation utilisera un véhicule moyen.</Text> : null}
-        <Text style={styles.small}>{VEHICLE_SOURCE_NOTE}</Text>
+        {!list.length ? <Text style={styles.p}>{V.absent}</Text> : null}
+        <Text style={styles.small}>{V.sourceNote}</Text>
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
         <Text style={styles.label} nativeID="soc-label">
-          Batterie actuelle : {soc} %
+          {V.socLabel(soc)}
         </Text>
         <View style={styles.presets} accessibilityLabelledBy="soc-label">
-          <Pressable accessibilityRole="button" accessibilityLabel="Moins 5 %" onPress={() => setSoc((x) => Math.max(0, x - 5))} style={styles.chip}>
+          <Pressable accessibilityRole="button" accessibilityLabel={V.minus} onPress={() => setSoc((x) => Math.max(0, x - 5))} style={styles.chip}>
             <Text style={styles.chipText}>−</Text>
           </Pressable>
           {PRESETS.map((p) => (
@@ -129,11 +130,11 @@ export default function VehiculeScreen() {
               <Text style={[styles.chipText, soc === p && { color: '#FFFFFF' }]}>{p}</Text>
             </Pressable>
           ))}
-          <Pressable accessibilityRole="button" accessibilityLabel="Plus 5 %" onPress={() => setSoc((x) => Math.min(100, x + 5))} style={styles.chip}>
+          <Pressable accessibilityRole="button" accessibilityLabel={V.plus} onPress={() => setSoc((x) => Math.min(100, x + 5))} style={styles.chip}>
             <Text style={styles.chipText}>+</Text>
           </Pressable>
         </View>
-        <Button label={sel ? `Enregistrer ${sel.name}` : 'Choisissez un modèle'} onPress={save} disabled={!sel} />
+        <Button label={sel ? V.save(sel.name) : V.pickModel} onPress={save} disabled={!sel} />
       </View>
     </View>
   );

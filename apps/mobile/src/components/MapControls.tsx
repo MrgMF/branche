@@ -2,7 +2,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { MAP_T } from '../lib/navStrings';
+import { useT } from '../i18n';
+
+type NoteKey = 'locPending' | 'locDenied' | 'locUnavailable' | 'compassUnavailable';
 import type { UserLocation } from '../lib/useLocation';
 import { colors, fonts, radius } from '../theme';
 import type { MapHandle } from './MapView';
@@ -14,7 +16,7 @@ export type FollowMode = 'none' | 'follow' | 'heading';
 export function useMapControls(map: React.RefObject<MapHandle | null>, loc: UserLocation, opts: { guiding: boolean; offsetY: number }) {
   const [mode, setMode] = useState<FollowMode>('none');
   const [bearing, setBearing] = useState(0);
-  const [note, setNote] = useState<string | null>(null);
+  const [note, setNote] = useState<NoteKey | null>(null);
   const [ready, setReady] = useState(false);
   const modeRef = useRef(mode);
   modeRef.current = mode;
@@ -30,11 +32,11 @@ export function useMapControls(map: React.RefObject<MapHandle | null>, loc: User
   }, [loc.fix, loc.heading, opts.guiding, ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (loc.status === 'granted' && note !== MAP_T.compassUnavailable) setNote(null);
+    if (loc.status === 'granted' && note !== 'compassUnavailable') setNote(null);
   }, [loc.status]); // eslint-disable-line react-hooks/exhaustive-deps
   // Messages éphémères (sauf refus : il reste tant que la position n'est pas autorisée).
   useEffect(() => {
-    if (!note || note === MAP_T.locDenied) return;
+    if (!note || note === 'locDenied') return;
     const t = setTimeout(() => setNote(null), 5000);
     return () => clearTimeout(t);
   }, [note]);
@@ -47,18 +49,18 @@ export function useMapControls(map: React.RefObject<MapHandle | null>, loc: User
 
   const locate = useCallback(async () => {
     if (loc.status === 'denied' || loc.status === 'unavailable') {
-      setNote(loc.status === 'denied' ? MAP_T.locDenied : MAP_T.locUnavailable);
+      setNote(loc.status === 'denied' ? 'locDenied' : 'locUnavailable');
       void loc.retry();
       return false;
     }
     if (!loc.fix) {
-      setNote(MAP_T.locPending);
+      setNote('locPending');
       return false;
     }
     const f = loc.fix;
     if (modeRef.current === 'follow') {
       const ok = await loc.enableCompass();
-      if (!ok && loc.heading === null) setNote(MAP_T.compassUnavailable);
+      if (!ok && loc.heading === null) setNote('compassUnavailable');
       setMode('heading');
       map.current?.post({ type: 'follow', lat: f.lat, lon: f.lon, bearing: loc.heading ?? undefined, pitch: 0, offsetY: opts.offsetY, duration: 500 });
     } else {
@@ -80,13 +82,14 @@ export function useMapControls(map: React.RefObject<MapHandle | null>, loc: User
 export type MapControlsApi = ReturnType<typeof useMapControls>;
 
 export function MapControls({ api, bottom, onLocate, status }: { api: MapControlsApi; bottom: number; onLocate: () => void; status: UserLocation['status'] }) {
+  const MAP_T = useT().mapCtl;
   const { mode, bearing } = api;
   const label = mode === 'follow' ? MAP_T.locateFollow : mode === 'heading' ? MAP_T.locateHeading : MAP_T.locate;
   return (
     <View style={[styles.col, { bottom }]} pointerEvents="box-none">
       {api.note ? (
         <View style={styles.note} accessibilityLiveRegion="polite">
-          <Text style={styles.noteText}>{api.note}</Text>
+          <Text style={styles.noteText}>{MAP_T[api.note]}</Text>
           {status === 'denied' || status === 'unavailable' ? (
             <Pressable accessibilityRole="button" accessibilityLabel={MAP_T.retry} onPress={() => api.locate()} style={styles.noteBtn}>
               <Text style={styles.noteBtnText}>{MAP_T.retry}</Text>

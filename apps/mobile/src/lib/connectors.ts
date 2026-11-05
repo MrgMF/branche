@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 import { displayName, type Station } from './stations';
 import { markConnected } from './accounts';
 import { store, type ChargePlan } from './store';
+import { tr } from '../i18n';
 
 export { directPayUrl, operatorLabel, operatorOf, payOptions, type PayOption } from './methods';
 
@@ -14,7 +15,7 @@ export type ConnectorId = 'scan' | 'operator-link' | 'account' | 'reader' | 'bad
 function stationRef(station: Station | null) {
   return station
     ? { id: station.id, name: displayName(station), operator: station.o, tel: station.tel, lat: station.lat, lon: station.lon }
-    : { id: 'inconnue', name: 'Borne scannée' };
+    : { id: 'inconnue', name: tr().common.scannedStation };
 }
 
 /** Démarre le suivi d'une recharge (avant confirmation du démarrage). */

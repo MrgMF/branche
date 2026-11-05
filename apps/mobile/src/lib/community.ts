@@ -1,5 +1,7 @@
 // Fiabilité et prix constatés par la communauté (API Branché, facultative) — l'app fonctionne sans.
 import { API_URL } from './config';
+import { tr } from '../i18n';
+import { dateNum, eur, kwhText, perKwh } from '../i18n/format';
 
 export interface Community {
   stationId: string;
@@ -55,23 +57,20 @@ export async function sendCheckin(body: { stationId: string; ok: boolean; priceP
   }
 }
 
-const dateFr = (d: string) => d.split('-').reverse().join('/');
 
 /** Phrase de fiabilité, ou null si trop peu de retours. */
 export function reliabilityText(c: Community | null): string | null {
   if (!c || !c.checkins) return null;
-  return `${c.okCount} recharge${c.okCount > 1 ? 's' : ''} réussie${c.okCount > 1 ? 's' : ''} sur ${c.checkins} signalée${c.checkins > 1 ? 's' : ''} (${c.windowDays} derniers jours)`;
+  return tr().community.reliability(c.okCount, c.checkins, c.windowDays);
 }
 
 export function lastPriceText(c: Community | null): string | null {
   const p = c?.recentPrices[0];
   if (!p) return null;
-  const amount = p.pricePaid.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
-  const perKwh = p.pricePerKwh != null ? ` (${p.pricePerKwh.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €/kWh)` : '';
-  return `Dernier prix constaté : ${amount}${p.kWh ? ` pour ${p.kWh.toLocaleString('fr-FR')} kWh` : ''}${perKwh}, le ${dateFr(p.date)}`;
+  return tr().community.lastPrice(eur(p.pricePaid), p.kWh ? kwhText(p.kWh) : null, p.pricePerKwh != null ? perKwh(p.pricePerKwh) : null, dateNum(p.date));
 }
 
 export function preauthText(c: Community | null): string | null {
   if (!c?.preauth) return null;
-  return `Constaté par la communauté : environ ${c.preauth.median.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })} bloqués (${c.preauth.count} retour${c.preauth.count > 1 ? 's' : ''}, dernier le ${dateFr(c.preauth.lastDate)}).`;
+  return tr().community.preauth(eur(c.preauth.median, 0), c.preauth.count, dateNum(c.preauth.lastDate));
 }

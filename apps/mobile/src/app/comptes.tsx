@@ -1,7 +1,7 @@
 // « Mes comptes de recharge » et « Mes badges » : l'utilisateur se connecte sur le SITE OFFICIEL de l'opérateur,
 // ouvert dans le navigateur intégré de Branché (la session reste dans ce navigateur). Branché ne voit, ne stocke ni ne
 // transmet aucun identifiant, mot de passe, numéro de badge ou carte : il retient seulement « compte X connecté le … ».
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -12,6 +12,9 @@ import { loadPortals, type Portals } from '../lib/portals';
 import type { Operator } from '../lib/qr';
 import { loadOperators } from '../lib/stations';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { ScreenHeader } from '../components/Screen';
+import { useT } from '../i18n';
+import { dateLong } from '../i18n/format';
 
 interface Site {
   key: string;
@@ -22,9 +25,11 @@ interface Site {
 }
 
 const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, '');
-const day = (t: number) => new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+const day = dateLong;
 
 export default function Comptes() {
+  const t = useT();
+  const A = t.accounts;
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ op?: string }>();
   const [portals, setPortals] = useState<Portals>({});
@@ -67,35 +72,30 @@ export default function Comptes() {
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]} keyboardShouldPersistTaps="handled">
-      <View style={styles.head}>
-        <Button label="Retour" variant="ghost" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={styles.back} />
-        <Text style={styles.h1} accessibilityRole="header">
-          Mes badges et comptes
-        </Text>
-      </View>
-      <Text style={styles.p}>Par défaut, Branché vous fait payer sans aucun compte. Quelques opérateurs imposent un compte : ajoutez-le une fois ici ou directement à la borne, Branché le réutilisera.</Text>
-      <Notice>Branché ne voit jamais vos identifiants, mot de passe ni carte : la connexion se fait sur le site de l’opérateur et reste dans le navigateur de Branché. Branché retient seulement « compte connecté le … », sur ce téléphone.</Notice>
+      <ScreenHeader title={t.titles.comptes} />
+      <Text style={styles.p}>{A.intro}</Text>
+      <Notice>{A.privacy}</Notice>
 
       {pending ? (
         <View style={styles.confirm} accessibilityLiveRegion="polite">
-          <Text style={styles.cardTitle}>Connecté au site de {pending.name} ?</Text>
-          <Text style={styles.p}>Si vous avez pu vous connecter, Branché retient que ce compte est disponible.</Text>
+          <Text style={styles.cardTitle}>{A.connectedQ(pending.name)}</Text>
+          <Text style={styles.p}>{A.connectedBody}</Text>
           <Button
-            label="Oui, je suis connecté"
+            label={A.yesConnected}
             onPress={async () => {
               setWallet(await markConnected(pending.key, pending.name));
               setPending(null);
             }}
           />
-          <Button label="Pas maintenant" variant="ghost" onPress={() => setPending(null)} />
+          <Button label={A.notNow} variant="ghost" onPress={() => setPending(null)} />
         </View>
       ) : null}
 
       <Text style={styles.h2} accessibilityRole="header">
-        Comptes opérateurs
+        {A.operators}
       </Text>
-      <TextInput value={q} onChangeText={setQ} placeholder="Opérateur : Ionity, Izivia, Freshmile…" placeholderTextColor="#6B7773" aria-label="Rechercher un opérateur" style={styles.input} autoCorrect={false} />
-      {!sites.length ? <Text style={styles.p}>Liste des opérateurs indisponible (connexion ?). Réessayez plus tard.</Text> : null}
+      <TextInput value={q} onChangeText={setQ} placeholder={A.searchPh} placeholderTextColor="#6B7773" aria-label={A.searchA11y} style={styles.input} autoCorrect={false} />
+      {!sites.length ? <Text style={styles.p}>{A.listDown}</Text> : !shown.length ? <Text style={styles.p}>{A.noMatch}</Text> : null}
       {shown.map((s) => {
         const c = connected(s.key);
         return (
@@ -103,28 +103,28 @@ export default function Comptes() {
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={styles.itemTitle}>{s.name}</Text>
               <Text style={styles.small} numberOfLines={2}>
-                {c ? `Connecté le ${day(c.connectedAt)}` : s.url.replace(/^https:\/\//, '')}
-                {s.canStart ? ' · démarrage depuis le site' : ''}
+                {c ? A.connectedOn(day(c.connectedAt)) : s.url.replace(/^https:\/\//, '')}
+                {s.canStart ? A.canStart : ''}
               </Text>
             </View>
             {c ? (
-              <Pressable accessibilityRole="button" accessibilityLabel={`Oublier le compte ${s.name}`} onPress={async () => setWallet(await forgetAccount(s.key))} style={styles.small2}>
-                <Text style={styles.linkDanger}>Oublier</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel={A.forgetA11y(s.name)} onPress={async () => setWallet(await forgetAccount(s.key))} style={styles.small2}>
+                <Text style={styles.linkDanger}>{A.forget}</Text>
               </Pressable>
             ) : (
-              <Pressable accessibilityRole="button" accessibilityLabel={`Se connecter sur le site de ${s.name}`} onPress={() => connect(s)} style={styles.small2}>
-                <Text style={styles.linkText}>Se connecter</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel={A.connectA11y(s.name)} onPress={() => connect(s)} style={styles.small2}>
+                <Text style={styles.linkText}>{A.connect}</Text>
               </Pressable>
             )}
           </View>
         );
       })}
-      {!q && sites.length > shown.length ? <Text style={styles.small}>{sites.length} opérateurs : tapez un nom pour trouver le vôtre.</Text> : null}
+      {!q && sites.length > shown.length ? <Text style={styles.small}>{A.countHint(sites.length)}</Text> : null}
 
       <Text style={styles.h2} accessibilityRole="header">
-        Mes badges
+        {A.badges}
       </Text>
-      <Text style={styles.p}>Indiquez les badges que vous avez (le nom suffit, jamais le numéro) : Branché vous dit sur chaque borne s’ils sont acceptés.</Text>
+      <Text style={styles.p}>{A.badgesIntro}</Text>
       <View style={styles.chips}>
         {[...BADGES, ...wallet.badges.filter((b) => !BADGES.includes(b))].map((b) => {
           const on = wallet.badges.includes(b);
@@ -136,9 +136,9 @@ export default function Comptes() {
         })}
       </View>
       <View style={styles.row}>
-        <TextInput value={other} onChangeText={setOther} placeholder="Autre badge (nom)" placeholderTextColor="#6B7773" aria-label="Autre badge" style={[styles.input, { flex: 1 }]} />
+        <TextInput value={other} onChangeText={setOther} placeholder={A.otherPh} placeholderTextColor="#6B7773" aria-label={A.otherA11y} style={[styles.input, { flex: 1 }]} />
         <Button
-          label="Ajouter"
+          label={A.add}
           variant="ghost"
           disabled={!other.trim()}
           onPress={async () => {

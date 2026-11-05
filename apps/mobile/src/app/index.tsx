@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ import { useRechargeHere } from '../lib/useRechargeHere';
 import { Chip, Notice } from '../components/ui';
 import { apiEnabled, getConfigWithRetry, type ApiConfig } from '../lib/api';
 import { DEFAULT_CENTER } from '../lib/config';
-import { km, kw, minutes, PLUG_LABEL } from '../lib/format';
+import { km, kw, minutes, plugLabel } from '../lib/format';
 import { operatorLabel } from '../lib/connectors';
 import type { Operator } from '../lib/qr';
 import { applyFilters, displayName, distanceKm, loadAround, loadOperators, nearest, NO_FILTERS, type Filters, type Station } from '../lib/stations';
@@ -22,13 +22,20 @@ import { store } from '../lib/store';
 import { placeDest, stationDest, useTrip } from '../lib/useTrip';
 import { useUserLocation } from '../lib/useLocation';
 import { MapControls, useMapControls } from '../components/MapControls';
+import { AppMenu, chargeState, MenuButton, type ChargeState } from '../components/AppMenu';
+import { Icon } from '../components/Icon';
+import { useT } from '../i18n';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 
 type Pos = { lat: number; lon: number };
 type LocState = 'pending' | 'granted' | 'denied';
 
 export default function MapScreen() {
+  const t = useT();
   const insets = useSafeAreaInsets();
+  const [menu, setMenu] = useState(false);
+  const [badge, setBadge] = useState<ChargeState>(null);
+  const closeMenu = useCallback(() => setMenu(false), []);
   const { height, width } = useWindowDimensions();
   const wide = width >= 768;
   const map = useRef<MapHandle>(null);
@@ -50,9 +57,13 @@ export default function MapScreen() {
   const [ops, setOps] = useState<Operator[]>([]);
   const [resume, setResume] = useState<string | null>(null);
 
-  useEffect(() => {
-    store.loadDirect().then((d) => setResume(d && !d.endedAt ? d.operatorName : null));
-  }, []);
+  // Au retour sur la carte : recharge en cours / préparée (badge du menu, bandeau « Reprendre »)
+  useFocusEffect(
+    useCallback(() => {
+      store.loadDirect().then((d) => setResume(d && !d.endedAt ? d.operatorName : null));
+      chargeState().then(setBadge);
+    }, []),
+  );
 
   useEffect(() => {
     loadOperators().then(setOps);
@@ -69,7 +80,7 @@ export default function MapScreen() {
 
   // Retour arrière (Android) et Échap (web) ferment la fiche au lieu de quitter l'app
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId || menu) return;
     if (Platform.OS === 'web') {
       const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setSelectedId(null);
       window.addEventListener('keydown', onKey);
@@ -80,7 +91,7 @@ export default function MapScreen() {
       return true;
     });
     return () => sub.remove();
-  }, [selectedId]);
+  }, [selectedId, menu]);
 
 
   // Centre de recherche : position, puis centre de la carte quand l'utilisateur la déplace
@@ -185,21 +196,26 @@ export default function MapScreen() {
       <MapView ref={map} onMessage={onMap} />
 
       <View style={[styles.top, { paddingTop: insets.top + 10 }, trip?.guiding ? { display: 'none' } : null, { flexDirection: 'column', alignItems: 'stretch', zIndex: 5 }, wide && { right: undefined, width: 440 }]} pointerEvents="box-none">
-        <SearchBar
-          near={user ?? (panned ? center : null)}
-          onFocusChange={setSearching}
-          onSelect={(p) => {
-            setSelectedId(null);
-            // Adresse d'une borne connue : la destination devient la borne (arrivée → recharge).
-            const st = all.find((s) => distanceKm(s, p) < 0.04);
-            plan(st ? { ...stationDest(st), name: displayName(st) } : placeDest(p));
-          }}
-        />
-        <ScrollView horizontal style={[{ flexGrow: 0 }, searching || trip ? { display: 'none' } : null]} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityLabel="Filtres">
-          <Chip label="Rapide" a11y="Rapide, 50 kW et plus" active={filters.fast} onPress={() => toggle('fast')} />
-          <Chip label="CCS" active={filters.ccs} onPress={() => toggle('ccs')} />
-          <Chip label="Type 2" active={filters.t2} onPress={() => toggle('t2')} />
-          <Chip label="Accès libre" active={filters.open} onPress={() => toggle('open')} />
+        <View style={styles.searchRow}>
+          {searching ? null : <MenuButton onPress={() => setMenu(true)} badge={badge} />}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <SearchBar
+              near={user ?? (panned ? center : null)}
+              onFocusChange={setSearching}
+              onSelect={(p) => {
+                setSelectedId(null);
+                // Adresse d'une borne connue : la destination devient la borne (arrivée → recharge).
+                const st = all.find((s) => distanceKm(s, p) < 0.04);
+                plan(st ? { ...stationDest(st), name: displayName(st) } : placeDest(p));
+              }}
+            />
+          </View>
+        </View>
+        <ScrollView horizontal style={[{ flexGrow: 0 }, searching || trip ? { display: 'none' } : null]} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityLabel={t.map.filters}>
+          <Chip label={t.map.fast} a11y={t.map.fastA11y} active={filters.fast} onPress={() => toggle('fast')} />
+          <Chip label={t.plugs.ccs.split(' ')[0]} a11y={t.plugs.ccs} active={filters.ccs} onPress={() => toggle('ccs')} />
+          <Chip label={t.plugs.t2} active={filters.t2} onPress={() => toggle('t2')} />
+          <Chip label={t.map.open} active={filters.open} onPress={() => toggle('open')} />
         </ScrollView>
       </View>
 
@@ -235,40 +251,48 @@ export default function MapScreen() {
           ) : (
             <>
               <View style={styles.titleRow}>
-                <Text style={[styles.h1, { flex: 1 }]} accessibilityRole="header">
-                  {panned || !user ? 'Bornes autour de la carte' : 'Bornes les plus proches'}
+                <Text style={[styles.h1, { flex: 1 }]} accessibilityRole="header" numberOfLines={2}>
+                  {panned || !user ? t.map.around : t.map.nearest}
                 </Text>
-                <Pressable accessibilityRole="button" accessibilityLabel="À propos et mentions légales" onPress={() => router.push('/about')} style={styles.infoBtn}>
-                  <Text style={styles.roundText}>i</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel={t.map.scanA11y} testID="scan" onPress={() => router.push('/payer')} style={({ pressed }) => [styles.scanBtn, pressed && { backgroundColor: colors.border }]}>
+                  <Icon name="qr" size={20} />
+                  <Text style={styles.scanText}>{t.map.scan}</Text>
                 </Pressable>
               </View>
               <ChargeShortcuts />
               {resume ? (
                 <Pressable accessibilityRole="button" onPress={() => router.push('/recharge')} style={styles.resume}>
-                  <Text style={styles.resumeText}>Recharge en cours chez {resume} · Reprendre</Text>
+                  <Text style={styles.resumeText}>{t.map.resume(resume)}</Text>
                 </Pressable>
               ) : (
                 <HereBanner user={user} onPick={select} />
               )}
               {loc === 'denied' && !panned ? (
-                <Notice>Position non autorisée : déplacez la carte vers votre zone ou autorisez la localisation dans les réglages.</Notice>
+                <Notice>{t.map.locDenied}</Notice>
               ) : null}
-              {dataError ? <Notice tone="error">Impossible de charger les bornes. Vérifiez votre connexion puis déplacez la carte pour réessayer.</Notice> : null}
+              {dataError ? <Notice tone="error">{t.map.dataError}</Notice> : null}
               {loading && !closest.length ? (
                 <View style={styles.loading}>
                   <ActivityIndicator color={colors.accent} />
-                  <Text style={styles.muted}>{loc === 'pending' ? 'Localisation en cours…' : 'Chargement des bornes…'}</Text>
+                  <Text style={styles.muted}>{loc === 'pending' ? t.map.locating : t.map.loading}</Text>
                 </View>
               ) : null}
               {!loading && !dataError && !closest.length ? (
-                <Text style={styles.muted}>Aucune borne trouvée ici avec ces filtres.</Text>
+                <View style={styles.empty}>
+                  <Text style={styles.muted}>{t.map.empty}</Text>
+                  {filters.fast || filters.ccs || filters.t2 || filters.open ? (
+                    <Pressable accessibilityRole="button" onPress={() => setFilters(NO_FILTERS)} style={styles.emptyBtn}>
+                      <Text style={styles.emptyBtnText}>{t.map.clearFilters}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               ) : null}
               {closest.map(({ s, d }, i) => (
                 <Pressable
                   key={s.id}
                   onPress={() => select(s)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${displayName(s)}, à ${km(d)}, ${kw(s.kw)}`}
+                  accessibilityLabel={t.map.itemA11y(displayName(s), km(d), kw(s.kw))}
                   style={({ pressed }) => [styles.item, i === 0 && styles.itemFirst, pressed && { backgroundColor: colors.surfaceAlt }]}
                 >
                   <View style={{ flex: 1, gap: 3 }}>
@@ -276,7 +300,7 @@ export default function MapScreen() {
                       {displayName(s)}
                     </Text>
                     <Text style={styles.itemSub} numberOfLines={1}>
-                      {[kw(s.kw), s.c.map((c) => PLUG_LABEL[c]).join(', '), s.acc === 'reserve' ? 'Accès réservé' : null].filter(Boolean).join(' · ')}
+                      {[kw(s.kw), s.c.map((c) => plugLabel(c)).join(', '), s.acc === 'reserve' ? t.map.reserved : null].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
@@ -285,11 +309,12 @@ export default function MapScreen() {
                   </View>
                 </Pressable>
               ))}
-              {Platform.OS === 'web' ? <Text style={styles.small}>Astuce : sur téléphone, ajoutez cette page à l’écran d’accueil.</Text> : null}
+              {Platform.OS === 'web' ? <Text style={styles.small}>{t.map.homeTip}</Text> : null}
             </>
           )}
         </ScrollView>
       </View>
+      <AppMenu open={menu} onClose={closeMenu} />
     </View>
   );
 }
@@ -298,6 +323,12 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.mapGround },
   top: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 },
   chips: { gap: 8, paddingRight: 8 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  scanBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: MIN_TOUCH, paddingHorizontal: 14, borderRadius: 22, backgroundColor: colors.surfaceAlt },
+  scanText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
+  empty: { gap: 8, paddingVertical: 8 },
+  emptyBtn: { alignSelf: 'flex-start', minHeight: MIN_TOUCH, paddingHorizontal: 16, borderRadius: 22, borderWidth: 1, borderColor: colors.ink, justifyContent: 'center' },
+  emptyBtnText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
   round: {
     width: MIN_TOUCH + 4,
     height: MIN_TOUCH + 4,

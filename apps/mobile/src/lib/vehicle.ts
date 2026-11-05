@@ -65,7 +65,6 @@ export const GENERIC_VEHICLE: VehicleModel = {
   plugs: ['ccs', 't2'],
 };
 
-export const VEHICLE_SOURCE_NOTE = 'Valeurs indicatives publiques ; la recharge réelle dépend de la borne, de la température et de la batterie.';
 
 /** Le véhicule peut-il se brancher sur l'une de ces prises ? (sans véhicule : oui) */
 export function compatible(plugs: Plug[], v: Pick<VehicleModel, 'plugs'> | null | undefined): boolean {

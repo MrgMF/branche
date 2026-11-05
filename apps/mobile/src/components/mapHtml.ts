@@ -6,13 +6,14 @@ const V = '5.24.0';
 const LOCAL = `${SITE_URL}/vendor`;
 const CDN = `https://unpkg.com/maplibre-gl@${V}/dist`;
 
-export const MAP_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
+/** Page de la carte dans la langue courante (libellé d'accessibilité, message hors connexion). */
+export const mapHtml = (lang: string, label: string, offline: string) => `<!doctype html><html lang="${lang}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <link rel="stylesheet" href="${LOCAL}/maplibre-gl.css" onerror="this.href='${CDN}/maplibre-gl.css'">
 <style>html,body,#m{margin:0;height:100%;background:#E6ECEA;overflow:hidden;overscroll-behavior:none}#m{touch-action:none}
 .maplibregl-ctrl-attrib{font:11px system-ui,sans-serif}
 #err{position:absolute;inset:auto 12px 12px 12px;padding:10px 12px;border-radius:12px;background:#fff;color:#0F1A17;font:14px system-ui;display:none}</style>
-</head><body><div id="m" role="application" aria-label="Carte des bornes de recharge"></div><div id="err">Carte indisponible hors connexion. La liste des bornes reste utilisable.</div>
+</head><body><div id="m" role="application" aria-label="${label.replace(/"/g, '')}"></div><div id="err">${offline.replace(/</g, '')}</div>
 <script src="${LOCAL}/maplibre-gl.js"></script>
 <script>if(!window.maplibregl){document.write('<script src="${CDN}/maplibre-gl.js"><\\/script>')}</script>
 <script>

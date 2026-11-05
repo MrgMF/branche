@@ -1,4 +1,5 @@
 import { DATA_URL } from './config';
+import { tr } from '../i18n';
 
 export type Plug = 'ccs' | 't2' | 'chademo' | 'ef';
 export type PayMethod = 'cb' | 'sans_contact' | 'acte' | 'qr_dynamique' | 'site_web' | 'liquide' | 'badge';
@@ -121,7 +122,7 @@ export function displayName(s: Pick<Station, 'n' | 'o' | 'a'>): string {
   if (s.n && !LOOKS_LIKE_ID.test(s.n)) return s.n;
   const street = s.a?.split(/\d{5}/)[0]?.replace(/[,\s]+$/, '').trim();
   const op = s.o?.split('|').map((x) => x.trim()).find((x) => x && !x.includes('*'));
-  return [op, street].filter(Boolean).join(' — ') || 'Borne de recharge';
+  return [op, street].filter(Boolean).join(' — ') || tr().common.stationFallback;
 }
 
 /** Le champ tarification contient parfois une URL plutôt qu'un prix. */

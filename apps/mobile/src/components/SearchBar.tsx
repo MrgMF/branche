@@ -7,8 +7,10 @@ import { searchPlaces, type Place } from '../lib/navigation';
 import { addRecent, clearRecents, loadRecents } from '../lib/recents';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { NavIcon } from './ManeuverIcon';
+import { useT } from '../i18n';
 
 export function SearchBar(props: { near: { lat: number; lon: number } | null; onSelect: (p: Place) => void; onFocusChange?: (f: boolean) => void }) {
+  const t = useT();
   const [q, setQ] = useState('');
   const [focused, setFocused] = useState(false);
   const [results, setResults] = useState<Place[]>([]);
@@ -39,10 +41,10 @@ export function SearchBar(props: { near: { lat: number; lon: number } | null; on
         .then((r) => {
           setResults(r.results);
           setAttribution(r.attribution);
-          if (!r.results.length) setError('Aucun résultat. Précisez la commune ou le code postal.');
+          if (!r.results.length) setError(t.search.none);
         })
         .catch((e) => {
-          if (!(e instanceof Error && e.name === 'AbortError')) setError(e instanceof Error ? e.message : 'Recherche indisponible.');
+          if (!(e instanceof Error && e.name === 'AbortError')) setError(e instanceof Error ? e.message : t.search.unavailable);
         })
         .finally(() => setBusy(false));
     }, 300);
@@ -80,9 +82,9 @@ export function SearchBar(props: { near: { lat: number; lon: number } | null; on
           onChangeText={setQ}
           onFocus={() => focus(true)}
           onBlur={() => setTimeout(() => focus(false), Platform.OS === 'web' ? 200 : 0)}
-          placeholder="Où allez-vous ? Adresse, lieu…"
+          placeholder={t.search.placeholder}
           placeholderTextColor={colors.inkMuted}
-          accessibilityLabel="Rechercher une adresse ou un lieu"
+          accessibilityLabel={t.search.a11y}
           returnKeyType="search"
           autoCorrect={false}
           style={styles.input}
@@ -90,7 +92,7 @@ export function SearchBar(props: { near: { lat: number; lon: number } | null; on
         />
         {busy ? <ActivityIndicator color={colors.accent} /> : null}
         {q ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Effacer la recherche" onPress={() => setQ('')} style={styles.clear}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t.search.clear} onPress={() => setQ('')} style={styles.clear}>
             <NavIcon name="close" size={18} color={colors.inkMuted} />
           </Pressable>
         ) : null}
@@ -99,17 +101,17 @@ export function SearchBar(props: { near: { lat: number; lon: number } | null; on
         <View style={styles.panel} accessibilityRole="list">
           {showRecents ? (
             <View style={styles.headRow}>
-              <Text style={styles.head}>Récents (sur cet appareil)</Text>
+              <Text style={styles.head}>{t.search.recents}</Text>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Effacer les destinations récentes"
+                accessibilityLabel={t.search.clearRecentsA11y}
                 onPress={async () => {
                   await clearRecents();
                   setRecents([]);
                 }}
                 style={styles.headBtn}
               >
-                <Text style={styles.headLink}>Effacer</Text>
+                <Text style={styles.headLink}>{t.search.clearRecents}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -136,7 +138,7 @@ export function SearchBar(props: { near: { lat: number; lon: number } | null; on
             </Pressable>
           ))}
           {error && !showRecents ? <Text style={styles.error}>{error}</Text> : null}
-          {!showRecents && results.length ? <Text style={styles.attr}>Recherche {attribution}</Text> : null}
+          {!showRecents && results.length ? <Text style={styles.attr}>{t.search.attribution(attribution)}</Text> : null}
         </View>
       ) : null}
     </View>

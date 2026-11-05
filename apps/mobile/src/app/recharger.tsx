@@ -11,11 +11,11 @@ import { TariffLines } from '../components/Pricing';
 import { Button, Notice, Tag } from '../components/ui';
 import { getCommunity, preauthText, reliabilityText, type Community } from '../lib/community';
 import { operatorLabel, payOptions, runPlan, type PayOption } from '../lib/connectors';
-import { AVAIL_LABEL, getAvailability, type AvailItem } from '../lib/availability';
+import { availLabel, getAvailability, type AvailItem } from '../lib/availability';
 import { clearPrepared, loadPrepared, savePrepared, type Prepared } from '../lib/prepared';
 import { durationLabel, estimateCharge, isDc } from '../lib/estimate';
 import { findStation, pointById, pointsOf, type ChargePoint } from '../lib/evse';
-import { euros, km, kw, PLUG_LABEL } from '../lib/format';
+import { euros, km, kw, plugLabel } from '../lib/format';
 import type { MethodId } from '../lib/history';
 import type { Operator } from '../lib/qr';
 import { displayName, distanceKm, loadOperators, nearest, type Station } from '../lib/stations';
@@ -26,11 +26,17 @@ import { loadWallet, type Wallet } from '../lib/accounts';
 import { appOnly } from '../lib/methods';
 import { loadPortals, type Portals } from '../lib/portals';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { ScreenHeader } from '../components/Screen';
+import { useLocale, useT } from '../i18n';
+import { kwhText } from '../i18n/format';
 
 const SKIP_KEY = 'branche.vehicle.skipped.v1';
 const SOC_FRESH_MS = 3 * 3600_000;
 
 export default function Recharger() {
+  const t = useT();
+  const R = t.recharger;
+  const { lang } = useLocale();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ evse?: string; station?: string; step?: string; method?: string; noLink?: string; prepare?: string }>();
   const [station, setStation] = useState<Station | null | undefined>(undefined);
@@ -120,7 +126,7 @@ export default function Recharger() {
     () => (point ? estimateCharge({ vehicle: vehicle ?? null, socPercent: soc, pointKw: point.kw, plugs: point.plugs, tariff }) : null),
     [point, vehicle, soc, tariff],
   );
-  const options = useMemo(() => (station ? payOptions(station, point, ops, { portals, wallet }) : []), [station, point, ops, portals, wallet]);
+  const options = useMemo(() => (station ? payOptions(station, point, ops, { portals, wallet }) : []), [station, point, ops, portals, wallet, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const portal = station?.ok ? portals[station.ok] : undefined;
   const accountConnected = !!station?.ok && wallet.accounts.some((a) => a.operatorKey === station.ok);
   // Rien de payable ici depuis Branché : alternative la plus proche qui l'est
@@ -193,19 +199,23 @@ export default function Recharger() {
     return (
       <View style={[styles.root, styles.center]}>
         <ActivityIndicator color={colors.accent} />
-        <Text style={styles.muted}>Recherche de la borne…</Text>
+        <Text style={styles.muted}>{R.searching}</Text>
       </View>
     );
   }
   if (!station) {
     return (
-      <View style={[styles.root, styles.center, { paddingTop: insets.top + 24 }]}>
-        <Text style={styles.h1} accessibilityRole="header">Borne introuvable</Text>
+      <View style={[styles.root, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.body}>
+          <ScreenHeader title={R.notFound} />
+        </View>
+      <View style={[styles.center, { flex: 1 }]}>
         <Text style={[styles.muted, { textAlign: 'center' }]}>
-          {params.evse ? `L’identifiant ${params.evse} n’est pas dans la base nationale des bornes, ou la connexion est coupée.` : 'Choisissez une borne sur la carte.'}
+          {params.evse ? R.notFoundEvse(params.evse) : R.pickOnMap}
         </Text>
-        <Button label="Scanner le QR code de la borne" onPress={() => router.replace('/payer')} style={{ alignSelf: 'stretch' }} />
-        <Button label="Retour à la carte" variant="ghost" onPress={() => router.replace('/')} style={{ alignSelf: 'stretch' }} />
+        <Button label={R.scanQr} onPress={() => router.replace('/payer')} style={{ alignSelf: 'stretch' }} />
+        <Button label={t.common.backToMap} variant="ghost" onPress={() => router.replace('/')} style={{ alignSelf: 'stretch' }} />
+      </View>
       </View>
     );
   }
@@ -213,13 +223,18 @@ export default function Recharger() {
   // Proposé au 1er passage (au choix du point, ou directement s'il n'y a qu'un point) ; jamais bloquant
   if (savedPrep) {
     return (
-      <View style={[styles.root, styles.center, { paddingTop: insets.top + 24 }]}>
-        <Text style={styles.h1} accessibilityRole="header">Tout est prêt</Text>
+      <View style={[styles.root, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.body}>
+          <ScreenHeader title={displayName(station)} kicker={R.prepKicker.replace(/[·\s]+$/, '')} />
+        </View>
+      <View style={[styles.center, { flex: 1, maxWidth: 600, alignSelf: 'center', width: '100%' }]}>
+        <Text style={styles.h1} accessibilityRole="header">{R.ready}</Text>
         <Text style={[styles.p, { textAlign: 'center' }]}>
-          À votre arrivée à {displayName(station)}, Branché affichera « Payer maintenant » : un seul geste pour {chosen?.id === 'reader' ? 'le mode d’emploi du lecteur de carte' : 'ouvrir la bonne page de paiement'}.
+          {R.readyBody(displayName(station), chosen?.id === 'reader')}
         </Text>
-        <Notice>Rien n’est débité maintenant : à l’arrivée, vous payez {opName} directement depuis Branché, en un geste.</Notice>
-        <Button label="Retour à la carte" onPress={() => router.replace('/')} style={{ alignSelf: 'stretch' }} />
+        <Notice>{R.readyNotice(opName)}</Notice>
+        <Button label={t.common.backToMap} onPress={() => router.replace('/')} style={{ alignSelf: 'stretch' }} />
+      </View>
       </View>
     );
   }
@@ -228,56 +243,50 @@ export default function Recharger() {
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]}>
-      <View style={styles.head}>
-        <Button label="Retour" variant="ghost" onPress={back} style={styles.back} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.kicker}>{preparing ? 'Préparation · ' : ''}{step === 'point' ? 'Étape 1 sur 2' : points.length > 1 || autoPoint === null ? 'Étape 2 sur 2' : 'Recharger ici'}</Text>
-          <Text style={styles.title} numberOfLines={2} accessibilityRole="header">
-            {displayName(station)}
-          </Text>
-          <Text style={styles.muted} numberOfLines={1}>
-            {opName}
-          </Text>
-          {step === 'point' && reliabilityText(community) ? <Text style={styles.small}>Fiabilité : {reliabilityText(community)}</Text> : null}
-        </View>
-      </View>
+      <ScreenHeader
+        onBack={back}
+        kicker={`${preparing ? R.prepKicker : ''}${step === 'point' ? R.step1 : points.length > 1 || autoPoint === null ? R.step2 : t.titles.recharger}`}
+        title={displayName(station)}
+        sub={opName}
+      />
+      {step === 'point' && reliabilityText(community) ? <Text style={styles.small}>{t.pricing.reliability(reliabilityText(community)!)}</Text> : null}
 
       {vehiclePrompt ? (
         <View style={styles.vehicleCard}>
-          <Text style={styles.cardTitle}>Votre véhicule ?</Text>
-          <Text style={styles.p}>Pour filtrer les prises compatibles et estimer durée et prix. Facultatif, enregistré sur ce téléphone.</Text>
+          <Text style={styles.cardTitle}>{R.vehicleQ}</Text>
+          <Text style={styles.p}>{R.vehicleWhy}</Text>
           <View style={styles.row}>
-            <Button label="Choisir" variant="secondary" onPress={() => router.push('/vehicule')} style={styles.half} />
-            <Button label="Passer" variant="ghost" onPress={skipVehicle} style={styles.half} />
+            <Button label={t.common.choose} variant="secondary" onPress={() => router.push('/vehicule')} style={styles.half} />
+            <Button label={t.common.skip} variant="ghost" onPress={skipVehicle} style={styles.half} />
           </View>
         </View>
       ) : null}
 
       {step === 'point' ? (
         <View style={{ gap: 10 }}>
-          <Text style={styles.h2} accessibilityRole="header">Choisissez votre point de charge</Text>
-          <Text style={styles.p}>Les 4 derniers caractères sont inscrits sur l’étiquette de la borne ou de la prise.</Text>
+          <Text style={styles.h2} accessibilityRole="header">{R.pickPoint}</Text>
+          <Text style={styles.p}>{R.pickPointHelp}</Text>
           {usable.map((p) => (
             <PointRow key={p.id} p={p} onPress={() => pick(p)} selected={p.id === pointId} status={avail[p.id]} />
           ))}
-          {!usable.length ? <Notice tone="demo">Aucun point compatible avec {vehicle?.name ?? 'votre véhicule'} dans la base nationale. Vérifiez sur place.</Notice> : null}
+          {!usable.length ? <Notice tone="demo">{R.noCompatible(vehicle?.name ?? R.yourVehicle)}</Notice> : null}
           {incompatible.length ? (
             <>
               <Pressable accessibilityRole="button" accessibilityState={{ expanded: showIncompatible }} onPress={() => setShowIncompatible((x) => !x)} style={styles.link}>
                 <Text style={styles.linkText}>
-                  {showIncompatible ? 'Masquer' : 'Afficher'} {incompatible.length} point{incompatible.length > 1 ? 's' : ''} incompatible{incompatible.length > 1 ? 's' : ''} avec {vehicle?.name ?? 'votre véhicule'}
+                  {R.toggleIncompatible(showIncompatible, incompatible.length, vehicle?.name ?? R.yourVehicle)}
                 </Text>
               </Pressable>
               {showIncompatible ? incompatible.map((p) => <PointRow key={p.id} p={p} disabled />) : null}
             </>
           ) : null}
-          {station.p > points.length ? <Text style={styles.small}>{station.p - points.length} autre(s) point(s) non détaillé(s) par l’opérateur.</Text> : null}
+          {station.p > points.length ? <Text style={styles.small}>{R.otherPoints(station.p - points.length)}</Text> : null}
         </View>
       ) : point && est ? (
         <>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Point ${point.short}, ${kw(point.kw)}. Changer de point`}
+            accessibilityLabel={R.pointA11y(point.short, kw(point.kw))}
             onPress={() => {
               setChoosing(true);
             }}
@@ -286,76 +295,76 @@ export default function Recharger() {
           >
             <Text style={styles.pointShort}>…{point.short}</Text>
             <Text style={[styles.p, { flex: 1 }]} numberOfLines={2}>
-              {kw(point.kw)} · {point.plugs.map((p) => PLUG_LABEL[p]).join(', ')}
+              {kw(point.kw)} · {point.plugs.map((p) => plugLabel(p)).join(', ')}
             </Text>
-            {points.length > 1 ? <Text style={styles.linkText}>Changer</Text> : null}
+            {points.length > 1 ? <Text style={styles.linkText}>{t.common.change}</Text> : null}
           </Pressable>
 
           {/* Prix avant de payer */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle} accessibilityRole="header">Prix avant de payer</Text>
+            <Text style={styles.cardTitle} accessibilityRole="header">{R.priceBefore}</Text>
             <TariffLines station={station} community={community} />
             <View style={styles.estimate} accessibilityRole="summary">
               <Text style={styles.estLabel}>
-                Estimation pour {est.assumedVehicle ? 'un véhicule moyen (55 kWh)' : vehicle?.name}, de {est.fromSoc} % à {est.toSoc} %
+                {R.estimateFor(est.assumedVehicle ? R.avgVehicle55 : vehicle?.name ?? '', est.fromSoc, est.toSoc)}
               </Text>
               <View style={styles.estRow}>
-                <Big label="Énergie" value={`${est.kWhBilled.toLocaleString('fr-FR')} kWh`} />
-                <Big label="Durée" value={`≈ ${durationLabel(est.minutes)}`} />
-                <Big label="Coût" value={est.cost != null ? `≈ ${euros(Math.round(est.cost * 100))}` : 'Inconnu'} />
+                <Big label={R.energy} value={kwhText(est.kWhBilled)} />
+                <Big label={R.duration} value={`≈ ${durationLabel(est.minutes)}`} />
+                <Big label={R.cost} value={est.cost != null ? `≈ ${euros(Math.round(est.cost * 100))}` : R.unknown} />
               </View>
               <Text style={styles.small}>
-                Puissance {kw(est.powerKw)} ({isDc(point.kw, point.plugs) ? 'courant continu, ralentit après 50 %' : 'courant alternatif'}) : le minimum entre le point ({kw(point.kw)}) et {est.assumedVehicle ? 'un véhicule moyen' : 'votre véhicule'}. Pertes de charge incluses.
-                {est.partial ? ' Seule une partie du tarif est publiée.' : ''}
-                {est.unknownPrice ? ' Prix inconnu : vérifiez l’écran de la borne avant de valider.' : ''}
+                {R.powerNote(kw(est.powerKw), isDc(point.kw, point.plugs), kw(point.kw), est.assumedVehicle)}
+                {est.partial ? R.partial : ''}
+                {est.unknownPrice ? R.unknownPriceNote : ''}
               </Text>
               <View style={styles.socRow}>
-                <Text style={[styles.p, { flex: 1 }]}>Batterie actuelle{soc == null ? ' (supposée)' : ''}</Text>
-                <Pressable accessibilityRole="button" accessibilityLabel="Batterie moins 5 %" onPress={() => changeSoc(-5)} style={styles.step}>
+                <Text style={[styles.p, { flex: 1 }]}>{R.socNow(soc == null)}</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel={R.socMinus} onPress={() => changeSoc(-5)} style={styles.step}>
                   <Text style={styles.stepText}>−</Text>
                 </Pressable>
-                <Text style={styles.socValue} accessibilityLabel={`Batterie ${soc ?? 20} %`}>
+                <Text style={styles.socValue} accessibilityLabel={R.socA11y(soc ?? 20)}>
                   {soc ?? 20} %
                 </Text>
-                <Pressable accessibilityRole="button" accessibilityLabel="Batterie plus 5 %" onPress={() => changeSoc(5)} style={styles.step}>
+                <Pressable accessibilityRole="button" accessibilityLabel={R.socPlus} onPress={() => changeSoc(5)} style={styles.step}>
                   <Text style={styles.stepText}>+</Text>
                 </Pressable>
               </View>
               {vehicle ? (
                 <Pressable accessibilityRole="button" onPress={() => router.push('/vehicule')} style={styles.link}>
-                  <Text style={styles.linkText}>Changer de véhicule</Text>
+                  <Text style={styles.linkText}>{R.changeVehicle}</Text>
                 </Pressable>
               ) : skipped ? (
                 <Pressable accessibilityRole="button" onPress={() => router.push('/vehicule')} style={styles.link}>
-                  <Text style={styles.linkText}>Préciser mon véhicule</Text>
+                  <Text style={styles.linkText}>{R.setVehicle}</Text>
                 </Pressable>
               ) : null}
             </View>
             <View style={styles.preauth}>
-              <Text style={styles.estLabel}>Pré-autorisation</Text>
+              <Text style={styles.estLabel}>{R.preauth}</Text>
               <Text style={styles.small}>
-                Avec une carte bancaire, la borne ou la page de paiement peut bloquer un montant le temps de la recharge (souvent plus que le coût réel). Seul le montant réel est débité ; le reste est libéré par votre banque, en général sous quelques jours. {opName} ne publie pas ce montant.
+                {R.preauthBody(opName)}
               </Text>
               {preauthText(community) ? <Text style={[styles.small, { color: colors.ink }]}>{preauthText(community)}</Text> : null}
             </View>
             {tariff.idle ? (
               <Notice tone="demo">
-                Occupation facturée après la fin de charge{tariff.idle.afterMin ? ` (au-delà de ${tariff.idle.afterMin} min)` : ''} : Branché vous prévient avant.
+                {R.idle(tariff.idle.afterMin)}
               </Notice>
             ) : null}
           </View>
 
-          {prepared && !preparing ? <Notice>Recharge préparée : point et méthode repris. Il ne reste qu’à payer.</Notice> : null}
-          {params.noLink ? <Notice>Borne et point identifiés par le QR code. Il ne contient pas de lien de paiement : {fallback ? 'utilisez la méthode ci-dessous.' : 'cherchez un autre QR code ou le lecteur de carte sur la borne.'}</Notice> : null}
+          {prepared && !preparing ? <Notice>{R.preparedNotice}</Notice> : null}
+          {params.noLink ? <Notice>{R.noLink(!!fallback)}</Notice> : null}
           {blocked ? (
             <View style={[styles.card, { borderColor: colors.busy }]}>
-              <Text style={styles.cardTitle} accessibilityRole="header">Pas de paiement possible ici depuis Branché</Text>
+              <Text style={styles.cardTitle} accessibilityRole="header">{R.blockedTitle}</Text>
               <Text style={styles.p}>
-                Pour cette borne, {opName} ne déclare ni paiement sans compte, ni lecteur de carte, ni site de compte utilisable{portal?.roamingBadgesAccepted?.length ? ` ; badges acceptés : ${portal.roamingBadgesAccepted.join(', ')}` : ''}. Si vous avez un badge, ajoutez-le dans « Mes badges ».
+                {R.blockedBody(opName, portal?.roamingBadgesAccepted?.length ? portal.roamingBadgesAccepted.join(', ') : null)}
               </Text>
               {alternative ? (
                 <Button
-                  label={`Borne payable la plus proche : ${displayName(alternative.s)} (${km(alternative.d)})`}
+                  label={R.nearestPayable(displayName(alternative.s), km(alternative.d))}
                   variant="secondary"
                   onPress={() => {
                     store.setCurrent(alternative.s);
@@ -363,7 +372,7 @@ export default function Recharger() {
                   }}
                 />
               ) : null}
-              <Button label="Mes badges" variant="ghost" onPress={() => router.push('/comptes')} />
+              <Button label={R.myBadges} variant="ghost" onPress={() => router.push('/comptes')} />
             </View>
           ) : null}
           {/* Méthode recommandée + mode d'emploi */}
@@ -373,10 +382,10 @@ export default function Recharger() {
                 <Text style={[styles.cardTitle, { flexShrink: 1 }]} accessibilityRole="header">
                   {chosen.label}
                 </Text>
-                {chosen.id === (fallback ?? options[0])?.id ? <Tag>Recommandé</Tag> : null}
+                {chosen.id === (fallback ?? options[0])?.id ? <Tag>{t.common.recommended}</Tag> : null}
               </View>
               <Text style={styles.p}>{chosen.why}</Text>
-              <Text style={styles.orderText}>{chosen.order === 'plug-first' ? 'Brancher d’abord, puis payer' : 'Payer d’abord, puis brancher'}</Text>
+              <Text style={styles.orderText}>{chosen.order === 'plug-first' ? R.plugFirst : R.payFirst}</Text>
               {chosen.steps.map((s, i) => (
                 <View key={s} style={styles.stepRow}>
                   <View style={styles.num}>
@@ -386,13 +395,13 @@ export default function Recharger() {
                 </View>
               ))}
               {chosen.copyId ? <CopyId id={chosen.copyId} /> : null}
-              <Text style={styles.small}>Si l’écran de la borne indique un autre ordre, suivez la borne.</Text>
-              {preparing ? <Text style={styles.small}>Préparation : rien n’est payé maintenant. À l’arrivée, un geste suffira.</Text> : null}
-              <Button label={preparing ? 'Enregistrer pour mon arrivée' : chosen.cta} onPress={() => go(chosen)} disabled={!chosen.available} hint={chosen.id === 'reader' ? 'Ouvre le suivi de la recharge' : 'Branché vérifie le QR code avant d’ouvrir la page de l’opérateur'} />
+              <Text style={styles.small}>{R.followStation}</Text>
+              {preparing ? <Text style={styles.small}>{R.prepNote}</Text> : null}
+              <Button label={preparing ? R.saveForArrival : chosen.cta} onPress={() => go(chosen)} disabled={!chosen.available} hint={chosen.id === 'reader' ? R.hintReader : R.hintQr} />
             </View>
           ) : null}
 
-          <Text style={styles.h3}>Autres méthodes</Text>
+          <Text style={styles.h3}>{R.otherMethods}</Text>
           {options
             .filter((o) => o.id !== chosen?.id)
             .map((o) => (
@@ -400,7 +409,7 @@ export default function Recharger() {
                 key={o.id}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !o.available }}
-                accessibilityLabel={`${o.label}${o.available ? '' : ', indisponible'}`}
+                accessibilityLabel={`${o.label}${o.available ? '' : R.unavailableSuffix}`}
                 disabled={!o.available}
                 onPress={() => setMethod(o.id)}
                 style={({ pressed }) => [styles.alt, !o.available && styles.altOff, pressed && { backgroundColor: colors.surfaceAlt }]}
@@ -411,15 +420,15 @@ export default function Recharger() {
                     {o.why}
                   </Text>
                 </View>
-                {!o.available ? <Tag>Indisponible</Tag> : <Text style={styles.linkText}>Choisir</Text>}
+                {!o.available ? <Tag>{t.common.unavailable}</Tag> : <Text style={styles.linkText}>{t.common.choose}</Text>}
               </Pressable>
             ))}
           {station.tel ? (
             <Pressable accessibilityRole="link" onPress={() => Linking.openURL(`tel:${station.tel!.replace(/[^+\d]/g, '')}`)} style={styles.link}>
-              <Text style={styles.linkText}>Un doute ? Appeler {opName}</Text>
+              <Text style={styles.linkText}>{R.callDoubt(opName)}</Text>
             </Pressable>
           ) : null}
-          <Text style={styles.small}>Branché ne voit jamais votre carte et n’encaisse rien : vous payez directement {opName}.</Text>
+          <Text style={styles.small}>{R.neverSee(opName)}</Text>
         </>
       ) : null}
     </ScrollView>
@@ -427,11 +436,12 @@ export default function Recharger() {
 }
 
 function PointRow({ p, onPress, selected, disabled, status }: { p: ChargePoint; onPress?: () => void; selected?: boolean; disabled?: boolean; status?: AvailItem }) {
+  const R = useT().recharger;
   const dc = isDc(p.kw, p.plugs);
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Point se terminant par ${p.short.split('').join(' ')}, ${kw(p.kw)}, ${p.plugs.map((x) => PLUG_LABEL[x]).join(', ')}${disabled ? ', incompatible' : ''}${status && status.status !== 'inconnu' ? `, ${AVAIL_LABEL[status.status]}` : ''}`}
+      accessibilityLabel={R.pointRowA11y(p.short.split('').join(' '), kw(p.kw), p.plugs.map((x) => plugLabel(x)).join(', '), !!disabled, status && status.status !== 'inconnu' ? availLabel(status.status) : null)}
       accessibilityState={{ disabled: !!disabled, selected: !!selected }}
       disabled={disabled}
       onPress={onPress}
@@ -443,16 +453,16 @@ function PointRow({ p, onPress, selected, disabled, status }: { p: ChargePoint; 
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={styles.altTitle}>
-          {kw(p.kw)} · {dc ? 'rapide (DC)' : 'normal (AC)'}
+          {kw(p.kw)} · {dc ? R.fast : R.normal}
         </Text>
         <Text style={styles.small} numberOfLines={2}>
-          {p.plugs.map((x) => PLUG_LABEL[x]).join(', ') || 'Prise non précisée'}
-          {p.exact ? '' : ' (prises de la station)'} · {p.id}
+          {p.plugs.map((x) => plugLabel(x)).join(', ') || R.plugUnknown}
+          {p.exact ? '' : R.stationPlugs} · {p.id}
         </Text>
       </View>
       {status && status.status !== 'inconnu' ? (
         <View style={[styles.pill, status.status === 'libre' ? styles.pillFree : status.status === 'occupe' ? styles.pillBusy : styles.pillDown]}>
-          <Text style={[styles.pillText, status.status === 'libre' ? { color: colors.accentPressed } : status.status === 'occupe' ? { color: '#7A3E06' } : { color: colors.danger }]}>{AVAIL_LABEL[status.status]}</Text>
+          <Text style={[styles.pillText, status.status === 'libre' ? { color: colors.accentPressed } : status.status === 'occupe' ? { color: '#7A3E06' } : { color: colors.danger }]}>{availLabel(status.status)}</Text>
         </View>
       ) : null}
     </Pressable>

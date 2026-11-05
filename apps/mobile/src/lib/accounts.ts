@@ -73,3 +73,9 @@ export function acceptedBadges(mine: string[], accepted: string[] | null | undef
     return acc.some((a) => a.includes(f) || f.includes(a));
   });
 }
+
+/** Réinitialisation (Réglages) : comptes et badges oubliés sur ce téléphone. */
+export async function clearWallet(): Promise<void> {
+  cache = { accounts: [], badges: [] };
+  await AsyncStorage.removeItem(KEY).catch(() => undefined);
+}

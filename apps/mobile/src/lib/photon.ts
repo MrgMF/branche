@@ -1,5 +1,6 @@
 // Repli de recherche côté app quand l'API Branché n'est pas configurée (site statique) : Photon (komoot, données OSM).
 import type { Place, SearchResponse } from './navigation';
+import { tr } from '../i18n';
 
 const URL_PHOTON = 'https://photon.komoot.io/api/';
 const ZONES = [
@@ -58,8 +59,8 @@ export async function searchPhoton(q: string, near: { lat: number; lon: number }
     res = await fetch(`${URL_PHOTON}?${qs}`, { signal });
   } catch (e) {
     if (e instanceof Error && e.name === 'AbortError') throw e;
-    throw new Error('Recherche indisponible. Vérifiez votre connexion.');
+    throw new Error(tr().search.unavailableNet);
   }
-  if (!res.ok) throw new Error('Recherche indisponible pour le moment.');
-  return { provider: 'photon', attribution: '© contributeurs OpenStreetMap, Photon (komoot)', results: parsePhotonClient(await res.json().catch(() => null)) };
+  if (!res.ok) throw new Error(tr().search.unavailableNow);
+  return { provider: 'photon', attribution: tr().search.photonAttr, results: parsePhotonClient(await res.json().catch(() => null)) };
 }

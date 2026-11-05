@@ -3,8 +3,10 @@ import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navigationLinks } from '../lib/charge';
-import { bigDist, etaClock, isOverSpeed, LOW_SOC, maneuverOf } from '../lib/guidance';
-import { distText, durationText, INCIDENT_LABEL, postReport, type IncidentType } from '../lib/navigation';
+import { bigDist, etaClock, instructionOf, isOverSpeed, LOW_SOC, maneuverOf } from '../lib/guidance';
+import { useT } from '../i18n';
+import { speedUnit, speedValue } from '../i18n/format';
+import { distText, durationText, incidentLabel, postReport, type IncidentType } from '../lib/navigation';
 import { etaMessage, shareEta } from '../lib/shareEta';
 import type { TripApi } from '../lib/useTrip';
 import { isMuted, onMutedChange, setMuted } from '../lib/voice';
@@ -13,23 +15,10 @@ import { colors, fonts, radius } from '../theme';
 import { LaneArrow, ManeuverIcon, NavIcon } from './ManeuverIcon';
 import { Button } from './ui';
 
-const REPORTS: { type: IncidentType; label: string }[] = [
-  { type: 'accident', label: 'Accident' },
-  { type: 'bouchon', label: 'Bouchon' },
-  { type: 'travaux', label: 'Travaux' },
-  { type: 'obstacle', label: 'Obstacle' },
-  { type: 'borne_hs', label: 'Borne hors service' },
-];
-
-const MANEUVER_A11Y: Record<string, string> = {
-  roundabout: 'rond-point',
-  'exit-right': 'sortie à droite',
-  'exit-left': 'sortie à gauche',
-  'keep-right': 'rester à droite',
-  'keep-left': 'rester à gauche',
-};
+const REPORTS: IncidentType[] = ['accident', 'bouchon', 'travaux', 'obstacle', 'borne_hs'];
 
 export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: Station) => void }) {
+  const t = useT();
   const insets = useSafeAreaInsets();
   const trip = nav.trip;
   const [muted, setMutedState] = useState(isMuted());
@@ -46,7 +35,7 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
   const next = trip.next;
   const m = next ? maneuverOf(next.step) : 'straight';
   const d = bigDist(next?.inM ?? 0);
-  const street = next ? next.step.street ?? next.step.towards ?? next.step.instruction : 'Suivez l’itinéraire';
+  const street = next ? next.step.street ?? next.step.towards ?? instructionOf(next.step) : t.guidance.follow;
   const lanes = next && next.inM < 1500 ? next.step.lanes : undefined;
   const over = isOverSpeed(trip.speedKmh, trip.limitKmh);
   const remainingS = trip.remainingS || trip.route.durationS;
@@ -54,23 +43,24 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
   // Avec une étape de recharge, la batterie utile est celle en arrivant à la borne.
   const soc = trip.via.length && typeof trip.viaSoc === 'number' ? trip.viaSoc : trip.battery?.[trip.route.id];
   const station = trip.arrivedAtVia?.station ?? (trip.arrived ? trip.dest.station : undefined);
-  const exitTxt = next?.step.exit ? `, sortie ${next.step.exit}` : '';
+  const exitTxt = next?.step.exit ? t.guidance.exit(next.step.exit) : '';
+  const what = t.guidance.maneuver[m] ?? '';
 
-  async function report(t: IncidentType) {
+  async function report(type: IncidentType) {
     setReporting(false);
     const p = nav.position;
-    if (!p) return setNote('Position inconnue : signalement impossible.');
+    if (!p) return setNote(t.guidance.noPos);
     try {
-      await postReport(t, p);
-      setNote(`${INCIDENT_LABEL[t]} signalé, merci.`);
+      await postReport(type, p);
+      setNote(t.guidance.reported(incidentLabel(type) ?? type));
     } catch (e) {
-      setNote(e instanceof Error ? e.message : 'Signalement impossible.');
+      setNote(e instanceof Error ? e.message : t.guidance.reportFailed);
     }
   }
 
   async function share() {
     const r = await shareEta(etaMessage(trip!.dest.name, etaClock(remainingS), Math.max(1, Math.round(remainingS / 60))));
-    setNote(r === 'copied' ? 'Heure d’arrivée copiée : collez-la dans un message.' : r === 'shared' ? 'Heure d’arrivée partagée.' : 'Partage impossible sur cet appareil.');
+    setNote(r === 'copied' ? t.guidance.shareCopied : r === 'shared' ? t.guidance.shareDone : t.guidance.shareFailed);
   }
 
   const banner = trip.arrived || trip.arrivedAtVia ? null : (
@@ -79,10 +69,10 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
       accessible
       accessibilityRole="summary"
       accessibilityLiveRegion="polite"
-      accessibilityLabel={next ? `Dans ${distText(next.inM)}, ${MANEUVER_A11Y[m] ?? ''}${exitTxt}. ${next.step.instruction}` : 'Suivez l’itinéraire'}
+      accessibilityLabel={next ? t.guidance.bannerA11y(distText(next.inM), what, exitTxt, instructionOf(next.step)) : t.guidance.follow}
     >
       <View style={styles.bannerRow}>
-        <View testID="maneuver-icon" accessibilityLabel={`Manœuvre : ${m}${exitTxt}`}>
+        <View testID="maneuver-icon" accessibilityLabel={t.guidance.maneuverA11y(what, exitTxt)}>
           <ManeuverIcon maneuver={m} exit={next?.step.exit} angle={next?.step.angle} size={84} />
         </View>
         <View style={{ flex: 1 }}>
@@ -96,7 +86,7 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
         </View>
       </View>
       {lanes?.length ? (
-        <View style={styles.lanes} accessibilityLabel={`Voies : prenez ${lanes.map((l, i) => (l.active ? i + 1 : null)).filter(Boolean).join(' ou ')} sur ${lanes.length}, en partant de la gauche`}>
+        <View style={styles.lanes} accessibilityLabel={t.guidance.lanes(lanes.map((l, i) => (l.active ? i + 1 : null)).filter(Boolean).join(t.guidance.or), lanes.length)}>
           {lanes.map((l, i) => (
             <View key={i} style={[styles.lane, i > 0 && styles.laneSep]}>
               <LaneArrow dirs={l.directions} active={l.active} />
@@ -106,7 +96,7 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
       ) : null}
       {trip.then && trip.then.gapM < 300 && maneuverOf(trip.then.step) !== 'arrive' ? (
         <View style={styles.then}>
-          <Text style={styles.thenText}>Puis</Text>
+          <Text style={styles.thenText}>{t.guidance.then}</Text>
           <ManeuverIcon maneuver={maneuverOf(trip.then.step)} exit={trip.then.step.exit} angle={trip.then.step.angle} size={28} />
         </View>
       ) : null}
@@ -117,10 +107,10 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         {banner}
-        {trip.gps === 'lost' ? <Text style={[styles.pill, styles.pillWarn]}>Signal GPS perdu : le guidage reprendra dès que la position sera retrouvée.</Text> : null}
+        {trip.gps === 'lost' ? <Text style={[styles.pill, styles.pillWarn]}>{t.guidance.gpsLost}</Text> : null}
         {trip.gps === 'unavailable' ? (
           <View style={[styles.pill, styles.pillWarn, { gap: 8 }]}>
-            <Text style={styles.pillText}>GPS indisponible : autorisez la localisation pour être guidé, ou continuez avec :</Text>
+            <Text style={styles.pillText}>{t.guidance.gpsUnavailable}</Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {navigationLinks(trip.dest).map((l) => (
                 <Button key={l.label} label={l.label} variant="light" style={{ flex: 1, minHeight: 48 }} onPress={() => Linking.openURL(l.url)} />
@@ -138,31 +128,31 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
             {trip.toast.text}
           </Text>
         ) : null}
-        {trip.rerouting ? <Text style={[styles.pill, styles.pillInfo]}>Recalcul de l’itinéraire…</Text> : null}
+        {trip.rerouting ? <Text style={[styles.pill, styles.pillInfo]}>{t.guidance.rerouting}</Text> : null}
         {note ? <Text style={[styles.pill, styles.pillInfo]}>{note}</Text> : null}
       </View>
 
       {!trip.arrived && !trip.arrivedAtVia ? (
         <View style={[styles.side, { bottom: 150 + insets.bottom }]} pointerEvents="box-none">
-          <View style={styles.speedBox} accessible accessibilityLabel={`Vitesse ${trip.speedKmh === null ? 'inconnue' : `${Math.round(trip.speedKmh)} kilomètres heure`}${trip.limitKmh ? `, limitée à ${trip.limitKmh}` : ''}${over ? ', dépassement' : ''}`}>
+          <View style={styles.speedBox} accessible accessibilityLabel={t.guidance.speedA11y(trip.speedKmh === null ? null : `${speedValue(trip.speedKmh)} ${speedUnit()}`, trip.limitKmh ? `${speedValue(trip.limitKmh)} ${speedUnit()}` : null, over)}>
             {trip.limitKmh ? (
               <View style={styles.limit} testID="speed-limit">
-                <Text style={styles.limitText}>{trip.limitKmh}</Text>
+                <Text style={styles.limitText}>{speedValue(trip.limitKmh)}</Text>
               </View>
             ) : null}
             <View style={[styles.speed, over && styles.speedOver]} testID="speed">
-              <Text style={[styles.speedText, over && { color: '#FFFFFF' }]}>{trip.speedKmh === null ? '–' : Math.round(trip.speedKmh)}</Text>
-              <Text style={[styles.speedUnit, over && { color: '#FFFFFF' }]}>km/h</Text>
+              <Text style={[styles.speedText, over && { color: '#FFFFFF' }]}>{trip.speedKmh === null ? '–' : speedValue(trip.speedKmh)}</Text>
+              <Text style={[styles.speedUnit, over && { color: '#FFFFFF' }]}>{speedUnit()}</Text>
             </View>
           </View>
           <View style={styles.actions}>
-            <RoundBtn label={muted ? 'Réactiver la voix' : 'Couper la voix'} pressed={muted} onPress={() => setMuted(!muted)}>
+            <RoundBtn label={muted ? t.guidance.voiceOn : t.guidance.voiceOff} pressed={muted} onPress={() => setMuted(!muted)}>
               <NavIcon name={muted ? 'voice-off' : 'voice-on'} size={26} color={muted ? colors.danger : colors.ink} />
             </RoundBtn>
-            <RoundBtn label="Signaler" onPress={() => setReporting(true)}>
+            <RoundBtn label={t.guidance.report} onPress={() => setReporting(true)}>
               <NavIcon name="report" size={26} color={colors.busy} />
             </RoundBtn>
-            <RoundBtn label="Partager mon heure d’arrivée" onPress={share}>
+            <RoundBtn label={t.guidance.share} onPress={share}>
               <NavIcon name="share" size={24} />
             </RoundBtn>
           </View>
@@ -172,43 +162,46 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 12 }]}>
         {trip.arrived || trip.arrivedAtVia ? (
           <View style={{ gap: 10 }} accessibilityLiveRegion="polite">
-            <Text style={styles.kicker}>{trip.arrivedAtVia ? 'Étape atteinte' : 'Vous êtes arrivé'}</Text>
+            <Text style={styles.kicker}>{trip.arrivedAtVia ? t.guidance.viaReached : t.guidance.arrived}</Text>
             <Text style={styles.arrTitle} numberOfLines={2} accessibilityRole="header">
               {(trip.arrivedAtVia ?? trip.dest).name}
             </Text>
-            {station ? <Button label="Recharger ici" onPress={() => onRecharge(station)} hint="Ouvre le parcours de recharge et de paiement de cette borne" /> : null}
-            {trip.arrivedAtVia ? <Button label="Reprendre le trajet" variant="secondary" onPress={nav.resumeAfterVia} /> : null}
-            <Button label="Terminer" variant="ghost" onPress={nav.clear} />
+            {station ? <Button label={t.here.rechargeHere} onPress={() => onRecharge(station)} hint={t.guidance.rechargeHint} /> : null}
+            {trip.arrivedAtVia ? <Button label={t.guidance.resume} variant="secondary" onPress={nav.resumeAfterVia} /> : null}
+            <Button label={t.guidance.finish} variant="ghost" onPress={nav.clear} />
           </View>
         ) : (
           <View style={styles.bottomRow}>
-            <View style={{ flex: 1 }} accessible accessibilityLabel={`Arrivée prévue à ${etaClock(remainingS)}, dans ${durationText(remainingS)}, ${distText(remainingM)} restants`}>
+            <View style={{ flex: 1 }} accessible accessibilityLabel={t.guidance.etaA11y(etaClock(remainingS), durationText(remainingS), distText(remainingM))}>
               <Text style={styles.eta}>{etaClock(remainingS)}</Text>
               <Text style={styles.etaMeta}>
                 {durationText(remainingS)} · {distText(remainingM)}
-                {typeof soc === 'number' ? <Text style={{ color: soc < LOW_SOC ? colors.danger : colors.accentPressed }}> · batterie {Math.max(0, soc)} %</Text> : null}
+                {typeof soc === 'number' ? <Text style={{ color: soc < LOW_SOC ? colors.danger : colors.accentPressed }}>{t.guidance.battery(Math.max(0, soc))}</Text> : null}
               </Text>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Arrêter le guidage" onPress={nav.clear} style={styles.stop}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t.guidance.stop} onPress={nav.clear} style={styles.stop}>
               <NavIcon name="close" size={26} color="#FFFFFF" />
             </Pressable>
           </View>
         )}
-        <Text style={styles.small}>{trip.provider === 'tomtom' ? '© TomTom · trafic temps réel' : '© contributeurs OpenStreetMap, Valhalla'} · Bison Futé · zones de danger © OSM</Text>
+        <Text style={styles.small}>
+          {trip.provider === 'tomtom' ? t.guidance.attrTomtom : t.guidance.attrOsm}
+          {t.guidance.attrTail}
+        </Text>
       </View>
 
       {reporting ? (
         <View style={styles.scrim}>
           <View style={[styles.reportSheet, { paddingBottom: insets.bottom + 16 }]} accessibilityViewIsModal>
             <Text style={styles.arrTitle} accessibilityRole="header">
-              Signaler
+              {t.guidance.report}
             </Text>
-            <Text style={styles.smallDark}>Un geste, anonyme, visible 1 h (24 h pour une borne). Seulement ce que vous voyez — le passager de préférence.</Text>
+            <Text style={styles.smallDark}>{t.guidance.reportNote}</Text>
             <View style={styles.grid}>
               {REPORTS.map((x) => (
-                <Button key={x.type} label={x.label} variant="ghost" style={styles.reportBtn} onPress={() => report(x.type)} />
+                <Button key={x} label={incidentLabel(x) ?? x} variant="ghost" style={styles.reportBtn} onPress={() => report(x)} />
               ))}
-              <Button label="Annuler" variant="secondary" style={styles.reportBtn} onPress={() => setReporting(false)} />
+              <Button label={t.common.cancel} variant="secondary" style={styles.reportBtn} onPress={() => setReporting(false)} />
             </View>
           </View>
         </View>

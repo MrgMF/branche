@@ -1,6 +1,8 @@
 // Itinéraire le plus rapide (trafic), perturbations et zones de danger.
 import { API_URL, DATA_URL } from './config';
 import { searchPhoton } from './photon';
+import { tr } from '../i18n';
+import { distText as distTextFmt, durationText as durationTextFmt } from '../i18n/format';
 
 export type LonLat = [number, number];
 
@@ -105,11 +107,11 @@ async function get<T>(url: string, ms = 20000, init?: RequestInit): Promise<T> {
   try {
     const res = await fetch(url, { ...init, signal: ctrl.signal });
     const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error((body as { error?: { message?: string } }).error?.message ?? `Erreur ${res.status}`);
+    if (!res.ok) throw new Error((body as { error?: { message?: string } }).error?.message ?? tr().errors.http(res.status));
     return body as T;
   } catch (e) {
     if (e instanceof Error && e.message && !/abort|fetch|network/i.test(e.message)) throw e;
-    throw new Error('Service d’itinéraire injoignable. Vérifiez votre connexion.');
+    throw new Error(tr().trip.unreachable);
   } finally {
     clearTimeout(t);
   }
@@ -158,11 +160,11 @@ export async function searchPlaces(q: string, near?: { lat: number; lon: number 
     });
   } catch (e) {
     if (e instanceof Error && e.name === 'AbortError') throw e;
-    throw new Error('Recherche indisponible. Vérifiez votre connexion.');
+    throw new Error(tr().search.unavailableNet);
   }
   const body = (await res.json().catch(() => ({}))) as Partial<SearchResponse> & { error?: { message?: string } };
   if (res.status === 503) return searchPhoton(q, near, signal);
-  if (!res.ok) throw new Error(body.error?.message ?? 'Recherche indisponible pour le moment.');
+  if (!res.ok) throw new Error(body.error?.message ?? tr().search.unavailableNow);
   return { provider: body.provider ?? 'photon', attribution: body.attribution ?? '', results: body.results ?? [] };
 }
 
@@ -182,7 +184,7 @@ export async function postReport(type: IncidentType, at: { lat: number; lon: num
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ type, lat: at.lat, lon: at.lon }),
   });
-  if (!res.ok) throw new Error('Signalement impossible pour le moment.');
+  if (!res.ok) throw new Error(tr().guidance.reportUnavailable);
 }
 
 let zonesPromise: Promise<DangerZone[]> | null = null;
@@ -271,20 +273,7 @@ export function bearing(a: { lat: number; lon: number }, b: { lat: number; lon: 
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
-export const INCIDENT_LABEL: Record<IncidentType, string> = {
-  accident: 'Accident',
-  travaux: 'Travaux',
-  fermeture: 'Route fermée',
-  bouchon: 'Bouchon',
-  obstacle: 'Obstacle',
-  meteo: 'Météo',
-  autre: 'Perturbation',
-  borne_hs: 'Borne hors service',
-  qr_suspect: 'QR code suspect',
-};
+export const incidentLabel = (t: IncidentType | string): string | undefined => (tr().incident as Record<string, string>)[t];
 
-export const durationText = (s: number) => {
-  const m = Math.max(1, Math.round(s / 60));
-  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
-};
-export const distText = (m: number) => (m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`);
+export const durationText = durationTextFmt;
+export const distText = distTextFmt;

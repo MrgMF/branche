@@ -1,34 +1,23 @@
 // Logique de guidage pure (testée) : annonces vocales, limitation, trajet plus rapide, trafic, batterie, bornes sur le trajet.
 import { metersBetween, progressOnRoute, type LonLat, type Maneuver, type RouteOption, type RouteStep } from './navigation';
 import type { Station } from './stations';
+import { lang, tr } from '../i18n';
+import { bigDist as bigDistFmt, etaClock as etaClockFmt, spokenDist as spokenDistFmt } from '../i18n/format';
 
 // ---------------------------------------------------------------- Distances et textes
 
 /** Distance affichée à l'écran : arrondis de lecture rapide (comme Waze). */
-export function bigDist(m: number): { value: string; unit: string } {
-  if (m >= 10000) return { value: String(Math.round(m / 1000)), unit: 'km' };
-  if (m >= 1000) return { value: (Math.round(m / 100) / 10).toLocaleString('fr-FR'), unit: 'km' };
-  if (m >= 300) return { value: String(Math.round(m / 50) * 50), unit: 'm' };
-  return { value: String(Math.max(0, Math.round(m / 10) * 10)), unit: 'm' };
-}
+export const bigDist = bigDistFmt;
 
 /** Distance lue par la voix (« 1,5 kilomètre », « 300 mètres »). */
-export function spokenDist(m: number): string {
-  if (m >= 950) {
-    const km = Math.round(m / 500) / 2;
-    return `${km.toLocaleString('fr-FR')} kilomètre${km >= 2 ? 's' : ''}`;
-  }
-  const r = m >= 200 ? Math.round(m / 100) * 100 : Math.max(10, Math.round(m / 10) * 10);
-  return `${r} mètres`;
-}
+export const spokenDist = spokenDistFmt;
 
-export const etaClock = (seconds: number, now = Date.now()) =>
-  new Date(now + seconds * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+export const etaClock = etaClockFmt;
 
 /** Écart affiché entre un trajet et le plus rapide (« +6 min », « même durée »). */
 export function deltaText(s: number): string {
   const m = Math.round(s / 60);
-  return m <= 0 ? 'Même durée' : `+${m} min`;
+  return m <= 0 ? tr().trip.same : tr().trip.delta(m);
 }
 
 // ---------------------------------------------------------------- Étapes
@@ -81,15 +70,18 @@ export function pickAnnouncement(idx: number, inM: number, legM: number, speedKm
   return null;
 }
 
+/** Consigne d'une étape dans la langue courante : texte du fournisseur en français, sinon générée depuis la manœuvre. */
+export function instructionOf(step: RouteStep): string {
+  if (lang() === 'fr' && step.instruction) return step.instruction;
+  return tr().instr[maneuverOf(step)]({ street: step.street, towards: step.towards, exit: step.exit, exitNumber: step.exitNumber });
+}
+
 /** Texte de l'annonce, avec enchaînement « puis… » si la manœuvre suivante est très proche. */
 export function announcementText(level: AnnounceLevel, inM: number, step: RouteStep, then?: { step: RouteStep; gapM: number }): string {
-  const what = step.instruction.replace(/\.$/, '');
-  const lower = what.charAt(0).toLowerCase() + what.slice(1);
-  const base = level === 'near' ? what : `Dans ${spokenDist(inM)}, ${lower}`;
-  if (then && then.gapM < 150 && maneuverOf(then.step) !== 'arrive') {
-    const t = then.step.instruction.replace(/\.$/, '');
-    return `${base}, puis ${t.charAt(0).toLowerCase()}${t.slice(1)}.`;
-  }
+  const v = tr().voice;
+  const what = instructionOf(step).replace(/\.$/, '');
+  const base = level === 'near' ? what : v.inDist(spokenDist(inM), what);
+  if (then && then.gapM < 150 && maneuverOf(then.step) !== 'arrive') return v.then(base, instructionOf(then.step).replace(/\.$/, ''));
   return `${base}.`;
 }
 

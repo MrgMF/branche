@@ -2,6 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
+import { localeTag } from '../i18n';
 
 const KEY = 'branche.nav.voice.v1';
 let muted = false;
@@ -12,6 +13,7 @@ export interface Spoken {
   t: number;
   text: string;
   muted: boolean;
+  lang: string;
 }
 /** Dernières annonces (dites ou non, si la voix est coupée). */
 export const voiceLog: Spoken[] = [];
@@ -51,12 +53,13 @@ export function onMutedChange(l: (m: boolean) => void): () => void {
 }
 
 export function speak(text: string): void {
-  voiceLog.push({ t: Date.now(), text, muted });
+  voiceLog.push({ t: Date.now(), text, muted, lang: localeTag() });
   if (voiceLog.length > 50) voiceLog.shift();
   if (muted) return;
   try {
     Speech.stop();
-    Speech.speak(text, { language: 'fr-FR', rate: 1.0 });
+    // Voix de la langue de l'app (région de l'appareil si elle correspond : fr-FR, en-US, de-DE…)
+    Speech.speak(text, { language: localeTag(), rate: 1.0 });
   } catch {
     /* synthèse vocale indisponible */
   }

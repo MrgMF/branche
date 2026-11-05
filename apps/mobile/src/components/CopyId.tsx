@@ -3,27 +3,29 @@ import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { useT } from '../i18n';
 
 export function CopyId({ id, dark }: { id: string; dark?: boolean }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   return (
     <View style={[styles.box, dark && styles.dark]}>
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={[styles.label, dark && { color: colors.nightMuted }]}>Identifiant du point à saisir</Text>
+        <Text style={[styles.label, dark && { color: colors.nightMuted }]}>{t.copyId.label}</Text>
         <Text style={[styles.id, dark && { color: '#F2F6F4' }]} selectable>
           {id}
         </Text>
       </View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={copied ? 'Identifiant copié' : `Copier l’identifiant ${id}`}
+        accessibilityLabel={copied ? t.copyId.copiedA11y : t.copyId.copyA11y(id)}
         onPress={async () => {
           await Clipboard.setStringAsync(id).catch(() => undefined);
           setCopied(true);
         }}
         style={styles.btn}
       >
-        <Text style={styles.btnText}>{copied ? 'Copié' : 'Copier'}</Text>
+        <Text style={styles.btnText}>{copied ? t.common.copied : t.common.copy}</Text>
       </Pressable>
     </View>
   );

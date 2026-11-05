@@ -7,14 +7,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Notice, Stat } from '../components/ui';
 import { durationLabel } from '../lib/estimate';
 import { euros } from '../lib/format';
-import { clearHistory, loadHistory, METHOD_LABEL, monthStats, removeRecord, toCsv, totals, type ChargeRecord } from '../lib/history';
+import { clearHistory, loadHistory, methodLabel, monthStats, removeRecord, toCsv, totals, type ChargeRecord } from '../lib/history';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { ScreenHeader } from '../components/Screen';
+import { useT } from '../i18n';
+import { clock, dateShort, eur, kwhText } from '../i18n/format';
 
-const dateFr = (t: number) => new Date(t).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-const hour = (t: number) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-const perKwh = (x: number | null) => (x == null ? '—' : `${x.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
+const dateFr = dateShort;
+const hour = clock;
+const perKwh = (x: number | null) => (x == null ? '—' : eur(x));
 
 export default function Historique() {
+  const t = useT();
+  const H = t.history;
   const insets = useSafeAreaInsets();
   const [list, setList] = useState<ChargeRecord[] | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
@@ -28,7 +33,7 @@ export default function Historique() {
   async function exportCsv() {
     if (!list?.length) return;
     const csv = toCsv(list);
-    const name = `branche-recharges-${new Date().toISOString().slice(0, 10)}.csv`;
+    const name = `${H.csvFile}-${new Date().toISOString().slice(0, 10)}.csv`;
     if (Platform.OS === 'web') {
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
       const a = document.createElement('a');
@@ -38,52 +43,50 @@ export default function Historique() {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setMsg(`Fichier ${name} téléchargé.`);
+      setMsg(H.downloaded(name));
     } else {
       // Feuille de partage du système (e-mail, Fichiers, messagerie…) : le CSV en texte.
       await Share.share({ title: name, message: csv }).catch(() => undefined);
     }
   }
 
-  const back = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const m = list ? monthStats(list) : null;
   const all = list ? totals(list) : null;
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]}>
-      <View style={styles.head}>
-        <Button label="Retour" variant="ghost" onPress={back} style={styles.back} />
-        <Text style={styles.h1} accessibilityRole="header">Mes recharges</Text>
-      </View>
+      <ScreenHeader title={t.titles.historique} />
 
-      {m ? (
+      {m && list?.length ? (
         <View style={{ gap: 8 }}>
-          <Text style={styles.h2}>Ce mois-ci · {m.month}</Text>
+          <Text style={styles.h2}>{H.thisMonth(m.month)}</Text>
           <View style={styles.stats}>
-            <Stat label="Dépensé" value={euros(Math.round(m.total * 100))} />
-            <Stat label="Recharges" value={String(m.count)} />
-            <Stat label="Prix moyen / kWh" value={perKwh(m.avgPerKwh)} />
+            <Stat label={H.spent} value={euros(Math.round(m.total * 100))} />
+            <Stat label={H.charges} value={String(m.count)} />
+            <Stat label={H.avgKwh} value={perKwh(m.avgPerKwh)} />
           </View>
-          {m.count > m.paidCount ? <Text style={styles.small}>{m.count - m.paidCount} recharge(s) sans montant renseigné, non comptée(s) dans le total.</Text> : null}
-          {all && all.count > m.count ? <Text style={styles.small}>Depuis le début : {euros(Math.round(all.total * 100))} pour {all.count} recharges.</Text> : null}
+          {m.count > m.paidCount ? <Text style={styles.small}>{H.unpaid(m.count - m.paidCount)}</Text> : null}
+          {all && all.count > m.count ? <Text style={styles.small}>{H.sinceStart(euros(Math.round(all.total * 100)), all.count)}</Text> : null}
         </View>
       ) : null}
 
+      {list?.length ? (
       <View style={styles.row}>
-        <Button label="Exporter en CSV" variant="secondary" onPress={exportCsv} disabled={!list?.length} style={{ flex: 1 }} hint="Pour une note de frais : tableur, séparateur point-virgule" />
+        <Button label={H.export} variant="secondary" onPress={exportCsv} disabled={!list?.length} style={{ flex: 1 }} hint={H.exportHint} />
       </View>
+      ) : null}
       {msg ? <Notice>{msg}</Notice> : null}
 
       {list && !list.length ? (
         <View style={styles.empty}>
-          <Text style={styles.h2}>Aucune recharge pour l’instant</Text>
-          <Text style={styles.p}>Après chaque recharge suivie dans Branché, le reçu (borne, durée, kWh, montant payé) s’ajoute ici, sur votre téléphone.</Text>
-          <Button label="Trouver une borne" onPress={() => router.replace('/')} />
+          <Text style={styles.h2}>{H.emptyTitle}</Text>
+          <Text style={styles.p}>{H.emptyBody}</Text>
+          <Button label={t.common.findStation} onPress={() => router.replace('/')} />
         </View>
       ) : null}
 
       {list?.map((r) => (
-        <View key={r.id} style={styles.item} accessibilityLabel={`Recharge du ${dateFr(r.startedAt)} à ${r.stationName}`}>
+        <View key={r.id} style={styles.item} accessibilityLabel={H.itemA11y(dateFr(r.startedAt), r.stationName)}>
           <View style={styles.itemHead}>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={styles.itemTitle} numberOfLines={2}>
@@ -91,23 +94,23 @@ export default function Historique() {
               </Text>
               <Text style={styles.small}>
                 {dateFr(r.startedAt)} · {hour(r.startedAt)} · {durationLabel((r.endedAt - r.startedAt) / 60_000)}
-                {r.pdcId ? ` · point …${r.pdcId.slice(-4)}` : ''}
+                {r.pdcId ? H.point(r.pdcId.slice(-4)) : ''}
               </Text>
             </View>
             <Text style={styles.amount}>{r.pricePaid != null ? euros(Math.round(r.pricePaid * 100)) : '—'}</Text>
           </View>
           <Text style={styles.small}>
-            {r.operatorName} · {METHOD_LABEL[r.method]} · {r.kWh != null ? `${r.kWh.toLocaleString('fr-FR')} kWh${r.kWhEstimated ? ' (estimés)' : ''}` : 'kWh inconnus'}
-            {r.ok === false ? ' · Échec signalé' : ''}
+            {r.operatorName} · {methodLabel(r.method)} · {r.kWh != null ? `${kwhText(r.kWh)}${r.kWhEstimated ? H.kwhEst : ''}` : H.kwhUnknown}
+            {r.ok === false ? H.failed : ''}
           </Text>
           {confirmId === r.id ? (
             <View style={styles.row}>
-              <Button label="Supprimer" variant="secondary" onPress={async () => setList(await removeRecord(r.id))} style={styles.small2} />
-              <Button label="Annuler" variant="ghost" onPress={() => setConfirmId(null)} style={styles.small2} />
+              <Button label={t.common.delete} variant="secondary" onPress={async () => setList(await removeRecord(r.id))} style={styles.small2} />
+              <Button label={t.common.cancel} variant="ghost" onPress={() => setConfirmId(null)} style={styles.small2} />
             </View>
           ) : (
-            <Pressable accessibilityRole="button" accessibilityLabel={`Supprimer la recharge du ${dateFr(r.startedAt)}`} onPress={() => setConfirmId(r.id)} style={styles.link}>
-              <Text style={styles.linkDanger}>Supprimer</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={H.delA11y(dateFr(r.startedAt))} onPress={() => setConfirmId(r.id)} style={styles.link}>
+              <Text style={styles.linkDanger}>{t.common.delete}</Text>
             </Pressable>
           )}
         </View>
@@ -116,10 +119,10 @@ export default function Historique() {
       {list?.length ? (
         confirmAll ? (
           <View style={{ gap: 8 }}>
-            <Notice tone="error">Supprimer définitivement les {list.length} recharges de ce téléphone ?</Notice>
+            <Notice tone="error">{H.delAllQ(list.length)}</Notice>
             <View style={styles.row}>
               <Button
-                label="Tout supprimer"
+                label={H.delAll}
                 variant="secondary"
                 onPress={async () => {
                   await clearHistory();
@@ -128,16 +131,16 @@ export default function Historique() {
                 }}
                 style={styles.small2}
               />
-              <Button label="Annuler" variant="ghost" onPress={() => setConfirmAll(false)} style={styles.small2} />
+              <Button label={t.common.cancel} variant="ghost" onPress={() => setConfirmAll(false)} style={styles.small2} />
             </View>
           </View>
         ) : (
           <Pressable accessibilityRole="button" onPress={() => setConfirmAll(true)} style={styles.link}>
-            <Text style={styles.linkDanger}>Tout supprimer</Text>
+            <Text style={styles.linkDanger}>{H.delAll}</Text>
           </Pressable>
         )
       ) : null}
-      <Text style={styles.small}>Historique stocké uniquement sur ce téléphone. Les montants sont ceux que vous avez saisis ; le justificatif officiel vient de l’opérateur.</Text>
+      <Text style={styles.small}>{H.footer}</Text>
     </ScrollView>
   );
 }

@@ -1,4 +1,5 @@
 // Vérification des QR codes de bornes (anti « quishing ») — fonctions pures, testées dans src/lib/qr.test.ts.
+import { tr } from '../i18n';
 
 export interface Operator {
   key: string;
@@ -96,21 +97,21 @@ const safeDecode = (x: string) => {
 export function verifyQr(raw: string, stationOperatorKey: string | null, operators: Operator[], opts: VerifyOptions = {}): QrResult {
   const text = (raw ?? '').trim();
   const reasons: string[] = [];
-  if (!text) return { kind: 'invalid', verdict: 'dangerous', reasons: ['QR code vide.'] };
+  if (!text) return { kind: 'invalid', verdict: 'dangerous', reasons: [tr().qr.empty] };
 
   // Identifiant de borne seul (pas d'URL)
   const evse = normalizeEvse(text);
-  if (evse) return { kind: 'evse', evse, verdict: 'known-operator', reasons: ['Identifiant de point de charge reconnu.'] };
+  if (evse) return { kind: 'evse', evse, verdict: 'known-operator', reasons: [tr().qr.evse] };
 
   if (/^\s*(javascript|data|file|vbscript|intent|blob):/i.test(text)) {
-    return { kind: 'url', url: text, verdict: 'dangerous', reasons: ['Lien de type non autorisé (script ou donnée embarquée).'] };
+    return { kind: 'url', url: text, verdict: 'dangerous', reasons: [tr().qr.scheme] };
   }
 
   let u: URL;
   try {
     u = new URL(text);
   } catch {
-    return { kind: 'invalid', verdict: 'dangerous', reasons: ['Ce QR code ne contient ni lien ni identifiant de borne.'] };
+    return { kind: 'invalid', verdict: 'dangerous', reasons: [tr().qr.notQr] };
   }
 
   const host = u.hostname.toLowerCase();
@@ -118,11 +119,11 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
   const domain = registrableDomain(host);
   const base: QrResult = { kind: 'url', url: u.toString(), verdict: 'unknown', domain, host: u.host.toLowerCase(), reasons };
 
-  if (u.protocol !== 'https:' && !(isDevHost && u.protocol === 'http:')) reasons.push('Le lien n’est pas sécurisé (pas de https).');
-  if (u.username || u.password) reasons.push('Le lien contient des identifiants cachés.');
-  if (/(^|\.)xn--/.test(host)) reasons.push('Nom de domaine à caractères trompeurs (punycode).');
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith('[')) reasons.push('Adresse IP au lieu d’un nom de domaine.');
-  if (SHORTENERS.has(domain) || SHORTENERS.has(host)) reasons.push('Lien raccourci : la destination réelle est masquée.');
+  if (u.protocol !== 'https:' && !(isDevHost && u.protocol === 'http:')) reasons.push(tr().qr.http);
+  if (u.username || u.password) reasons.push(tr().qr.creds);
+  if (/(^|\.)xn--/.test(host)) reasons.push(tr().qr.punycode);
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith('[')) reasons.push(tr().qr.ip);
+  if (SHORTENERS.has(domain) || SHORTENERS.has(host)) reasons.push(tr().qr.shortener);
   if (reasons.length) return { ...base, verdict: 'dangerous' };
 
   const owner = isDevHost ? operators.find((o) => o.domains.includes(u.host.toLowerCase())) : operators.find((o) => o.domains.includes(domain));
@@ -134,14 +135,14 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
         ...base,
         verdict: stationOperatorKey ? 'official' : 'known-operator',
         operatorKey: owner.key,
-        reasons: [`Domaine de ${owner.names[0]} selon la base nationale IRVE.`],
+        reasons: [tr().qr.official(owner.names[0])],
       };
     }
     return {
       ...base,
       verdict: 'other-operator',
       operatorKey: owner.key,
-      reasons: [`Ce QR code mène à ${owner.names[0]}, pas à l’opérateur de cette borne${stationOp ? ` (${stationOp.names[0]})` : ''}.`],
+      reasons: [tr().qr.otherOp(owner.names[0], stationOp?.names[0] ?? null)],
     };
   }
 
@@ -154,10 +155,10 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
       if (d.includes(':')) continue;
       const known = label(d);
       if (sub.includes(d) || (known.length >= 5 && subLabels.includes(known))) {
-        return { ...base, verdict: 'dangerous', reasons: [`Ce lien se fait passer pour ${o.names[0]} (${d}) : le site réel est ${domain}.`] };
+        return { ...base, verdict: 'dangerous', reasons: [tr().qr.impersonate(o.names[0], d, domain)] };
       }
       if (rest.includes(d)) {
-        return { ...base, verdict: 'dangerous', reasons: [`Le nom de ${o.names[0]} (${d}) apparaît dans le lien, mais le site réel est ${domain}.`] };
+        return { ...base, verdict: 'dangerous', reasons: [tr().qr.nameInLink(o.names[0], d, domain)] };
       }
     }
   }
@@ -167,7 +168,7 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
     return {
       ...base,
       verdict: 'payment-platform',
-      reasons: [`Paiement via ${platform} : n’importe qui peut créer ce type de lien. Vérifiez que le bénéficiaire affiché est bien ${stationOp?.names[0] ?? 'l’opérateur de la borne'}.`],
+      reasons: [tr().qr.platform(platform, stationOp?.names[0] ?? null)],
     };
   }
 
@@ -178,25 +179,25 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
       const known = label(d);
       if (known.length < 4 || d.includes(':')) continue;
       if (domain.startsWith(`${d}.`)) {
-        return { ...base, verdict: 'dangerous', reasons: [`Ce lien se fait passer pour ${o.names[0]} (${d}) : le site réel est ${domain}.`] };
+        return { ...base, verdict: 'dangerous', reasons: [tr().qr.impersonate(o.names[0], d, domain)] };
       }
       if (lbl === known) {
         // Fraude documentée : même nom, autre extension (izivia.site). Les domaines secondaires réels sont déclarés dans le registre.
-        return { ...base, verdict: 'dangerous', reasons: [`Ce site porte le nom de ${o.names[0]} mais n’est pas son domaine (${d}).`] };
+        return { ...base, verdict: 'dangerous', reasons: [tr().qr.nameNotDomain(o.names[0], d)] };
       }
       const minLen = Math.min(known.length, lbl.length);
       if (minLen === 5 && editDistance(lbl, known, 1) <= 1) {
-        return { ...base, verdict: 'unknown', reasons: [`Ce domaine ressemble à celui de ${o.names[0]} (${d}) sans l’être.`] };
+        return { ...base, verdict: 'unknown', reasons: [tr().qr.lookalike(o.names[0], d)] };
       }
       // Libellés courts : seules les substitutions de caractères sosies comptent (0/o, 1/l, rn/m…)
       const close = minLen >= 6 ? editDistance(lbl, known, 2) <= 2 : lbl !== known && lookalike(lbl) === lookalike(known);
       const contains = known.length >= 5 && lbl.includes(known);
       if (close || contains) {
-        return { ...base, verdict: 'dangerous', reasons: [`Ce domaine imite celui de ${o.names[0]} (${d}).`] };
+        return { ...base, verdict: 'dangerous', reasons: [tr().qr.imitates(o.names[0], d)] };
       }
     }
   }
-  return { ...base, verdict: 'unknown', reasons: ['Domaine absent de la base des opérateurs.'] };
+  return { ...base, verdict: 'unknown', reasons: [tr().qr.unknownDomain] };
 }
 
 /** URL de paiement d'un opérateur à partir de son gabarit vérifié. */

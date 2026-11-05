@@ -6,6 +6,7 @@ import { scheduleAlerts, cancelAlerts } from './notify';
 import { distanceKm } from './stations';
 import type { DirectCharge } from './store';
 import { parseTariff } from './tariff';
+import { tr } from '../i18n';
 
 export const AUTO_END_M = 150;
 const DRIVING_MPS = 4; // ≈ 15 km/h
@@ -73,6 +74,6 @@ export async function autoFinish(d: DirectCharge, now = Date.now()): Promise<Dir
   const endedAt = Math.min(now, d.lastNearAt ?? now);
   await cancelAlerts(d.alertIds);
   await addRecord(recordOf(d, endedAt));
-  await scheduleAlerts([{ at: now + 1500, title: 'Recharge terminée', body: `${d.station.name} : 2 secondes pour noter le prix ? Le reçu est déjà dans votre historique.` }]);
+  await scheduleAlerts([{ at: now + 1500, title: tr().recharge.autoEndTitle, body: tr().recharge.autoEndBody(d.station.name) }]);
   return { ...d, endedAt, autoEnded: true, alertIds: [] };
 }

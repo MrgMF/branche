@@ -1,4 +1,6 @@
 // Analyse du champ libre IRVE `tarification` (texte saisi par chaque opérateur) — fonction pure, testée dans tariff.test.ts.
+import { tr } from '../i18n';
+import { num, perKwh as perKwhFmt, perMin as perMinFmt } from '../i18n/format';
 // But : afficher AVANT de payer un prix lisible (€/kWh, €/min, frais de session, occupation) et estimer le coût.
 // Prudence : on n'invente rien. Si le texte est ambigu, le résultat le dit (guessedUnit, kind 'unknown').
 
@@ -191,36 +193,35 @@ export function parseTariff(raw: string | null | undefined, opts: { free?: boole
     out.kind = 'free';
     return out;
   }
-  if (/gratuit/.test(t)) out.notes.push('Gratuit pour certains usagers seulement, selon l’opérateur.');
+  if (/gratuit/.test(t)) out.notes.push(tr().tariff.notePartialFree);
   if (out.url) out.kind = 'link';
-  if (/kwh/.test(t)) out.notes.push('Facturé au kWh (montant non publié).');
-  if (/minute|\bmin\b|dur[ée]e|temps/.test(t)) out.notes.push('Une partie peut être facturée au temps.');
-  if (/connexion|session/.test(t)) out.notes.push('Frais de connexion ou de session possibles.');
-  if (/abonn/.test(t)) out.notes.push('Prix différent pour les abonnés.');
+  if (/kwh/.test(t)) out.notes.push(tr().tariff.noteKwh);
+  if (/minute|\bmin\b|dur[ée]e|temps/.test(t)) out.notes.push(tr().tariff.noteTime);
+  if (/connexion|session/.test(t)) out.notes.push(tr().tariff.noteSession);
+  if (/abonn/.test(t)) out.notes.push(tr().tariff.noteSubscribers);
   return out;
 }
 
-const eur = (x: number, digits = 2) => `${x.toLocaleString('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits })} €`;
-const perKwhText = (x: number) => `${x.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: x < 0.1 ? 3 : 2 })} €/kWh`;
-const perMinText = (x: number) =>
-  `${x.toLocaleString('fr-FR', { maximumFractionDigits: 3 })} €/min (${(x * 60).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/h)`;
+const eur = (x: number, digits = 2) => `${num(x, digits, digits)} €`;
+const perKwhText = perKwhFmt;
+const perMinText = perMinFmt;
 
-/** Lignes lisibles pour l'écran « Prix avant de payer ». */
 export function describeTariff(t: Tariff): string[] {
-  if (t.kind === 'free') return ['Gratuit selon l’opérateur.'];
+  const T = tr().tariff;
+  if (t.kind === 'free') return [T.free];
   if (t.kind !== 'priced') return [];
   const lines: string[] = [];
   if (t.perKwh !== undefined) {
     lines.push(
-      t.perKwhMin !== undefined ? `Énergie : ${perKwhText(t.perKwhMin)} à ${perKwhText(t.perKwh)} selon l’heure` : `Énergie : ${perKwhText(t.perKwh)}${t.guessedUnit ? ' (unité non précisée, supposée au kWh)' : ''}`,
+      t.perKwhMin !== undefined ? T.energyRange(perKwhText(t.perKwhMin), perKwhText(t.perKwh)) : T.energy(perKwhText(t.perKwh), t.guessedUnit),
     );
   }
-  if (t.perMin) lines.push(`Temps de charge : ${perMinText(t.perMin)}`);
-  if (t.perMinLater) lines.push(`Au-delà de ${t.perMinLater.afterMin} min de charge : ${perMinText(t.perMinLater.perMin)}`);
-  if (t.session) lines.push(`Frais de session : ${eur(t.session)}`);
-  if (t.idle) lines.push(`Occupation après la charge : ${perMinText(t.idle.perMin)}${t.idle.afterMin ? ` après ${t.idle.afterMin} min de tolérance` : ', dès la fin de charge'}`);
-  if (t.ht) lines.push('Prix annoncés hors taxes : TVA de 20 % en plus (incluse dans l’estimation).');
-  if (t.varies) lines.push('Le tarif varie selon l’heure : estimation au tarif le plus élevé.');
+  if (t.perMin) lines.push(T.time(perMinText(t.perMin)));
+  if (t.perMinLater) lines.push(T.later(t.perMinLater.afterMin, perMinText(t.perMinLater.perMin)));
+  if (t.session) lines.push(T.session(eur(t.session)));
+  if (t.idle) lines.push(T.idle(perMinText(t.idle.perMin), t.idle.afterMin));
+  if (t.ht) lines.push(T.ht);
+  if (t.varies) lines.push(T.varies);
   return lines;
 }
 

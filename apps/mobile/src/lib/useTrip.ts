@@ -16,6 +16,7 @@ import {
   remainingLine,
   speedKmh as computeSpeed,
   speedLimitAt,
+  spokenDist,
   stepsAlong,
   tileProbes,
   trafficSegments,
@@ -31,7 +32,7 @@ import {
   distText,
   getIncidents,
   getRoute,
-  INCIDENT_LABEL,
+  incidentLabel,
   loadDangerZones,
   metersBetween,
   progressOnRoute,
@@ -47,6 +48,9 @@ import {
 import { displayName, loadAround, type Station } from './stations';
 import { loadVehicle, socAfter, type Vehicle } from './vehicle';
 import { loadVoicePref, speak, stopSpeaking } from './voice';
+import { getSettings } from './settings';
+import { tr } from '../i18n';
+import { instructionOf } from './guidance';
 
 type Pos = { lat: number; lon: number };
 export type RouteIncident = Incident & { alongM: number };
@@ -181,14 +185,14 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
           : t.routes
               .map((x, i) => ({ x, i }))
               .filter(({ i }) => i !== t.selected)
-              .map(({ x }) => ({ id: x.id, coords: x.geometry, label: best ? (x.id === best.id ? 'Le plus rapide' : deltaText(x.durationS - best.durationS)) : '' })),
+              .map(({ x }) => ({ id: x.id, coords: x.geometry, label: best ? (x.id === best.id ? tr().guidance.fastestLabel : deltaText(x.durationS - best.durationS)) : '' })),
       });
       map.current?.post({ type: 'dest', lat: t.dest.lat, lon: t.dest.lon });
       const pins = t.guiding ? t.via : t.chargers.map((c) => ({ id: c.station.id, name: `${Math.round(c.station.kw)} kW`, lat: c.station.lat, lon: c.station.lon }));
       map.current?.post({ type: 'pins', items: [...pins, ...(t.guiding ? [] : t.via)].map((p) => ({ id: p.id, lat: p.lat, lon: p.lon, label: p.name })) });
       map.current?.post({
         type: 'incidents',
-        items: t.incidents.map((i) => ({ id: i.id, lon: i.lon, lat: i.lat, type: i.type, title: INCIDENT_LABEL[i.type] ?? i.title })),
+        items: t.incidents.map((i) => ({ id: i.id, lon: i.lon, lat: i.lat, type: i.type, title: incidentLabel(i.type) ?? i.title })),
       });
       map.current?.post({ type: 'zones', polys: t.zones.map((z) => circle(z)) });
     },
@@ -232,7 +236,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
       const id = ++reqId.current;
       setTrip({ ...base, loading: true, error: null, rerouting: mode === 'reroute' });
       try {
-        if (!apiEnabled()) throw new Error('Service d’itinéraire non configuré.');
+        if (!apiEnabled()) throw new Error(tr().trip.unconfigured);
         vehicle.current = await loadVehicle().catch(() => null);
         const res = await getRoute(from, base.dest, { via: base.via, options: base.options });
         if (id !== reqId.current) return;
@@ -260,15 +264,15 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
           rerouting: false,
           feedOk: f.feedOk,
           feedUpdatedAt: f.updatedAt,
-          toast: mode === 'reroute' ? { text: 'Nouvel itinéraire calculé', tone: 'info', at: Date.now() } : base.toast,
+          toast: mode === 'reroute' ? { text: tr().guidance.newRoute, tone: 'info', at: Date.now() } : base.toast,
         });
         if (id !== reqId.current) return;
         commit(next);
       } catch (e) {
         if (id !== reqId.current) return;
-        const msg = e instanceof Error ? e.message : 'Itinéraire indisponible.';
+        const msg = e instanceof Error ? e.message : tr().trip.unavailable;
         // En guidage, on garde l'ancien tracé : un recalcul raté n'interrompt pas la conduite.
-        setTrip((t) => (t ? (mode === 'reroute' && t.route ? { ...t, loading: false, rerouting: false, toast: { text: 'Recalcul impossible pour le moment, nouvel essai bientôt.', tone: 'warn', at: Date.now() } } : { ...t, loading: false, rerouting: false, error: msg }) : t));
+        setTrip((t) => (t ? (mode === 'reroute' && t.route ? { ...t, loading: false, rerouting: false, toast: { text: tr().guidance.rerouteFailed, tone: 'warn', at: Date.now() } } : { ...t, loading: false, rerouting: false, error: msg }) : t));
       } finally {
         inFlight.current = false;
       }
@@ -281,9 +285,10 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
       const dest = 'station' in d || 'name' in d ? (d as Destination) : stationDest(d as Station);
       announced.current.clear();
       const prev = tripRef.current;
-      const base = blank(dest, { options: prev?.options ?? NO_OPTIONS, routes: prev?.dest.id === dest.id ? prev.routes : [] });
+      const set = getSettings();
+      const base = blank(dest, { options: prev?.options ?? { avoidTolls: set.avoidTolls, avoidMotorways: set.avoidMotorways }, routes: prev?.dest.id === dest.id ? prev.routes : [] });
       if (!user) {
-        setTrip({ ...base, error: 'Position inconnue : activez la localisation pour calculer un trajet.', gps: 'unavailable' });
+        setTrip({ ...base, error: tr().trip.noPosition, gps: 'unavailable' });
         return;
       }
       void compute(base, user, 'preview');
@@ -372,8 +377,8 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     commit(g);
     void keepScreenOn(true);
     const first = t.route.steps.find((s) => maneuverOf(s) !== 'depart') ?? t.route.steps[0];
-    const delay = t.traffic && t.route.trafficDelayS > 60 ? `, dont ${Math.round(t.route.trafficDelayS / 60)} minutes de trafic` : '';
-    speak(`C’est parti vers ${t.dest.name}${delay}.${first ? ` ${first.instruction}` : ''}`);
+    const delay = t.traffic && t.route.trafficDelayS > 60 ? Math.round(t.route.trafficDelayS / 60) : null;
+    speak(tr().voice.go(t.dest.name, delay, first ? instructionOf(first) : null));
     await startWatch();
   }, [commit, startWatch]);
 
@@ -424,7 +429,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
       lastReroute.current = Date.now();
       offCount.current = 0;
       inFlight.current = true;
-      speak('Nouvel itinéraire.');
+      speak(tr().voice.newRoute);
       void compute({ ...t }, p, 'reroute');
       return;
     }
@@ -432,7 +437,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     // Étape (borne) atteinte
     const via = t.via[0];
     if (via && metersBetween(p, via) < 50) {
-      speak(`Vous êtes arrivé à votre étape, ${via.name}.`);
+      speak(tr().voice.viaReached(via.name));
       setTrip((x) => (x ? { ...x, arrivedAtVia: via, speedKmh: speed } : x));
       map.current?.post({ type: 'unfollow' });
       return;
@@ -447,25 +452,25 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
       const legM = idx > 0 ? along.current[idx] - along.current[idx - 1] : along.current[idx];
       const level = pickAnnouncement(idx, inM, legM, speed, announced.current);
       if (level && maneuverOf(step) !== 'arrive') speak(announcementText(level, inM, step, after ?? undefined));
-      else if (level && maneuverOf(step) === 'arrive' && level !== 'near') speak(`Dans ${distText(inM)}, vous serez arrivé.`);
+      else if (level && maneuverOf(step) === 'arrive' && level !== 'near') speak(tr().voice.arrivingIn(spokenDist(inM)));
     }
 
     let alert: Trip['alert'] = null;
     const zone = t.zones.find((z) => metersBetween(p, z) <= z.radiusM);
     if (zone) {
-      alert = { text: 'Zone de danger : soyez vigilant et respectez les limitations.', tone: 'danger' };
+      alert = { text: tr().guidance.dangerZone, tone: 'danger' };
       if (!announced.current.has(`z${zone.id}`)) {
         announced.current.add(`z${zone.id}`);
-        speak('Zone de danger.');
+        speak(tr().voice.dangerZone);
       }
     }
     const ahead = t.incidents.find((i) => i.alongM > prog.along && i.alongM - prog.along < ALERT_AHEAD_M);
     if (ahead) {
-      const label = INCIDENT_LABEL[ahead.type] ?? 'Perturbation';
-      alert = alert ?? { text: `${label} dans ${distText(ahead.alongM - prog.along)}`, tone: 'incident' };
+      const label = incidentLabel(ahead.type) ?? tr().incident.autre;
+      alert = alert ?? { text: tr().guidance.incidentIn(label, distText(ahead.alongM - prog.along)), tone: 'incident' };
       if (!announced.current.has(`i${ahead.id}`)) {
         announced.current.add(`i${ahead.id}`);
-        speak(`${label} signalé dans ${distText(ahead.alongM - prog.along)}.`);
+        speak(tr().voice.incident(label, spokenDist(ahead.alongM - prog.along)));
       }
     }
     const total = prog.total || route.distanceM;
@@ -473,7 +478,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     const remainingS = route.durationS * (total ? remainingM / total : 1);
     const arrived = remainingM < 30 || metersBetween(p, t.dest) < 40;
     if (arrived) {
-      speak(t.dest.station ? `Vous êtes arrivé à ${t.dest.name}. Vous pouvez lancer la recharge depuis Branché.` : `Vous êtes arrivé à ${t.dest.name}.`);
+      speak(t.dest.station ? tr().voice.arrivedStation(t.dest.name) : tr().voice.arrived(t.dest.name));
       stopWatch();
       void keepScreenOn(false);
       map.current?.post({ type: 'unfollow' });
@@ -529,14 +534,14 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
         const min = Math.round(better.gainS / 60);
         along.current = stepsAlong(better.route);
         announced.current.clear();
-        speak(`Trajet plus rapide trouvé : vous gagnez ${min} minutes.`);
+        speak(tr().voice.faster(min));
         commit(
           await annotate({
             ...cur,
             routes: [better.route],
             selected: 0,
             route: better.route,
-            toast: { text: `Trajet plus rapide : ${min} min gagnées`, tone: 'success', at: Date.now() },
+            toast: { text: tr().guidance.faster(min), tone: 'success', at: Date.now() },
           }),
         );
       } catch {

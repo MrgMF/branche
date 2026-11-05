@@ -7,8 +7,8 @@ import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getAvailability, stationSummary } from '../lib/availability';
 import { runPlan } from '../lib/connectors';
 import { shortId } from '../lib/evse';
-import { euros, km, kw, PLUG_LABEL } from '../lib/format';
-import { METHOD_LABEL } from '../lib/history';
+import { euros, km, kw, plugLabel } from '../lib/format';
+import { methodLabel } from '../lib/history';
 import { clearPrepared, loadPrepared, type Prepared } from '../lib/prepared';
 import { compatible, loadVehicle, type Vehicle } from '../lib/vehicle';
 import { nearbyStation } from '../lib/proximity';
@@ -17,10 +17,13 @@ import { autoFinish, departed } from '../lib/autoEnd';
 import { store, type DirectCharge } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { Button } from './ui';
+import { useT } from '../i18n';
+import { distText } from '../i18n/format';
 
 type Pos = { lat: number; lon: number };
 
 export function HereBanner({ user, onPick }: { user: Pos | null; onPick?: (s: Station) => void }) {
+  const t = useT();
   const [pos, setPos] = useState<Pos | null>(user);
   const [hit, setHit] = useState<{ station: Station; distanceM: number } | null>(null);
   const [around, setAround] = useState<Station[]>([]);
@@ -97,25 +100,25 @@ export function HereBanner({ user, onPick }: { user: Pos | null; onPick?: (s: St
     const cost = p.estimatedCost != null ? ` · ≈ ${euros(Math.round(p.estimatedCost * 100))}` : '';
     return (
       <View style={styles.card} accessibilityRole="summary">
-        <Text style={styles.kicker}>Tout est prêt</Text>
+        <Text style={styles.kicker}>{t.here.ready}</Text>
         <Text style={styles.title} numberOfLines={2}>
           {displayName(hit.station)}
         </Text>
         <Text style={styles.sub}>
-          {p.plan.pdcId ? `Point …${shortId(p.plan.pdcId)} · ` : ''}
-          {METHOD_LABEL[p.plan.method]}
+          {p.plan.pdcId ? `${t.common.point(shortId(p.plan.pdcId))} · ` : ''}
+          {methodLabel(p.plan.method)}
           {cost}
         </Text>
         <Button
-          label="Payer maintenant"
+          label={t.here.payNow}
           onPress={() => {
             clearPrepared();
             setPrepared(null);
             runPlan(hit.station, p.plan, p.operatorName, p.url);
           }}
-          hint={`Paiement à la borne, directement à ${p.operatorName}`}
+          hint={t.here.payHint(p.operatorName)}
         />
-        <Text style={styles.small}>Vous payez directement {p.operatorName} : rien n’a été débité à l’avance.</Text>
+        <Text style={styles.small}>{t.here.payNote(p.operatorName)}</Text>
       </View>
     );
   }
@@ -124,28 +127,28 @@ export function HereBanner({ user, onPick }: { user: Pos | null; onPick?: (s: St
   if (hit && hidden !== hit.station.id) {
     const s = hit.station;
     return (
-      <View style={styles.card} accessibilityRole="summary" accessibilityLabel={`Vous êtes à ${displayName(s)}, à ${hit.distanceM} mètres`}>
+      <View style={styles.card} accessibilityRole="summary" accessibilityLabel={t.here.youAreAtA11y(displayName(s), distText(hit.distanceM))}>
         <View style={styles.row}>
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={styles.kicker}>Vous êtes à</Text>
+            <Text style={styles.kicker}>{t.here.youAreAt}</Text>
             <Text style={styles.title} numberOfLines={2}>
               {displayName(s)}
             </Text>
             <Text style={styles.sub} numberOfLines={1}>
-              {hit.distanceM} m · {kw(s.kw)} · {s.c.map((c) => PLUG_LABEL[c]).join(', ')}
+              {distText(hit.distanceM)} · {kw(s.kw)} · {s.c.map((c) => plugLabel(c)).join(', ')}
             </Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Masquer" onPress={() => setHidden(s.id)} style={styles.close}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t.here.hide} onPress={() => setHidden(s.id)} style={styles.close}>
             <Text style={styles.closeX}>×</Text>
           </Pressable>
         </View>
         <Button
-          label="Recharger ici"
+          label={t.here.rechargeHere}
           onPress={() => {
             store.setCurrent(s);
             router.push({ pathname: '/recharger', params: { station: s.id } });
           }}
-          hint="Choix du point, prix et mode d’emploi de cette borne"
+          hint={t.here.rechargeHint}
         />
       </View>
     );
@@ -156,16 +159,16 @@ export function HereBanner({ user, onPick }: { user: Pos | null; onPick?: (s: St
   if (!target || !onPick) return null;
   return (
     <View style={[styles.card, styles.soft]} accessibilityRole="summary">
-      <Text style={styles.kicker}>{prepared ? 'Recharge préparée' : vehicle ? `Conseillée pour ${vehicle.name}` : 'Borne conseillée'}</Text>
+      <Text style={styles.kicker}>{prepared ? t.here.prepared : vehicle ? t.here.advisedFor(vehicle.name) : t.here.advised}</Text>
       <Text style={styles.title} numberOfLines={2}>
         {displayName(target.s)}
       </Text>
       <Text style={styles.sub} numberOfLines={2}>
-        {[target.d != null ? km(target.d) : null, kw(target.s.kw), target.known ? (target.free ? `${target.free} libre${target.free > 1 ? 's' : ''} maintenant` : 'occupée') : null]
+        {[target.d != null ? km(target.d) : null, kw(target.s.kw), target.known ? (target.free ? t.here.freeNow(target.free) : t.here.busy) : null]
           .filter(Boolean)
           .join(' · ')}
       </Text>
-      <Button label="Voir la borne" variant="secondary" onPress={() => onPick(target.s)} hint="Fiche de la borne : itinéraire et recharge" />
+      <Button label={t.here.see} variant="secondary" onPress={() => onPick(target.s)} hint={t.here.seeHint} />
     </View>
   );
 }
@@ -183,11 +186,11 @@ const styles = StyleSheet.create({
 });
 
 /**
- * Accès en un geste depuis la carte (routes /historique, /vehicule, /comptes, /payer) et fin automatique constatée
- * à l'ouverture : si une recharge suivie est en cours et que l'on est loin de la borne, elle est terminée et
+ * Fin automatique constatée à l'ouverture (les autres sections sont dans le menu) : si une recharge suivie est en cours et que l'on est loin de la borne, elle est terminée et
  * déjà dans l'historique ; il ne reste qu'à noter le prix (facultatif).
  */
 export function ChargeShortcuts() {
+  const t = useT();
   const [ended, setEnded] = useState<DirectCharge | null>(null);
 
   useEffect(() => {
@@ -217,34 +220,14 @@ export function ChargeShortcuts() {
     <>
       {ended ? (
         <View style={styles.card} accessibilityRole="summary">
-          <Text style={styles.kicker}>Recharge terminée</Text>
+          <Text style={styles.kicker}>{t.here.ended}</Text>
           <Text style={styles.title} numberOfLines={2}>
             {ended.station.name}
           </Text>
-          <Text style={styles.sub}>Départ détecté : le reçu est déjà dans votre historique.</Text>
-          <Button label="Noter le prix (2 secondes)" onPress={() => router.push('/recharge')} />
+          <Text style={styles.sub}>{t.here.endedBody}</Text>
+          <Button label={t.here.notePrice} onPress={() => router.push('/recharge')} />
         </View>
       ) : null}
-      <View style={short.row}>
-        {[
-          { label: 'Recharges', a11y: 'Mes recharges : historique, dépenses, export', to: '/historique' },
-          { label: 'Véhicule', a11y: 'Mon véhicule et ma batterie', to: '/vehicule' },
-          { label: 'Badges', a11y: 'Mes badges et comptes de recharge', to: '/comptes' },
-          { label: 'Scanner', a11y: 'Scanner le QR code d’une borne', to: '/payer' },
-        ].map((b) => (
-          <Pressable key={b.to} accessibilityRole="button" accessibilityLabel={b.a11y} onPress={() => router.push(b.to as never)} style={short.btn}>
-            <Text style={short.text} numberOfLines={1}>
-              {b.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
     </>
   );
 }
-
-const short = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 6 },
-  btn: { flex: 1, minHeight: MIN_TOUCH, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  text: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink, textAlign: 'center' },
-});

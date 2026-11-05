@@ -1,13 +1,14 @@
 // Disponibilité temps réel par point (GET /v1/availability, équipe disponibilité) — cache 60 s, dégradation propre.
 import { API_URL } from './config';
 import type { Station } from './stations';
+import { tr } from '../i18n';
 
 export type AvailStatus = 'libre' | 'occupe' | 'hors_service' | 'inconnu';
 export interface AvailItem {
   status: AvailStatus;
   at: string;
 }
-export const AVAIL_LABEL: Record<AvailStatus, string> = { libre: 'Libre', occupe: 'Occupé', hors_service: 'Hors service', inconnu: 'État inconnu' };
+export const availLabel = (s: AvailStatus): string => tr().avail[s];
 
 const TTL = 60_000;
 const cache = new Map<string, { t: number; v: AvailItem | null }>();

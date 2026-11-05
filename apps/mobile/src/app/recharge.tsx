@@ -14,7 +14,7 @@ import { sendCheckin } from '../lib/community';
 import { durationLabel, estimateCharge, progressAt, type EstimateInput } from '../lib/estimate';
 import { euros } from '../lib/format';
 import { autoFinish, departed, distanceToStation, recordOf, AUTO_END_M } from '../lib/autoEnd';
-import { addRecord, METHOD_LABEL, type ChargeRecord } from '../lib/history';
+import { addRecord, methodLabel, type ChargeRecord } from '../lib/history';
 import { postReport } from '../lib/navigation';
 import { cancelAlerts, scheduleAlerts, type Alert } from '../lib/notify';
 import { store, type DirectCharge } from '../lib/store';
@@ -201,7 +201,7 @@ export default function Recharge() {
           <Row k="Borne" v={saved.stationName} />
           {saved.pdcId ? <Row k="Point" v={`…${saved.pdcId.slice(-4)}`} /> : null}
           <Row k="Payé à" v={saved.operatorName} />
-          <Row k="Méthode" v={METHOD_LABEL[saved.method]} />
+          <Row k="Méthode" v={methodLabel(saved.method)} />
           <Row k="Durée" v={durationLabel((saved.endedAt - saved.startedAt) / 60_000)} />
           <Row k={saved.kWhEstimated ? 'Énergie (estimée)' : 'Énergie'} v={saved.kWh != null ? `${saved.kWh.toLocaleString('fr-FR')} kWh` : '—'} />
           <Row k="Montant payé" v={saved.pricePaid != null ? euros(Math.round(saved.pricePaid * 100)) : 'Non renseigné'} strong />

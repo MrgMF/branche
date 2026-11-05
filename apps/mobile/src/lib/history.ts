@@ -1,15 +1,11 @@
 // Historique des recharges et dépenses — stocké uniquement sur l'appareil (AsyncStorage), jamais envoyé.
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { tr } from '../i18n';
+import { decimalSep, monthYear } from '../i18n/format';
 
 export type MethodId = 'account' | 'scan' | 'operator-link' | 'reader' | 'badge';
 
-export const METHOD_LABEL: Record<MethodId, string> = {
-  reader: 'Carte bancaire au lecteur',
-  scan: 'Page de l’opérateur (QR code vérifié)',
-  'operator-link': 'Page de l’opérateur (lien connu)',
-  account: 'Compte opérateur connecté',
-  badge: 'Badge de recharge',
-};
+export const methodLabel = (m: MethodId): string => tr().methodLabel[m] ?? m;
 
 export interface ChargeRecord {
   id: string;
@@ -85,7 +81,7 @@ export function monthStats(list: ChargeRecord[], now = Date.now()) {
     const x = new Date(r.startedAt);
     return x.getFullYear() === d.getFullYear() && x.getMonth() === d.getMonth();
   });
-  return { ...totals(inMonth), month: d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) };
+  return { ...totals(inMonth), month: monthYear(d) };
 }
 
 export function totals(list: ChargeRecord[]) {
@@ -102,10 +98,10 @@ export function totals(list: ChargeRecord[]) {
   };
 }
 
-const csvCell = (v: string | number | null | undefined) => {
+const csvCell = (v: string | number | null | undefined, sep: string) => {
   if (v == null) return '';
-  const s = typeof v === 'number' ? v.toLocaleString('fr-FR', { useGrouping: false, maximumFractionDigits: 3 }) : v;
-  return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const s = typeof v === 'number' ? String(Math.round(v * 1000) / 1000).replace('.', decimalSep()) : v;
+  return s.includes(sep) || /["\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 const two = (n: number) => String(n).padStart(2, '0');
 const dateTime = (t: number) => {
@@ -113,9 +109,11 @@ const dateTime = (t: number) => {
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`;
 };
 
-/** Export CSV pour note de frais : séparateur « ; » et virgule décimale (tableurs français), BOM UTF-8. */
+/** Export CSV pour note de frais, BOM UTF-8 : « ; » et virgule décimale si la langue l'utilise (tableurs européens), sinon « , » et point. */
 export function toCsv(list: ChargeRecord[]): string {
-  const head = ['Date', 'Fin', 'Station', 'Opérateur', 'Point de charge', 'Méthode', 'kWh', 'kWh estimés', 'Montant payé (€)', 'Coût estimé (€)', 'Réussie', 'Véhicule'];
+  const H = tr().history;
+  const sep = decimalSep() === ',' ? ';' : ',';
+  const head = H.csvHead;
   const rows = list.map((r) =>
     [
       dateTime(r.startedAt),
@@ -123,16 +121,16 @@ export function toCsv(list: ChargeRecord[]): string {
       r.stationName,
       r.operatorName,
       r.pdcId ?? '',
-      METHOD_LABEL[r.method] ?? r.method,
+      methodLabel(r.method),
       r.kWh,
-      r.kWhEstimated ? 'oui' : 'non',
+      r.kWhEstimated ? H.csvYes : H.csvNo,
       r.pricePaid,
       r.estimatedCost,
-      r.ok == null ? '' : r.ok ? 'oui' : 'non',
+      r.ok == null ? '' : r.ok ? H.csvYes : H.csvNo,
       r.vehicleName ?? '',
     ]
-      .map(csvCell)
-      .join(';'),
+      .map((c) => csvCell(c, sep))
+      .join(sep),
   );
-  return `﻿${[head.join(';'), ...rows].join('\r\n')}\r\n`;
+  return `﻿${[head.map((c) => csvCell(c, sep)).join(sep), ...rows].join('\r\n')}\r\n`;
 }

@@ -27,5 +27,5 @@ export const fonts = {
   bold: 'Inter_700Bold',
 } as const;
 
-export const radius = { sm: 10, md: 14, lg: 16, xl: 24 } as const;
+export const radius = { sm: 10, md: 14, lg: 16, xl: 24, pill: 999 } as const;
 export const MIN_TOUCH = 44;
