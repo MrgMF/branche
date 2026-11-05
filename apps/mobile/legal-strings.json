@@ -1,0 +1,7 @@
+{
+  "locationPermission": "Branché utilise votre position pour trouver la borne la plus proche. Le calcul se fait sur votre appareil : votre position n'est jamais envoyée à nos serveurs.",
+  "demoBanner": "Mode démo : paiement simulé, aucune borne réelle activée, aucun débit.",
+  "dataAttribution": "Bornes : base nationale IRVE, data.gouv.fr (Licence Ouverte 2.0), mise à jour du {date}. Disponibilité non garantie.",
+  "mapAttribution": "OpenFreeMap · © OpenMapTiles · © contributeurs OpenStreetMap",
+  "paymentDisclaimer": "Démonstration : aucune carte n'est débitée et votre véhicule ne sera pas rechargé. Pour recharger, payez directement à la borne."
+}

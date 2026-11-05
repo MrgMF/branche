@@ -1,0 +1,41 @@
+# Blueprint Render — API Branché (offre gratuite).
+services:
+  - type: web
+    name: branche-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: apps/api
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PAYMENT_PROVIDER
+        value: mock
+      - key: CHARGER_ADAPTER
+        value: simulator
+      - key: TRUST_PROXY
+        value: "1"
+      - key: PRICE_CENTS_PER_KWH
+        value: "45"
+      - key: FEE_CENTS
+        value: "49"
+      - key: PREAUTH_CENTS
+        value: "5000"
+      - key: SIM_POWER_KW
+        value: "50"
+      - key: SIM_SPEED
+        value: "20"
+      - key: ALLOWED_RETURN_PREFIXES
+        value: "branche://,exp://,exps://,http://localhost,http://127.0.0.1,https://*.github.io"
+      # URL publique (par défaut : RENDER_EXTERNAL_URL fourni par Render).
+      - key: PUBLIC_URL
+        sync: false
+      # Secrets Stripe (mode test uniquement en V1) — à saisir dans le tableau de bord.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false

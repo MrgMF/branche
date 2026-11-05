@@ -1,0 +1,21 @@
+{
+  "name": "branche",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/api",
+    "apps/mobile",
+    "pipeline"
+  ],
+  "scripts": {
+    "test": "npm run test -w pipeline && npm run test -w apps/api",
+    "build": "npm run build -w apps/api && npm run build:web -w apps/mobile && node scripts/assemble-site.mjs",
+    "data": "npm run build -w pipeline"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "maplibre-gl": "^5.24.0"
+  }
+}

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Confidentialité · Branché</title>
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+  <header class="site-header">
+    <a href="../index.html">← Branché</a>
+  </header>
+  <main class="page prose">
+    <p class="draft"><strong>Brouillon à faire valider</strong> par un professionnel du droit avant publication définitive. Les éléments entre crochets sont à compléter.</p>
+
+    <h1>Politique de confidentialité</h1>
+    <p>Dernière mise à jour : 5 novembre 2026. S'applique au site et aux applications « Branché » (iOS, Android, web).</p>
+
+    <h2>En bref</h2>
+    <ul>
+      <li>Pas de compte, pas de publicité, pas de mesure d'audience, aucun traceur.</li>
+      <li>Votre position GPS reste sur votre appareil : elle n'est jamais envoyée à nos serveurs.</li>
+      <li>Le paiement est en mode démo : aucune donnée de carte bancaire n'est demandée.</li>
+    </ul>
+
+    <h2>1. Responsable du traitement</h2>
+    <p>[ÉDITEUR], [ADRESSE], [EMAIL DE CONTACT].</p>
+
+    <h2>2. Données traitées</h2>
+    <table>
+      <thead>
+        <tr><th>Donnée</th><th>Usage</th><th>Base légale (RGPD art. 6)</th><th>Conservation</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Position de l'appareil (si vous l'autorisez)</td>
+          <td>Trouver la borne la plus proche. Le calcul est fait <strong>sur l'appareil</strong>. L'app télécharge seulement les tuiles de données couvrant votre zone (carrés d'environ 0,25° de côté, soit environ 28 × 18 km en France) : nos serveurs ne reçoivent jamais vos coordonnées.</td>
+          <td>Sans objet pour nos serveurs (aucune collecte) ; accès autorisé par vous via la permission du système</td>
+          <td>Non conservée par Branché</td>
+        </tr>
+        <tr>
+          <td>Session de paiement de démonstration : identifiant aléatoire (« ses_… »), borne choisie, horodatages, montants fictifs</td>
+          <td>Faire fonctionner la démonstration de paiement et de recharge</td>
+          <td>Exécution du service demandé (art. 6.1.b)</td>
+          <td>En mémoire du serveur, effacée au redémarrage du service et au plus tard [X] jours</td>
+        </tr>
+        <tr>
+          <td>Journaux techniques de l'API : adresse IP, date, requête, code de réponse, navigateur</td>
+          <td>Sécurité, diagnostic des erreurs</td>
+          <td>Intérêt légitime (art. 6.1.f)</td>
+          <td>[X] jours (7 jours sur l'offre actuelle de l'hébergeur Render)</td>
+        </tr>
+        <tr>
+          <td>Journaux de connexion des hébergeurs du site et de la carte (adresse IP)</td>
+          <td>Sécurité, acheminement des pages et des tuiles de carte</td>
+          <td>Intérêt légitime (art. 6.1.f)</td>
+          <td>Selon chaque hébergeur (voir section 4)</td>
+        </tr>
+        <tr>
+          <td>Message envoyé à [EMAIL DE CONTACT]</td>
+          <td>Vous répondre</td>
+          <td>Intérêt légitime (art. 6.1.f)</td>
+          <td>3 ans après le dernier échange</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>Nous ne vendons aucune donnée, ne faisons aucun profilage et ne prenons aucune décision automatisée vous concernant.</p>
+
+    <h2>3. Cookies et traceurs</h2>
+    <p>Branché ne dépose <strong>aucun cookie publicitaire ou de mesure d'audience et aucun traceur</strong> ; aucun bandeau de consentement n'est donc nécessaire. L'application peut garder sur votre appareil des données strictement nécessaires à son fonctionnement (tuiles de bornes en cache, identifiant de la session de démo en cours). Elles ne quittent pas votre appareil, hormis l'identifiant de session envoyé à notre API pour suivre la démo.</p>
+
+    <h2>4. Destinataires et sous-traitants</h2>
+    <ul>
+      <li><strong>GitHub, Inc.</strong> (États-Unis) : hébergement du site et des données de bornes (GitHub Pages). GitHub enregistre l'adresse IP des visiteurs pour des raisons de sécurité. <a href="https://docs.github.com/fr/site-policy/privacy-policies/github-general-privacy-statement">Politique de GitHub</a>.</li>
+      <li><strong>Render Services, Inc.</strong> (États-Unis) : hébergement de l'API de démonstration. <a href="https://render.com/privacy">Politique de Render</a>.</li>
+      <li><strong>OpenFreeMap</strong> (Hyperknot Software Kft., Hongrie) : tuiles du fond de carte. Selon sa politique, ses journaux d'accès ne contiennent pas d'adresse IP et ses journaux d'erreurs sont supprimés sous 7 jours ; il peut utiliser le réseau Cloudflare. <a href="https://openfreemap.org/privacy/">Politique d'OpenFreeMap</a>.</li>
+      <li><strong>Stripe</strong> : non utilisé en mode démo. Si un paiement réel était activé, vos données de carte seraient saisies directement sur la page Stripe Checkout et traitées par Stripe ; Branché n'y aurait pas accès. Cette politique serait alors mise à jour avant activation. <a href="https://stripe.com/fr/privacy">Politique de Stripe</a>.</li>
+      <li>Sites des opérateurs de bornes : si vous ouvrez leur lien de paiement, vous quittez Branché et leur propre politique s'applique.</li>
+    </ul>
+
+    <h2>5. Transferts hors de l'Union européenne</h2>
+    <p>GitHub, Render et Stripe sont établis aux États-Unis. Ces trois sociétés déclarent adhérer au <a href="https://www.dataprivacyframework.gov/">Data Privacy Framework UE–États-Unis</a> (décision d'adéquation de la Commission européenne du 10 juillet 2023) et prévoient en complément des clauses contractuelles types de la Commission européenne. [À VÉRIFIER : présence active de chaque société sur la liste officielle du DPF à la date de publication.]</p>
+
+    <h2>6. Vos droits</h2>
+    <p>Vous disposez des droits d'accès, de rectification, d'effacement, de limitation, d'opposition (notamment au traitement fondé sur l'intérêt légitime) et de portabilité lorsqu'il s'applique (RGPD, art. 15 à 21). Comme nous ne gérons pas de compte, indiquez si possible l'identifiant de session ou la date et l'heure concernées. Écrivez à [EMAIL DE CONTACT] ; réponse sous un mois.</p>
+    <p>Vous pouvez retirer à tout moment l'accès à la position dans les réglages de votre appareil ou de votre navigateur ; l'application reste utilisable en déplaçant la carte manuellement.</p>
+    <p>Vous pouvez introduire une réclamation auprès de la CNIL : Service des plaintes, 3 place de Fontenoy, 75007 Paris, ou en ligne sur <a href="https://www.cnil.fr/fr/plaintes">cnil.fr/fr/plaintes</a>.</p>
+
+    <h2>7. Sécurité et mineurs</h2>
+    <p>Les échanges sont chiffrés (HTTPS). Le service ne s'adresse pas spécifiquement aux mineurs et ne leur demande aucune donnée.</p>
+
+    <h2>8. Modifications</h2>
+    <p>Toute modification sera publiée sur cette page avec sa date. Un changement important (par exemple l'activation d'un paiement réel ou d'un compte utilisateur) sera signalé dans l'application avant de s'appliquer.</p>
+  </main>
+</body>
+</html>

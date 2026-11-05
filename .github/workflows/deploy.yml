@@ -1,0 +1,57 @@
+name: Données IRVE + site
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 4 * * *' # chaque nuit : base IRVE mise à jour
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      REPO: ${{ github.event.repository.name }}
+      OWNER: ${{ github.repository_owner }}
+      API_URL: ${{ vars.API_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Tuiles IRVE (base nationale data.gouv.fr)
+        run: npm run data -- --out dist/data
+      - name: Export web de l'app
+        working-directory: apps/mobile
+        run: npx expo export -p web
+        env:
+          EXPO_OFFLINE: '1'
+          BASE_URL: /${{ env.REPO }}/app
+          DATA_URL: https://${{ env.OWNER }}.github.io/${{ env.REPO }}/data
+          SITE_URL: https://${{ env.OWNER }}.github.io/${{ env.REPO }}
+      - run: node scripts/assemble-site.mjs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
