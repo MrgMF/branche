@@ -366,3 +366,6 @@ a:hover { text-decoration-thickness: 2px; }
 @media (prefers-color-scheme: dark) {
   .draft { background: #3A2610; border-color: #7A4A14; color: #F8D9B0; }
 }
+
+/* Sélecteur de langue (FR / EN) */
+.site-nav .lang-switch { font-weight: 600; }

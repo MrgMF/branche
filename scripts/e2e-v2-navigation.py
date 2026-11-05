@@ -301,7 +301,7 @@ with sync_playwright() as p:
         ctx.set_geolocation({'latitude': geo_k[1], 'longitude': geo_k[0], 'accuracy': 5})
         page.wait_for_timeout(1000)
     page.wait_for_timeout(500)
-    icon = page.get_by_label('Manœuvre : roundabout, sortie 2')
+    icon = page.get_by_label('Manœuvre : rond-point, sortie 2')
     expect(icon).to_be_visible()
     expect(page.get_by_test_id('speed-limit')).to_have_text('50')
     spd = page.get_by_test_id('speed').inner_text()

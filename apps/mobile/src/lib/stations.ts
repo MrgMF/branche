@@ -127,11 +127,11 @@ export function displayName(s: Pick<Station, 'n' | 'o' | 'a'>): string {
 
 /** Le champ tarification contient parfois une URL plutôt qu'un prix. */
 export function priceInfo(s: Pick<Station, 'prix' | 'free'>): { text: string; url?: string } {
-  if (s.free) return { text: 'Gratuit' };
+  if (s.free) return { text: tr().station.free };
   const p = (s.prix ?? '').trim();
-  if (!p || p === '0') return { text: 'Tarif non publié dans la base nationale — affiché sur la borne.' };
+  if (!p || p === '0') return { text: tr().pricing.unpublished };
   const url = p.match(/https?:\/\/\S+/)?.[0];
-  if (url && p.replace(url, '').trim().length < 4) return { text: 'Voir les tarifs de l’opérateur', url };
+  if (url && p.replace(url, '').trim().length < 4) return { text: tr().pricing.seeOperator, url };
   return { text: p, url };
 }
 

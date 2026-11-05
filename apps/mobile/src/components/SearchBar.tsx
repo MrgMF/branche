@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   boxFocused: { borderColor: colors.accent, borderWidth: 2 },
-  input: { flex: 1, minHeight: 48, fontFamily: fonts.medium, fontSize: 16, color: colors.ink, outlineStyle: 'none' } as object,
+  input: { flex: 1, minWidth: 0, minHeight: 48, fontFamily: fonts.medium, fontSize: 16, color: colors.ink, outlineStyle: 'none' } as object,
   clear: { width: MIN_TOUCH, height: MIN_TOUCH, alignItems: 'center', justifyContent: 'center', marginRight: -10 },
   panel: {
     backgroundColor: colors.surface,

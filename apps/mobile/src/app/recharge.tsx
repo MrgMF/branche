@@ -20,8 +20,11 @@ import { cancelAlerts, scheduleAlerts, type Alert } from '../lib/notify';
 import { store, type DirectCharge } from '../lib/store';
 import { parseTariff } from '../lib/tariff';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { ScreenHeader } from '../components/Screen';
+import { tr, useT } from '../i18n';
+import { clock as clockFmt, kwhText, num } from '../i18n/format';
 
-const clock = (t: number) => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+const clock = clockFmt;
 const fmt = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(s / 3600);
@@ -45,6 +48,8 @@ function inputOf(d: DirectCharge): EstimateInput {
 }
 
 export default function Recharge() {
+  const t = useT();
+  const C = t.recharge;
   const insets = useSafeAreaInsets();
   const [d, setD] = useState<DirectCharge | null | undefined>(store.direct() ?? undefined);
   const [now, setNow] = useState(Date.now());
@@ -137,13 +142,14 @@ export default function Recharge() {
     if (!d || !est || !tariff) return;
     const t0 = Date.now();
     const endAt = t0 + est.minutes * 60_000;
-    const alerts: Alert[] = [{ at: endAt, title: 'Recharge à 80 % (estimation)', body: `${d.station.name} : débranchez pour libérer la place.` }];
+    const N = tr().recharge;
+    const alerts: Alert[] = [{ at: endAt, title: N.endTitle, body: N.endBody(d.station.name) }];
     if (tariff.idle) {
       const idleAt = endAt + tariff.idle.afterMin * 60_000;
-      alerts.push({ at: idleAt - 5 * 60_000, title: 'Occupation facturée dans 5 min', body: `${d.operatorName} facture l’occupation après la charge : libérez la place avant ${clock(idleAt)}.` });
+      alerts.push({ at: idleAt - 5 * 60_000, title: N.idleTitle, body: N.idleBody(d.operatorName, clock(idleAt)) });
     }
     if (tariff.perMinLater) {
-      alerts.push({ at: t0 + (tariff.perMinLater.afterMin - 5) * 60_000, title: 'Le prix à la minute augmente dans 5 min', body: `Au-delà de ${tariff.perMinLater.afterMin} min de charge chez ${d.operatorName}.` });
+      alerts.push({ at: t0 + (tariff.perMinLater.afterMin - 5) * 60_000, title: N.perMinTitle, body: N.perMinBody(tariff.perMinLater.afterMin, d.operatorName) });
     }
     const next = update({ chargeStartedAt: t0 });
     const ids = await scheduleAlerts(alerts);
@@ -165,14 +171,14 @@ export default function Recharge() {
     setMsg(null);
     if (d.station.id !== 'inconnue') sendCheckin({ stationId: d.station.id, ok: false });
     if (!apiEnabled() || d.station.lat == null || d.station.lon == null) {
-      setMsg('Signalement enregistré sur ce téléphone. Prévenez aussi l’opérateur : son numéro figure sur la borne.');
+      setMsg(C.reportPhone);
       return;
     }
     try {
       await postReport('borne_hs', { lat: d.station.lat, lon: d.station.lon });
-      setMsg('Merci : la borne est signalée hors service aux autres conducteurs pendant 24 h.');
+      setMsg(C.reportOk);
     } catch {
-      setMsg('Signalement impossible pour le moment (réseau). Réessayez plus tard.');
+      setMsg(C.reportFail);
     }
   }
 
@@ -196,19 +202,19 @@ export default function Recharge() {
   if (saved) {
     return (
       <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]}>
-        <View style={styles.card} accessibilityLabel="Reçu">
-          <Text style={styles.cardTitle} accessibilityRole="header">Reçu enregistré</Text>
-          <Row k="Borne" v={saved.stationName} />
-          {saved.pdcId ? <Row k="Point" v={`…${saved.pdcId.slice(-4)}`} /> : null}
-          <Row k="Payé à" v={saved.operatorName} />
-          <Row k="Méthode" v={methodLabel(saved.method)} />
-          <Row k="Durée" v={durationLabel((saved.endedAt - saved.startedAt) / 60_000)} />
-          <Row k={saved.kWhEstimated ? 'Énergie (estimée)' : 'Énergie'} v={saved.kWh != null ? `${saved.kWh.toLocaleString('fr-FR')} kWh` : '—'} />
-          <Row k="Montant payé" v={saved.pricePaid != null ? euros(Math.round(saved.pricePaid * 100)) : 'Non renseigné'} strong />
-          <Text style={styles.mutedLeft}>Gardé uniquement sur ce téléphone. Le justificatif officiel vient de {saved.operatorName} (e-mail, ticket ou page de paiement).</Text>
+        <View style={styles.card} accessibilityLabel={C.receipt}>
+          <Text style={styles.cardTitle} accessibilityRole="header">{C.receiptTitle}</Text>
+          <Row k={C.station} v={saved.stationName} />
+          {saved.pdcId ? <Row k={C.point} v={`…${saved.pdcId.slice(-4)}`} /> : null}
+          <Row k={C.paidTo} v={saved.operatorName} />
+          <Row k={C.method} v={methodLabel(saved.method)} />
+          <Row k={C.duration} v={durationLabel((saved.endedAt - saved.startedAt) / 60_000)} />
+          <Row k={saved.kWhEstimated ? C.energyEst : C.energy} v={saved.kWh != null ? kwhText(saved.kWh) : '—'} />
+          <Row k={C.paid} v={saved.pricePaid != null ? euros(Math.round(saved.pricePaid * 100)) : t.common.notProvided} strong />
+          <Text style={styles.mutedLeft}>{C.keptHere(saved.operatorName)}</Text>
         </View>
-        <Button label="Voir l’historique" onPress={() => router.replace('/historique')} />
-        <Button label="Retour à la carte" variant="light" onPress={() => router.replace('/')} />
+        <Button label={C.seeHistory} onPress={() => router.replace('/historique')} />
+        <Button label={t.common.backToMap} variant="light" onPress={() => router.replace('/')} />
       </ScrollView>
     );
   }
@@ -222,10 +228,16 @@ export default function Recharge() {
   }
   if (!d || !est || !input) {
     return (
-      <View style={[styles.root, styles.center, { paddingTop: insets.top + 24 }]}>
-        <Text style={styles.title}>Aucune recharge en cours</Text>
-        <Button label="Historique des recharges" variant="light" onPress={() => router.replace('/historique')} style={{ alignSelf: 'stretch' }} />
-        <Button label="Retour à la carte" variant="light" onPress={() => router.replace('/')} style={{ alignSelf: 'stretch' }} />
+      <View style={[styles.root, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.body}>
+          <ScreenHeader title={t.titles.maRecharge} dark />
+        </View>
+        <View style={[styles.center, { flex: 1 }]}>
+          <Text style={styles.title} accessibilityRole="header">{C.none}</Text>
+          <Text style={styles.muted}>{C.noneBody}</Text>
+          <Button label={t.common.findStation} onPress={() => router.replace('/')} style={{ alignSelf: 'stretch' }} />
+          <Button label={C.historyBtn} variant="light" onPress={() => router.replace('/historique')} style={{ alignSelf: 'stretch' }} />
+        </View>
       </View>
     );
   }
@@ -239,55 +251,49 @@ export default function Recharge() {
   const idleAt = tariff?.idle && endAt ? endAt + tariff.idle.afterMin * 60_000 : null;
   const span = Math.max(1, est.toSoc - est.fromSoc);
   const pct = Math.min(1, Math.max(0, (prog.soc - est.fromSoc) / span));
-  const pointText = d.plan?.pdcId ? ` · point …\u2060${d.plan.pdcId.slice(-4)}` : '';
+  const pointText = d.plan?.pdcId ? C.pointSuffix(d.plan.pdcId.slice(-4)) : '';
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
-      <View style={styles.headRow}>
-        <Button label="Carte" variant="ghost" onPress={() => router.replace('/')} style={styles.back} />
-        <Text style={styles.station} numberOfLines={2}>
-          {d.station.name}
-          {pointText}
-        </Text>
-      </View>
+      <ScreenHeader dark title={t.titles.maRecharge} sub={`${d.station.name}${pointText}`} />
 
       {!d.chargeStartedAt && !help ? (
         <>
           <View style={styles.ring}>
             <Text style={styles.stateBig} accessibilityRole="header">
-              {d.plan?.method === 'badge' ? 'Passez votre badge sur la borne' : d.plan?.method === 'account' ? `Démarrage avec votre compte ${d.operatorName}` : reader ? 'Payez sur le lecteur de la borne' : `Paiement chez ${d.operatorName}`}
+              {d.plan?.method === 'badge' ? C.stateBadge : d.plan?.method === 'account' ? C.stateAccount(d.operatorName) : reader ? C.stateReader : C.statePage(d.operatorName)}
             </Text>
             <Text style={styles.muted}>
               {d.plan?.method === 'badge'
-                ? 'Suivez l’écran de la borne, puis branchez. Branché suit la recharge ici.'
+                ? C.bodyBadge
                 : d.plan?.method === 'account'
-                  ? `Lancez la charge sur la page de ${d.operatorName}, branchez si ce n’est pas déjà fait, puis revenez ici.`
+                  ? C.bodyAccount(d.operatorName)
                   : reader
-                ? `Suivez l’écran de la borne : carte bancaire${d.plan?.pdcId ? `, point …${d.plan.pdcId.slice(-4)}` : ''}, puis branchement. Branché suit la recharge ici.`
-                : `Finalisez le paiement sur la page de ${d.operatorName}, branchez si ce n’est pas déjà fait, puis revenez ici.`}
+                    ? C.bodyReader(d.plan?.pdcId ? d.plan.pdcId.slice(-4) : null)
+                    : C.bodyPage(d.operatorName)}
             </Text>
           </View>
           {!reader && d.plan?.pdcId && (d.plan.method === 'operator-link' || d.plan.method === 'account') ? <CopyId id={d.plan.pdcId} dark /> : null}
-          <Button label="La charge a démarré" onPress={started} hint="Lance le suivi en direct et les rappels de fin de charge" />
-          <Button label="Ça ne démarre pas" variant="light" onPress={() => setHelp(true)} hint="Autre point, autre méthode, appeler l’opérateur" />
-          {!reader ? <Button label={`Rouvrir la page ${d.operatorName}`} variant="ghost" onPress={reopen} /> : null}
+          <Button label={C.started} onPress={started} hint={C.startedHint} />
+          <Button label={C.notStarting} variant="light" onPress={() => setHelp(true)} hint={C.notStartingHint} />
+          {!reader ? <Button label={C.reopen(d.operatorName)} variant="ghost" onPress={reopen} /> : null}
         </>
       ) : null}
 
       {!d.chargeStartedAt && help ? (
         <>
           <View style={styles.card}>
-            <Text style={styles.cardTitle} accessibilityRole="header">La charge ne démarre pas</Text>
-            <Text style={styles.mutedLeft}>Vérifiez que le câble est bien enfoncé des deux côtés et que la voiture est déverrouillée. Si vous avez payé sans que la charge démarre, l’opérateur rembourse ou libère la pré-autorisation : gardez le reçu.</Text>
+            <Text style={styles.cardTitle} accessibilityRole="header">{C.helpTitle}</Text>
+            <Text style={styles.mutedLeft}>{C.helpBody}</Text>
           </View>
-          <Button label="Essayer un autre point" variant="light" onPress={() => router.replace({ pathname: '/recharger', params: { station: d.station.id, step: 'point' } })} />
-          <Button label="Essayer une autre méthode" variant="light" onPress={() => router.replace({ pathname: '/recharger', params: { station: d.station.id } })} />
-          {tel ? <Button label={`Appeler ${d.operatorName}`} variant="light" onPress={tel} hint={d.station.tel} /> : null}
-          <Button label="Signaler la borne hors service" variant="light" onPress={reportDown} hint="Prévient les autres conducteurs, sans vous identifier" />
+          <Button label={C.otherPoint} variant="light" onPress={() => router.replace({ pathname: '/recharger', params: { station: d.station.id, step: 'point' } })} />
+          <Button label={C.otherMethod} variant="light" onPress={() => router.replace({ pathname: '/recharger', params: { station: d.station.id } })} />
+          {tel ? <Button label={C.call(d.operatorName)} variant="light" onPress={tel} hint={d.station.tel} /> : null}
+          <Button label={C.reportDown} variant="light" onPress={reportDown} hint={C.reportDownHint} />
           {msg ? <Notice dark>{msg}</Notice> : null}
-          <Button label="Finalement, la charge a démarré" variant="ghost" onPress={started} />
+          <Button label={C.startedAfterAll} variant="ghost" onPress={started} />
           <Button
-            label="Abandonner"
+            label={C.abandon}
             variant="ghost"
             onPress={() => {
               cancelAlerts(d.alertIds);
@@ -302,50 +308,50 @@ export default function Recharge() {
         <>
           <View style={styles.ring} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: prog.soc }}>
             <Text style={styles.big}>{prog.soc} %</Text>
-            <Text style={styles.state}>{prog.done ? `Objectif ${est.toSoc} % atteint (estimation)` : `En charge · fin à ${est.toSoc} % vers ${clock(endAt)}`}</Text>
+            <Text style={styles.state}>{prog.done ? C.goalReached(est.toSoc) : C.charging(est.toSoc, clock(endAt))}</Text>
             <View style={styles.bar}>
               <View style={[styles.barFill, { width: `${Math.round(pct * 100)}%` }]} />
             </View>
             <View style={styles.stats}>
-              <Stat label="Énergie" value={`${prog.kWhBilled.toLocaleString('fr-FR')} kWh`} />
-              <Stat label="Coût estimé" value={prog.cost != null ? euros(Math.round(prog.cost * 100)) : 'Prix inconnu'} />
-              <Stat label="Écoulé" value={fmt(elapsedMs)} />
+              <Stat label={C.energy} value={kwhText(prog.kWhBilled)} />
+              <Stat label={C.costEst} value={prog.cost != null ? euros(Math.round(prog.cost * 100)) : t.common.unknownPrice} />
+              <Stat label={C.elapsed} value={fmt(elapsedMs)} />
             </View>
             <Text style={styles.muted}>
-              Estimation {d.plan?.vehicle ? `pour ${d.plan.vehicle.name}` : 'pour un véhicule moyen'} depuis {est.fromSoc} %, à {est.powerKw.toLocaleString('fr-FR')} kW. Le montant réel est celui de {d.operatorName}.
+              {C.estimateNote(d.plan?.vehicle?.name ?? null, est.fromSoc, `${num(est.powerKw)} kW`, d.operatorName)}
             </Text>
           </View>
-          {prog.done ? <Notice tone="demo">Votre batterie devrait être à {est.toSoc} % : débranchez pour libérer la place{idleAt ? ' et éviter les frais d’occupation' : ''}.</Notice> : null}
+          {prog.done ? <Notice tone="demo">{C.unplug(est.toSoc, !!idleAt)}</Notice> : null}
           {idleAt ? (
             <Notice tone="demo">
-              Occupation facturée à partir de {clock(idleAt)} environ ({tariff!.idle!.perMin.toLocaleString('fr-FR', { maximumFractionDigits: 3 })} €/min). Rappel 5 min avant.
+              {C.idleNotice(clock(idleAt), `${num(tariff!.idle!.perMin, 3)} €/min`)}
             </Notice>
           ) : (
-            <Notice dark>Pensez à libérer la place en fin de charge.</Notice>
+            <Notice dark>{C.freeSpot}</Notice>
           )}
-          {d.alertIds?.length ? <Text style={styles.small}>Rappel programmé à la fin de charge{idleAt ? ' et avant les frais d’occupation' : ''}.</Text> : null}
-          <Button label="J’ai terminé ma recharge" onPress={finish} />
-          {!reader ? <Button label={`Rouvrir la page ${d.operatorName}`} variant="ghost" onPress={reopen} /> : null}
-          {tel ? <Button label={`Problème ? Appeler ${d.operatorName}`} variant="ghost" onPress={tel} /> : null}
+          {d.alertIds?.length ? <Text style={styles.small}>{C.reminder(!!idleAt)}</Text> : null}
+          <Button label={C.done} onPress={finish} />
+          {!reader ? <Button label={C.reopen(d.operatorName)} variant="ghost" onPress={reopen} /> : null}
+          {tel ? <Button label={C.problemCall(d.operatorName)} variant="ghost" onPress={tel} /> : null}
         </>
       ) : null}
 
       {d.endedAt ? (
         <>
           <View style={styles.card}>
-            <Text style={styles.cardTitle} accessibilityRole="header">Recharge terminée</Text>
-            {d.autoEnded ? <Text style={styles.mutedLeft}>Départ de la borne détecté : recharge terminée automatiquement à {clock(d.endedAt)}. Le reçu est déjà dans votre historique ; ajoutez le prix si vous le souhaitez.</Text> : null}
-            <Row k="Durée" v={fmt(elapsedMs)} />
-            <Row k="Énergie estimée" v={`${prog.kWhBilled.toLocaleString('fr-FR')} kWh`} />
-            <Row k="Coût estimé" v={prog.cost != null ? euros(Math.round(prog.cost * 100)) : 'Prix inconnu'} />
+            <Text style={styles.cardTitle} accessibilityRole="header">{C.endedTitle}</Text>
+            {d.autoEnded ? <Text style={styles.mutedLeft}>{C.autoEnded(clock(d.endedAt))}</Text> : null}
+            <Row k={C.duration} v={fmt(elapsedMs)} />
+            <Row k={C.energyEstimated} v={kwhText(prog.kWhBilled)} />
+            <Row k={C.costEst} v={prog.cost != null ? euros(Math.round(prog.cost * 100)) : t.common.unknownPrice} />
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.label} nativeID="ok-label">Ça a marché ?</Text>
+            <Text style={styles.label} nativeID="ok-label">{C.worked}</Text>
             <View style={styles.choices} accessibilityRole="radiogroup" accessibilityLabelledBy="ok-label">
               {[
-                { v: true, l: 'Oui' },
-                { v: false, l: 'Non' },
+                { v: true, l: t.common.yes },
+                { v: false, l: t.common.no },
               ].map((c) => (
                 <Pressable
                   key={c.l}
@@ -360,31 +366,31 @@ export default function Recharge() {
                 </Pressable>
               ))}
             </View>
-            <Text style={styles.small}>Votre réponse aide les autres conducteurs (fiabilité de la borne). Envoyée sans identifiant, seulement si vous répondez.</Text>
+            <Text style={styles.small}>{C.workedNote}</Text>
 
-            <Text style={styles.label} nativeID="paid-label">Combien avez-vous payé ? (facultatif)</Text>
+            <Text style={styles.label} nativeID="paid-label">{C.paidQ}</Text>
             <TextInput
               value={paid}
               onChangeText={setPaid}
-              placeholder="ex. 12,40"
+              placeholder={C.paidPh}
               placeholderTextColor={colors.nightMuted}
               keyboardType="decimal-pad"
-              aria-label="Montant payé en euros"
+              aria-label={C.paidA11y}
               accessibilityLabelledBy="paid-label"
               style={styles.input}
             />
             <Pressable accessibilityRole="button" accessibilityState={{ expanded: details }} onPress={() => setDetails((x) => !x)} style={styles.link}>
-              <Text style={styles.linkText}>{details ? 'Moins de détails' : 'Plus de détails (kWh du ticket, montant bloqué)'}</Text>
+              <Text style={styles.linkText}>{details ? C.less : C.more}</Text>
             </Pressable>
             {details ? (
               <>
-                <TextInput value={kwhIn} onChangeText={setKwhIn} placeholder={`kWh affichés (estimé : ${prog.kWhBilled.toLocaleString('fr-FR')})`} placeholderTextColor={colors.nightMuted} keyboardType="decimal-pad" aria-label="kWh affichés par la borne" style={styles.input} />
-                <TextInput value={preauthIn} onChangeText={setPreauthIn} placeholder="Montant bloqué (pré-autorisation), en €" placeholderTextColor={colors.nightMuted} keyboardType="decimal-pad" aria-label="Montant de pré-autorisation en euros" style={styles.input} />
+                <TextInput value={kwhIn} onChangeText={setKwhIn} placeholder={C.kwhPh(num(prog.kWhBilled))} placeholderTextColor={colors.nightMuted} keyboardType="decimal-pad" aria-label={C.kwhA11y} style={styles.input} />
+                <TextInput value={preauthIn} onChangeText={setPreauthIn} placeholder={C.preauthPh} placeholderTextColor={colors.nightMuted} keyboardType="decimal-pad" aria-label={C.preauthA11y} style={styles.input} />
               </>
             ) : null}
           </View>
-          <Button label="Enregistrer le reçu" onPress={save} hint="Ajoute la recharge à votre historique, sur ce téléphone" />
-          <Button label="Reprendre la recharge" variant="ghost" onPress={() => update({ endedAt: null, autoEnded: false })} />
+          <Button label={C.save} onPress={save} hint={C.saveHint} />
+          <Button label={C.resume} variant="ghost" onPress={() => update({ endedAt: null, autoEnded: false })} />
         </>
       ) : null}
     </ScrollView>

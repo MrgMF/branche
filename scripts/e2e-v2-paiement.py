@@ -229,7 +229,7 @@ try:
         page.wait_for_selector('text=Reçu enregistré')
         shot(page, 'a9-recu')
         page.get_by_role('button', name='Voir l’historique').click()
-        page.get_by_role('heading', name='Mes recharges', exact=True).wait_for()
+        page.get_by_role('heading', name='Historique et dépenses', exact=True).wait_for()
         page.get_by_text('9,80 €').first.wait_for()
         no_overflow(page, 'historique')
         shot(page, 'a10-historique')
@@ -264,7 +264,7 @@ try:
         page.wait_for_selector('text=Votre véhicule ?')
         shot(page, 'b2-vehicule-propose')
         page.get_by_role('button', name='Choisir').click()
-        page.get_by_role('heading', name='Votre véhicule', exact=True).wait_for()
+        page.get_by_role('heading', name='Mon véhicule', exact=True).wait_for()
         assert page.get_by_role('button', name='Prendre en photo').count() == 0  # API absente : bouton masqué
         page.get_by_label('Rechercher un modèle').fill('megnae')  # faute de frappe tolérée
         page.get_by_role('radio', name='Renault Mégane E-Tech 60 kWh', exact=False).click()

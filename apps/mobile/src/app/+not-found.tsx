@@ -2,13 +2,15 @@ import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/ui';
 import { colors, fonts } from '../theme';
+import { useT } from '../i18n';
 
 export default function NotFound() {
+  const t = useT();
   return (
     <View style={styles.root}>
-      <Text style={styles.h1} accessibilityRole="header">Page introuvable</Text>
-      <Text style={styles.p}>Cette adresse n’existe pas dans Branché.</Text>
-      <Button label="Retour à la carte" onPress={() => router.replace('/')} style={{ alignSelf: 'stretch' }} />
+      <Text style={styles.h1} accessibilityRole="header">{t.titles.notFound}</Text>
+      <Text style={styles.p}>{t.notFound.body}</Text>
+      <Button label={t.common.backToMap} onPress={() => router.replace('/')} style={{ alignSelf: 'stretch' }} />
     </View>
   );
 }

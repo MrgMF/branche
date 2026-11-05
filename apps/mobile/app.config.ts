@@ -35,6 +35,8 @@ const config: ExpoConfig = {
     'expo-router',
     'expo-font',
     'expo-web-browser',
+    // Langue de l'appareil (src/i18n/device.ts)
+    'expo-localization',
     // Rappels locaux de fin de charge et avant pénalité d'occupation (aucune notification distante)
     ['expo-notifications', { color: '#0B7A55' }],
     // Véhicule : photo facultative (envoyée pour identification, jamais conservée) et marques des applis constructeur (<queries>)

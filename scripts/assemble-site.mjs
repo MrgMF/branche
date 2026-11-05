@@ -36,7 +36,7 @@ const fallback = {
   EDITEUR_NOM: 'un particulier (éditeur non professionnel ; identité communiquée à l’hébergeur, LCEN art. 6, III, 2)',
   CONTACT_EMAIL: 'le suivi public du projet sur GitHub (messages visibles de tous)',
 };
-const pages = ['index.html', ...(await readdir(resolve(out, 'legal'))).map((f) => `legal/${f}`)].filter((f) => f.endsWith('.html'));
+const pages = ['index.html', 'en/index.html', ...(await readdir(resolve(out, 'legal'))).map((f) => `legal/${f}`)].filter((f) => f.endsWith('.html'));
 for (const f of pages) {
   const path = resolve(out, f);
   let html = await readFile(path, 'utf8');

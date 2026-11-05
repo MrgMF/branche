@@ -104,7 +104,7 @@ export function AppMenu({ open, onClose }: { open: boolean; onClose: () => void 
   }
 
   return (
-    <View style={StyleSheet.absoluteFill} testID="app-menu">
+    <View style={[StyleSheet.absoluteFill, { zIndex: 50, elevation: 50 }]} testID="app-menu">
       <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel={t.menu.close} accessibilityRole="button" />
       <View
         style={[styles.panel, { width: Math.min(360, width * 0.88), paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}
