@@ -646,7 +646,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
       wrongWay.current = 0;
       inFlight.current = true;
       speak(tr().voice.newRoute);
-      void compute({ ...t, offer: null }, p, 'reroute');
+      void compute({ ...t, gps: 'ok', offer: null }, p, 'reroute');
       return;
     }
 
