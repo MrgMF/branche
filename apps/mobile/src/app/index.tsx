@@ -212,7 +212,7 @@ export default function MapScreen() {
     }),
   });
   // Texte agrandi : fiche plus haute et action principale collée en bas du panneau (toujours atteignable).
-  const sheetMax = Math.round(height * (trip ? 0.58 : selected ? (large ? 0.74 : 0.62) : 0.46));
+  const sheetMax = Math.round(height * (trip ? 0.58 : selected ? (large ? 0.7 : 0.62) : 0.46));
 
   useEffect(() => {
     store.setStations(all);
@@ -276,7 +276,11 @@ export default function MapScreen() {
       if (!user) map.current?.post({ type: 'fly', ...DEFAULT_CENTER, zoom: 12, instant: true });
     } else if (m.type === 'tapRoute' || m.type === 'tapPin') nav.onMapMessage(m);
     else if (m.type === 'tap') {
-      if (!trip) setSelectedId(m.id);
+      if (trip) return;
+      setSelectedId(m.id);
+      // Borne touchée sur la carte : ramenée au-dessus de la fiche (zoom inchangé, l'éventail reste lisible).
+      const s = byId.get(m.id);
+      if (s) map.current?.post({ type: 'fly', lat: s.lat, lon: s.lon, offsetY: wide ? 0 : -height * 0.25 });
     }
     else if (m.type === 'moveend' && m.user) {
       setCenter({ lat: m.lat, lon: m.lon });

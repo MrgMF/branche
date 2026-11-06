@@ -14,7 +14,7 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
 <style>html,body,#m{margin:0;height:100%;background:${C.mapGround};overflow:hidden;overscroll-behavior:none}#m{touch-action:none}
 .maplibregl-ctrl-attrib{font:11px/1.4 system-ui,sans-serif}.maplibregl-ctrl-bottom-left .maplibregl-ctrl-attrib{max-width:calc(100vw - 92px);background:rgba(255,255,255,.88);border-radius:8px;margin:0 0 6px 8px;padding:2px 8px}
 .maplibregl-ctrl-attrib a{color:${C.ink}}
-.sp{position:relative;width:52px;height:52px;margin:0;padding:0;border:0;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.sp{width:52px;height:52px;margin:0;padding:0;border:0;background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .sp .leg{position:absolute;left:50%;top:21px;height:2px;background:${C.ink};opacity:.55;transform-origin:0 50%;z-index:0;pointer-events:none}
 .sp .dot{position:absolute;left:15px;top:10px;width:16px;height:16px;border-radius:50%;border:3px solid ${M.stationStroke};z-index:1;box-sizing:content-box}
 .sp .lb{position:absolute;left:50%;transform:translateX(-50%);bottom:0;z-index:1;white-space:nowrap;font:700 11px/14px system-ui,sans-serif;color:${C.ink};background:rgba(255,255,255,.94);border-radius:6px;padding:0 4px}

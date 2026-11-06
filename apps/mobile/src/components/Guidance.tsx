@@ -423,8 +423,9 @@ const styles = StyleSheet.create({
   reportSheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: 18, gap: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10 },
   offRoute: { flex: 1, fontFamily: fonts.display, fontSize: 26, lineHeight: 32, color: '#FFFFFF', paddingVertical: 10 },
-  socRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  socChip: { minWidth: MIN_TOUCH, minHeight: 48, flexGrow: 1, paddingHorizontal: 8, borderRadius: radius.md, borderWidth: 2, borderColor: colors.accent, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  // 6 choix en 2 rangées de 3 (grille équilibrée).
+  socRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8 },
+  socChip: { width: '31.5%', minWidth: MIN_TOUCH, minHeight: 48, paddingHorizontal: 8, borderRadius: radius.md, borderWidth: 2, borderColor: colors.accent, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   socChipText: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
   reportBtn: { minHeight: 64, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 8 },
   reportCancel: { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.inputBorder },

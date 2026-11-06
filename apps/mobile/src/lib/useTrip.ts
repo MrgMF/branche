@@ -374,9 +374,16 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
         feed.current = { incidents: f.incidents, zones };
         const route = routes[0] ?? null;
         resetProgress(route, mode === 'reroute');
+        // Nouveau tracé en guidage : la première manœuvre s'affiche tout de suite (sans attendre la position suivante).
+        let first: Partial<Pick<Trip, 'next' | 'then'>> = {};
         if (mode === 'reroute') {
           announced.current = new Set([...announced.current].filter((k) => !/^s\d+:/.test(k)));
           prevArrival.current = null;
+          const i = route ? nextStepIndex(along.current, route.steps, 0) : -1;
+          if (route && i >= 0) {
+            const after = route.steps[i + 1];
+            first = { next: { step: route.steps[i]!, index: i, inM: along.current[i]! }, then: after ? { step: after, gapM: along.current[i + 1]! - along.current[i]! } : null };
+          }
         }
         const next = await annotate({
           ...base,
@@ -394,6 +401,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
           driverChose: mode === 'reroute' ? false : base.driverChose,
           chargers: mode === 'reroute' ? [] : base.chargers,
           offRoute: false,
+          ...first,
           toast:
             mode === 'reroute'
               ? lostTraffic(base, res)
@@ -806,7 +814,8 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
             offRoute: x.route === route ? offRoute : x.offRoute,
             socNow: socNowPct,
             speedKmh: speed,
-            limitKmh: speedLimitAt(route, prog.seg),
+            // Hors itinéraire : la limitation de l'ancien tracé ne vaut plus.
+            limitKmh: offRoute ? null : speedLimitAt(route, prog.seg),
             remainingM,
             remainingS,
             alert,
