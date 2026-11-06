@@ -54,9 +54,13 @@ export async function vehicleRoutes(app: FastifyInstance, deps: { identifier: Ve
 }
 
 /** GET /v1/meta : fonctions disponibles sur ce serveur (l'app masque ce qui ne l'est pas). */
-export async function featureRoutes(app: FastifyInstance, deps: { identifier: VehicleIdentifier | null }): Promise<void> {
+export async function featureRoutes(
+  app: FastifyInstance,
+  deps: { identifier: VehicleIdentifier | null; routing?: { provider: 'tomtom' | 'valhalla'; fallback: boolean } | null },
+): Promise<void> {
   app.get('/v1/meta', async (_req, reply) => {
     reply.header('cache-control', 'public, max-age=300');
-    return { v: 2, features: { vehicleIdentify: !!deps.identifier, checkins: true, availability: availabilityEnabled() } };
+    // routing : fournisseur d'itinéraire (null = aucun) ; fallback : repli Valhalla derrière TomTom.
+    return { v: 2, features: { vehicleIdentify: !!deps.identifier, checkins: true, availability: availabilityEnabled() }, routing: deps.routing ?? null };
   });
 }

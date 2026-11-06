@@ -187,7 +187,9 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
         ? new AnthropicVehicleIdentifier(config.anthropicApiKey, config.anthropicModel, fetchFn)
         : null;
   await app.register(async (scope) => vehicleRoutes(scope, { identifier }));
-  await app.register(async (scope) => featureRoutes(scope, { identifier }));
+  // Fournisseur d'itinéraire réellement configuré (attribution « À propos » de l'app : © TomTom seulement s'il est utilisé).
+  const routing = router ? { provider: router.name, fallback: router instanceof FallbackRouteProvider } : null;
+  await app.register(async (scope) => featureRoutes(scope, { identifier, routing }));
 
   return app;
 }

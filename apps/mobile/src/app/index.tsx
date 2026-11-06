@@ -1,7 +1,7 @@
 import * as Location from 'expo-location';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ScrollViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapView, type MapHandle } from '../components/MapView';
 import type { MapOut } from '../components/mapHtml';
@@ -28,6 +28,7 @@ import { AppMenu, chargeState, MenuButton, type ChargeState } from '../component
 import { Icon } from '../components/Icon';
 import { useT } from '../i18n';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { useLargeText } from '../lib/useLargeText';
 
 type Pos = { lat: number; lon: number };
 type LocState = 'pending' | 'granted' | 'denied';
@@ -64,6 +65,12 @@ export default function MapScreen() {
   const [sheetH, setSheetH] = useState(0);
   const [advisedId, setAdvisedId] = useState<string | null>(null);
   const [status, setStatus] = useState<Record<string, 'free' | 'busy' | 'down'>>({});
+  const large = useLargeText();
+  // Panneau : remis en haut à chaque fiche ouverte (titre et « Recharger ici » visibles sans défiler).
+  const sheetScroll = useRef<ScrollViewInstance>(null);
+  useEffect(() => {
+    sheetScroll.current?.scrollTo({ y: 0, animated: false });
+  }, [selectedId]);
 
   // Au retour sur la carte : recharge en cours / préparée (badge du menu, bandeau « Reprendre »)
   useFocusEffect(
@@ -183,11 +190,17 @@ export default function MapScreen() {
     });
   }, [visible, mapReady, status]);
 
-  // Attribution OSM / MapLibre toujours visible : au-dessus de la fiche (mobile) ou à droite du panneau (large).
+  // Attribution OSM / MapLibre toujours visible : sous la recherche et les filtres (mobile, loin du point bleu et de la fiche),
+  // à droite du panneau (large), en bas pendant le guidage.
   useEffect(() => {
     if (!mapReady) return;
-    map.current?.post(wide ? { type: 'pad', bottom: 0, left: 16 + PANEL + 8 } : { type: 'pad', bottom: trip?.guiding ? 0 : sheetH, left: 0 });
-  }, [mapReady, wide, sheetH, trip?.guiding]);
+    map.current?.post(wide ? { type: 'pad', bottom: 0, left: 16 + PANEL + 8 } : trip?.guiding
+          ? { type: 'pad', bottom: 0, left: 0 }
+          : // Écran court ou texte agrandi : la position est sous la recherche, l'attribution reste juste au-dessus de la fiche.
+            height - topH - sheetH > 220
+            ? { type: 'pad', bottom: 0, left: 4, top: topH }
+            : { type: 'pad', bottom: sheetH, left: 0 });
+  }, [mapReady, wide, topH, sheetH, height, trip?.guiding]);
 
   // Premier centrage sur la position ; ensuite, recentrage/suivi via « Ma position » (MapControls).
   const flown = useRef(false);
@@ -269,7 +282,7 @@ export default function MapScreen() {
           api={controls}
           status={geo.status}
           height={height}
-          top={topH + 8}
+          top={topH + (wide ? 8 : 34)}
           left={wide ? 16 + PANEL + 12 : 12}
           bottom={wide ? 24 : sheetMax + 12}
           onLocate={() => {
@@ -291,7 +304,7 @@ export default function MapScreen() {
         testID="sheet"
       >
         {wide ? null : <View style={styles.grip} />}
-        <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 8 }} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={sheetScroll} contentContainerStyle={{ gap: 12, paddingBottom: 8 }} keyboardShouldPersistTaps="handled">
           {trip ? (
             <TripPanel nav={nav} />
           ) : selected ? (
@@ -304,11 +317,12 @@ export default function MapScreen() {
               operatorName={operatorLabel(selected, ops)}
               onRoute={() => plan(selected)}
               onClose={() => setSelectedId(null)}
+              onPick={select}
             />
           ) : (
             <>
-              <View style={styles.titleRow}>
-                <Text style={[styles.h1, { flex: 1 }]} accessibilityRole="header" numberOfLines={2}>
+              <View style={[styles.titleRow, large && { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                <Text style={[styles.h1, !large && { flex: 1 }]} accessibilityRole="header" numberOfLines={large ? 4 : 2}>
                   {panned || !user ? t.map.around : t.map.nearest}
                 </Text>
                 <Pressable accessibilityRole="button" accessibilityLabel={t.map.scanA11y} testID="scan" onPress={() => router.push('/payer')} style={({ pressed }) => [styles.scanBtn, pressed && { backgroundColor: colors.border }]}>
@@ -324,7 +338,7 @@ export default function MapScreen() {
               ) : (
                 <HereBanner user={user} onPick={select} filters={filters} onAdvised={setAdvisedId} />
               )}
-              {loc === 'denied' && !panned ? (
+              {loc === 'denied' && !panned && !selected ? (
                 <Notice>{t.map.locDenied}</Notice>
               ) : null}
               {dataError ? (
@@ -361,24 +375,30 @@ export default function MapScreen() {
               {closest.map(({ s }, i) => {
                 // Distance seulement depuis la position réelle (jamais depuis le centre de la carte).
                 const d = user ? distanceKm(user, s) : null;
+                const st = status[s.id];
+                const stLabel = st === 'free' ? t.avail.libre : st === 'busy' ? t.avail.occupe : st === 'down' ? t.avail.hors_service : t.avail.inconnu;
                 return (
                 <Pressable
                   key={s.id}
                   onPress={() => select(s)}
                   accessibilityRole="button"
-                  accessibilityLabel={d != null ? t.map.itemA11y(displayName(s), km(d), kw(s.kw)) : [displayName(s), kw(s.kw)].join(', ')}
-                  style={({ pressed }) => [styles.item, i === 0 && styles.itemFirst, pressed && { backgroundColor: colors.surfaceAlt }]}
+                  accessibilityLabel={`${d != null ? t.map.itemA11y(displayName(s), km(d), kw(s.kw)) : [displayName(s), kw(s.kw)].join(', ')}, ${stLabel}`}
+                  style={({ pressed }) => [styles.item, large && styles.itemLarge, i === 0 && !advisedId && styles.itemFirst, pressed && { backgroundColor: colors.surfaceAlt }]}
                 >
                   <View style={{ flex: 1, gap: 3 }}>
-                    <Text style={styles.itemTitle} numberOfLines={1}>
+                    <Text style={styles.itemTitle} numberOfLines={large ? 4 : 2}>
                       {displayName(s)}
                     </Text>
-                    <Text style={styles.itemSub} numberOfLines={1}>
+                    <Text style={styles.itemSub} numberOfLines={large ? 3 : 1}>
                       {[kw(s.kw), s.c.map((c) => plugLabel(c)).join(', '), s.acc === 'reserve' ? t.map.reserved : null].filter(Boolean).join(' · ')}
                     </Text>
+                    {/* Statut temps réel par ligne ; inconnu : mention discrète, sans pastille. */}
+                    <View style={[styles.pill, st === 'free' ? styles.pillFree : st === 'busy' ? styles.pillBusy : st === 'down' ? styles.pillDown : styles.pillUnknown]} accessibilityElementsHidden importantForAccessibility="no">
+                      <Text style={[styles.pillText, { color: st === 'free' ? colors.accentPressed : st === 'busy' ? colors.warnText : st === 'down' ? colors.danger : colors.inkMuted }, !st && styles.pillTextUnknown]}>{stLabel}</Text>
+                    </View>
                   </View>
                   {d != null ? (
-                    <View style={{ alignItems: 'flex-end' }}>
+                    <View style={{ alignItems: large ? 'flex-start' : 'flex-end' }}>
                       <Text style={styles.dist}>{km(d)}</Text>
                       <Text style={styles.itemSub}>{minutes(d)}</Text>
                     </View>
@@ -405,7 +425,7 @@ const styles = StyleSheet.create({
   scanBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: MIN_TOUCH, paddingHorizontal: 14, borderRadius: 22, backgroundColor: colors.surfaceAlt },
   scanText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
   empty: { gap: 8, paddingVertical: 8 },
-  emptyBtn: { alignSelf: 'flex-start', minHeight: MIN_TOUCH, paddingHorizontal: 16, borderRadius: 22, borderWidth: 1, borderColor: colors.ink, justifyContent: 'center' },
+  emptyBtn: { alignSelf: 'flex-start', minHeight: MIN_TOUCH, paddingHorizontal: 16, borderRadius: 22, borderWidth: 2, borderColor: colors.inputBorder, justifyContent: 'center' },
   emptyBtnText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
   round: {
     width: MIN_TOUCH + 4,
@@ -451,6 +471,14 @@ const styles = StyleSheet.create({
   muted: { fontFamily: fonts.medium, fontSize: 14, color: colors.inkMuted },
   item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, minHeight: 64 },
   itemFirst: { borderColor: colors.accent, borderWidth: 2 },
+  itemLarge: { flexDirection: 'column', alignItems: 'stretch' },
+  pill: { alignSelf: 'flex-start', borderRadius: radius.sm, paddingVertical: 2, paddingHorizontal: 8, marginTop: 2 },
+  pillFree: { backgroundColor: colors.accentSoft },
+  pillBusy: { backgroundColor: colors.warnSoft },
+  pillDown: { backgroundColor: colors.dangerSoft },
+  pillUnknown: { paddingHorizontal: 0, paddingVertical: 0 },
+  pillText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
+  pillTextUnknown: { fontFamily: fonts.medium },
   itemTitle: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
   itemSub: { fontFamily: fonts.medium, fontSize: 13, color: colors.inkMuted },
   dist: { fontFamily: fonts.display, fontSize: 17, color: colors.ink },

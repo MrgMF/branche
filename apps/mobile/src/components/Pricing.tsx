@@ -40,7 +40,7 @@ export function TariffLines({ station, community, compact }: { station: Station;
       {!compact && t.kind === 'priced' ? <Text style={styles.src}>{T.pricing.src(t.raw.length > 90 ? `${t.raw.slice(0, 90)}…` : t.raw)}</Text> : null}
       {rel ? (
         <View style={[styles.badge, { backgroundColor: rate != null && rate < 0.6 ? colors.warnSoft : colors.accentSoft }]} accessibilityRole="text">
-          <Text style={[styles.badgeText, { color: rate != null && rate < 0.6 ? '#7A3E06' : colors.accentPressed }]}>{T.pricing.reliability(rel)}</Text>
+          <Text style={[styles.badgeText, { color: rate != null && rate < 0.6 ? colors.warnText : colors.accentPressed }]}>{T.pricing.reliability(rel)}</Text>
         </View>
       ) : null}
       {last ? <Text style={styles.src}>{last}</Text> : null}

@@ -8,6 +8,7 @@ import { useT } from '../i18n';
 import { dateNum, num } from '../i18n/format';
 import { LEGAL } from '../lib/config';
 import { loadMeta, type Meta } from '../lib/stations';
+import { getRouting, type Routing } from '../lib/features';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 
 export default function About() {
@@ -15,9 +16,21 @@ export default function About() {
   const A = t.about;
   const insets = useSafeAreaInsets();
   const [meta, setMeta] = useState<Meta | null>(null);
+  const [routing, setRouting] = useState<Routing>(null);
   useEffect(() => {
     loadMeta().then(setMeta).catch(() => undefined);
+    getRouting().then(setRouting);
   }, []);
+  // Attribution de l'itinéraire selon le fournisseur réellement utilisé (© TomTom seulement s'il est configuré).
+  const routeAttr = !routing
+    ? null
+    : routing.provider === 'tomtom'
+      ? routing.fallback
+        ? A.routeTomtomFallback
+        : A.routeTomtom
+      : routing.client
+        ? A.routeValhallaClient
+        : A.routeValhalla;
 
   // Textes juridiques : en français uniquement (la version française fait foi).
   const links = [
@@ -43,7 +56,10 @@ export default function About() {
           {A.stations}
           {meta ? A.meta(num(meta.stations, 0), num(meta.pdc, 0), dateNum(Date.parse(meta.generatedAt))) : ''}
         </Text>
-        <Text style={styles.p}>{A.attributions}</Text>
+        <Text style={styles.p} testID="attributions">
+          {A.attributions}
+          {routeAttr ? ` ${routeAttr}` : ''}
+        </Text>
         <Text style={styles.p}>{A.realtime}</Text>
       </View>
 

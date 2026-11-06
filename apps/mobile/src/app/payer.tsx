@@ -24,7 +24,7 @@ import { ScreenHeader } from '../components/Screen';
 import { useT } from '../i18n';
 
 const PAYABLE = new Set<QrResult['verdict']>(['official', 'known-operator']);
-const WARN = { bg: colors.warnSoft, fg: '#7A3E06' };
+const WARN = { bg: colors.warnSoft, fg: colors.warnText };
 const OK = { bg: colors.accentSoft, fg: colors.accentPressed };
 const TONE: Record<QrResult['verdict'], { bg: string; fg: string }> = {
   official: OK,
@@ -32,7 +32,7 @@ const TONE: Record<QrResult['verdict'], { bg: string; fg: string }> = {
   'payment-platform': WARN,
   'other-operator': WARN,
   unknown: WARN,
-  dangerous: { bg: '#FDECEC', fg: colors.danger },
+  dangerous: { bg: colors.dangerSoft, fg: colors.danger },
 };
 
 export default function Payer() {
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#C9D3D0',
+    borderColor: colors.inputBorder,
     paddingHorizontal: 14,
     fontFamily: fonts.medium,
     fontSize: 16,
@@ -403,8 +403,8 @@ const styles = StyleSheet.create({
   reason: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 20 },
   check: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: MIN_TOUCH },
   mismatch: { gap: 8, borderTopWidth: 1, borderTopColor: '#E5C9A8', paddingTop: 10 },
-  box: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#7A3E06', backgroundColor: '#FFFFFF' },
-  boxOn: { backgroundColor: '#7A3E06' },
+  box: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: colors.warnText, backgroundColor: colors.surface },
+  boxOn: { backgroundColor: colors.warnText },
   checkText: { flex: 1, fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
   card: { backgroundColor: colors.surfaceAlt, borderRadius: radius.lg, padding: 16, gap: 6 },
   cardTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },

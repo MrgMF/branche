@@ -21,3 +21,21 @@ export function getFeatures(): Promise<Features> {
   }
   return p;
 }
+
+export type Routing = { provider: 'tomtom' | 'valhalla'; fallback: boolean; client?: boolean } | null;
+
+/**
+ * Fournisseur d'itinéraire réellement utilisé (attributions) : celui annoncé par l'API (GET /v1/meta),
+ * ou Valhalla public calculé par l'app quand il n'y a pas d'API (site statique).
+ */
+export async function getRouting(): Promise<Routing> {
+  if (!API_URL) return { provider: 'valhalla', fallback: false, client: true };
+  try {
+    const r = await fetch(`${API_URL}/v1/meta`);
+    if (!r.ok) return null;
+    const j = (await r.json()) as { routing?: Routing };
+    return j.routing ?? null;
+  } catch {
+    return null;
+  }
+}

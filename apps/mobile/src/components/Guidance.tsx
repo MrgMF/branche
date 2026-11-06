@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   unit: { fontFamily: fonts.displayMedium, fontSize: 24, color: '#FFFFFF' },
   street: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 25, color: '#E8EEEC' },
   // Panneau de sortie (vert autoroute français : texte blanc, contraste AA).
-  exitBadge: { alignSelf: 'flex-start', backgroundColor: '#0B6E3A', color: '#FFFFFF', fontFamily: fonts.bold, fontSize: 16, borderRadius: 6, borderWidth: 2, borderColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 2, marginBottom: 4, overflow: 'hidden' },
+  exitBadge: { alignSelf: 'flex-start', backgroundColor: colors.signExit, color: '#FFFFFF', fontFamily: fonts.bold, fontSize: 16, borderRadius: 6, borderWidth: 2, borderColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 2, marginBottom: 4, overflow: 'hidden' },
   offer: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 12, gap: 8, borderWidth: 2, borderColor: colors.accent, ...shadow },
   lowSoc: { borderColor: colors.danger },
   offerTitle: { fontFamily: fonts.display, fontSize: 19, color: colors.ink },
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
   pill: { alignSelf: 'stretch', borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 10, fontFamily: fonts.bold, fontSize: 15, color: colors.ink, overflow: 'hidden', ...shadow },
   pillText: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   pillWarn: { backgroundColor: '#FEF3E2', borderWidth: 2, borderColor: colors.busy },
-  pillDanger: { backgroundColor: '#FDECEC', borderWidth: 2, borderColor: colors.danger },
+  pillDanger: { backgroundColor: colors.dangerSoft, borderWidth: 2, borderColor: colors.danger },
   pillOk: { backgroundColor: colors.accentSoft, borderWidth: 2, borderColor: colors.accent },
   pillInfo: { backgroundColor: colors.surface },
   side: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },

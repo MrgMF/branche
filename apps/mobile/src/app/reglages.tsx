@@ -13,6 +13,7 @@ import { resetLocalData, updateSettings, useSettings } from '../lib/settings';
 import { showOnboardingAgain } from '../lib/useOnboarding';
 import { isMuted, onMutedChange, setMuted } from '../lib/voice';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { useLargeText } from '../lib/useLargeText';
 
 export default function Reglages() {
   const t = useT();
@@ -25,10 +26,12 @@ export default function Reglages() {
   const [resetErr, setResetErr] = useState(false);
   useEffect(() => onMutedChange((m) => setVoice(!m)), []);
   const dev = deviceLang().lang;
+  // Texte agrandi : marges réduites pour que les mots ne soient pas coupés.
+  const large = useLargeText();
 
   const langs: ('auto' | Lang)[] = ['auto', ...LANGS];
   return (
-    <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]}>
+    <ScrollView style={styles.root} contentContainerStyle={[styles.body, large && { paddingHorizontal: 6 }, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]}>
       <ScreenHeader title={t.titles.reglages} />
 
       <Section title={S.language}>
@@ -43,7 +46,7 @@ export default function Reglages() {
                 accessibilityState={{ checked: on }}
                 testID={`lang-${l}`}
                 onPress={() => updateSettings({ lang: l })}
-                style={({ pressed }) => [styles.row, i > 0 && styles.sep, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.row, large && { paddingHorizontal: 10, gap: 8 }, i > 0 && styles.sep, pressed && styles.pressed]}
               >
                 <View style={{ flex: 1 }}>
                   <Text style={styles.label} {...({ lang: l === 'auto' ? undefined : l } as object)}>

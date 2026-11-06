@@ -511,7 +511,7 @@ function PointRow({ p, onPress, selected, disabled, status }: { p: ChargePoint; 
       </View>
       {status && status.status !== 'inconnu' ? (
         <View style={[styles.pill, status.status === 'libre' ? styles.pillFree : status.status === 'occupe' ? styles.pillBusy : styles.pillDown]}>
-          <Text style={[styles.pillText, status.status === 'libre' ? { color: colors.accentPressed } : status.status === 'occupe' ? { color: '#7A3E06' } : { color: colors.danger }]}>{availLabel(status.status)}</Text>
+          <Text style={[styles.pillText, status.status === 'libre' ? { color: colors.accentPressed } : status.status === 'occupe' ? { color: colors.warnText } : { color: colors.danger }]}>{availLabel(status.status)}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
   pill: { borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 8 },
   pillFree: { backgroundColor: colors.accentSoft },
   pillBusy: { backgroundColor: colors.warnSoft },
-  pillDown: { backgroundColor: '#FDECEC' },
+  pillDown: { backgroundColor: colors.dangerSoft },
   pillText: { fontFamily: fonts.bold, fontSize: 12 },
   pointChip: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: colors.accentSoft },
   pointShort: { fontFamily: fonts.display, fontSize: 20, color: colors.accentPressed, letterSpacing: 1 },

@@ -137,7 +137,7 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
     return (
       <View style={styles.card} accessibilityRole="summary">
         <Text style={styles.kicker}>{t.here.ready}</Text>
-        <Text style={styles.title} numberOfLines={2}>
+        <Text style={styles.title} numberOfLines={4}>
           {displayName(hit.station)}
         </Text>
         <Text style={styles.sub}>
@@ -169,7 +169,7 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
         <View style={styles.row}>
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={styles.kicker}>{t.here.youAreAt}</Text>
-            <Text style={styles.title} numberOfLines={2}>
+            <Text style={styles.title} numberOfLines={4}>
               {displayName(s)}
             </Text>
             <Text style={styles.sub} numberOfLines={2}>
@@ -202,7 +202,7 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
   return (
     <View style={[styles.card, styles.soft]} accessibilityRole="summary">
       <Text style={styles.kicker}>{prepared ? t.here.prepared : vehicle ? t.here.advisedFor(vehicle.name) : t.here.advised}</Text>
-      <Text style={styles.title} numberOfLines={2}>
+      <Text style={styles.title} numberOfLines={4}>
         {displayName(target.s)}
       </Text>
       <Text style={styles.sub} numberOfLines={2}>
@@ -265,7 +265,7 @@ export function ChargeShortcuts() {
       {ended ? (
         <View style={styles.card} accessibilityRole="summary">
           <Text style={styles.kicker}>{t.here.ended}</Text>
-          <Text style={styles.title} numberOfLines={2}>
+          <Text style={styles.title} numberOfLines={4}>
             {ended.station.name}
           </Text>
           <Text style={styles.sub}>{t.here.endedBody}</Text>

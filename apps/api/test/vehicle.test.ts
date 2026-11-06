@@ -28,7 +28,9 @@ function fakeAnthropic(input: Record<string, unknown> | null, status = 200) {
 describe('POST /v1/vehicle/identify', () => {
   it('sans clé : 503 et /v1/meta annonce vehicleIdentify:false', async () => {
     ({ app } = await makeApp());
-    expect((await app.inject('/v1/meta')).json()).toEqual({ v: 2, features: { vehicleIdentify: false, checkins: true, availability: true } });
+    const meta = (await app.inject('/v1/meta')).json();
+    expect(meta).toMatchObject({ v: 2, features: { vehicleIdentify: false, checkins: true, availability: true } });
+    expect(meta).toHaveProperty('routing');
     const r = await post(app, { image: IMG, mediaType: 'image/jpeg' });
     expect(r.statusCode).toBe(503);
     expect(r.json().error.code).toBe('vehicle_identify_unavailable');
