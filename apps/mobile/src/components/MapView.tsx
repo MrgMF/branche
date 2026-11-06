@@ -1,7 +1,8 @@
-import { forwardRef, useImperativeHandle, useRef, type ComponentType, type Ref } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useState, type ComponentType, type Ref } from 'react';
 import { StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent, type WebViewProps } from 'react-native-webview';
-import { MAP_HTML, type MapIn, type MapOut } from './mapHtml';
+import { mapHtml, type MapIn, type MapOut } from './mapHtml';
+import { localeTag, tr, useT } from '../i18n';
 
 export interface MapHandle {
   post: (m: MapIn) => void;
@@ -12,6 +13,8 @@ type WebViewHandle = { injectJavaScript: (js: string) => void };
 const WV = WebView as unknown as ComponentType<WebViewProps & { ref?: Ref<WebViewHandle> }>;
 
 export const MapView = forwardRef<MapHandle, { onMessage: (m: MapOut) => void }>(function MapView({ onMessage }, ref) {
+  const t = useT();
+  const [html] = useState(() => mapHtml(localeTag(), tr().map.label, tr().map.offline));
   const web = useRef<WebViewHandle>(null);
   useImperativeHandle(ref, () => ({
     post: (m) => web.current?.injectJavaScript(`window.__recv(${JSON.stringify(JSON.stringify(m))});true;`),
@@ -21,7 +24,7 @@ export const MapView = forwardRef<MapHandle, { onMessage: (m: MapOut) => void }>
       ref={web}
       style={styles.map}
       originWhitelist={['*']}
-      source={{ html: MAP_HTML, baseUrl: 'https://branche.app/' }}
+      source={{ html, baseUrl: 'https://branche.app/' }}
       onMessage={(e: WebViewMessageEvent) => {
         try {
           onMessage(JSON.parse(e.nativeEvent.data) as MapOut);
@@ -32,7 +35,7 @@ export const MapView = forwardRef<MapHandle, { onMessage: (m: MapOut) => void }>
       setSupportMultipleWindows={false}
       javaScriptEnabled
       domStorageEnabled
-      accessibilityLabel="Carte des bornes de recharge"
+      accessibilityLabel={t.map.label}
     />
   );
 });

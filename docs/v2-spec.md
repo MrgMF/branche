@@ -10,6 +10,9 @@
 ## Promesse V2
 « Une seule appli, aucun compte : Branché me reconnaît à la borne, me dit combien je vais payer, me guide pas à pas, me fait payer l'opérateur en toute sécurité, suit ma charge et garde mon reçu. »
 
+## Règle produit (utilisateur)
+Par défaut : payer dans Branché sans aucun compte opérateur. Compte opérateur seulement s'il est imposé : ajouté une seule fois dans Branché (« Mes comptes de recharge », site officiel dans le navigateur intégré, session conservée), réutilisé ensuite automatiquement. Aucun partenariat, aucune appli tierce. Branché ne voit jamais identifiants ni carte.
+
 ## Parcours paiement A → Z (sans contrat d'itinérance, sans compte)
 1. **Détection** : à moins de 60 m d'une station (ou à l'arrivée du guidage), carte « Vous êtes à X » avec bouton unique « Recharger ici ». Scan QR possible à tout moment : l'identifiant de borne contenu dans le QR désigne la station et le point.
 2. **Point de charge** : liste des points de la station (puissance, prise) avec les 4 derniers caractères de l'identifiant mis en évidence, comme sur l'étiquette ; filtrés par compatibilité du véhicule.

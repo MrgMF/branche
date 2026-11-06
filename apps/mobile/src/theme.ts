@@ -1,22 +1,9 @@
-export const colors = {
-  ink: '#0F1A17',
-  inkMuted: '#4B5753',
-  surface: '#FFFFFF',
-  surfaceAlt: '#F1F4F3',
-  border: '#DDE4E2',
-  mapGround: '#E6ECEA',
-  accent: '#0B7A55',
-  accentPressed: '#075C40',
-  accentSoft: '#E3F2EC',
-  busy: '#B45309',
-  offline: '#5B6662',
-  nightBg: '#0F1A17',
-  nightCard: '#1A2622',
-  nightMuted: '#A9B8B3',
-  charge: '#3DDC97',
-  danger: '#B42318',
-  warnSoft: '#FEF3E2',
-} as const;
+// Jetons de design : source unique docs/design/tokens.json (couleurs de l'app, de la carte et du site).
+import tokens from '../../../docs/design/tokens.json';
+
+export const colors = tokens.color;
+/** Couleurs de la carte MapLibre (src/components/mapHtml.ts). */
+export const mapColors = tokens.map;
 
 export const fonts = {
   display: 'SpaceGrotesk_700Bold',
@@ -27,5 +14,5 @@ export const fonts = {
   bold: 'Inter_700Bold',
 } as const;
 
-export const radius = { sm: 10, md: 14, lg: 16, xl: 24 } as const;
-export const MIN_TOUCH = 44;
+export const radius = tokens.radius;
+export const MIN_TOUCH = tokens.minTouch;

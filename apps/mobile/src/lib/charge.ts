@@ -5,6 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { createSession, type Session } from './api';
 import { displayName, type Station } from './stations';
+import { tr } from '../i18n';
 
 /** URL de retour après la page de paiement (app native ou site web). */
 export function returnUrl(): string {
@@ -41,6 +42,6 @@ export function navigationLinks(s: Pick<Station, 'lat' | 'lon'>) {
     { label: 'Waze', url: `https://waze.com/ul?ll=${ll}&navigate=yes` },
     { label: 'Google Maps', url: `https://www.google.com/maps/dir/?api=1&destination=${ll}` },
   ];
-  if (Platform.OS === 'ios') links.push({ label: 'Plans', url: `https://maps.apple.com/?daddr=${ll}` });
+  if (Platform.OS === 'ios') links.push({ label: tr().common.appleMaps, url: `https://maps.apple.com/?daddr=${ll}` });
   return links;
 }

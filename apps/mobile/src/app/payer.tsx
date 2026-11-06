@@ -1,32 +1,44 @@
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PriceSummary } from '../components/Pricing';
 import { Button, Notice } from '../components/ui';
 import { apiEnabled } from '../lib/api';
+import { getCommunity, type Community } from '../lib/community';
 import { DEV_HOSTS } from '../lib/config';
 import { postReport } from '../lib/navigation';
-import { directPayUrl, openOperatorPayment, operatorLabel, operatorOf } from '../lib/connectors';
-import { PAY_LABEL } from '../lib/format';
+import { directPayUrl, openOperatorPayment, operatorLabel, operatorOf, startReaderCharge } from '../lib/connectors';
+import { km, payLabel } from '../lib/format';
+import type { MethodId } from '../lib/history';
 import { verifyQr, type Operator, type QrResult } from '../lib/qr';
-import { displayName, findByEvse, loadOperators, type Station } from '../lib/stations';
+import { findStation, pointById, pointsOf, type ChargePoint } from '../lib/evse';
+import { nearestPayable, payOptions, reader2027Applies } from '../lib/methods';
+import { loadPortals, preauthMaxOf, type Portals } from '../lib/portals';
+import { evseInText, qrTarget, type QrTarget } from '../lib/qrTarget';
+import { displayName, loadAround, loadOperators, nearest, type Station } from '../lib/stations';
+import { loadVehicle, type Vehicle } from '../lib/vehicle';
 import { store } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { ScreenHeader } from '../components/Screen';
+import { useT } from '../i18n';
 
 const PAYABLE = new Set<QrResult['verdict']>(['official', 'known-operator']);
-const WARN = { bg: colors.warnSoft, fg: '#7A3E06' };
+const WARN = { bg: colors.warnSoft, fg: colors.warnText };
 const OK = { bg: colors.accentSoft, fg: colors.accentPressed };
-const TONE: Record<QrResult['verdict'], { bg: string; fg: string; title: string }> = {
-  official: { ...OK, title: 'Domaine de l’opérateur (base IRVE)' },
-  'known-operator': { ...OK, title: 'Opérateur reconnu (base IRVE)' },
-  'payment-platform': { ...WARN, title: 'Plateforme de paiement : bénéficiaire à vérifier' },
-  'other-operator': { ...WARN, title: 'Autre opérateur que celui de la borne' },
-  unknown: { ...WARN, title: 'Lien non vérifié' },
-  dangerous: { bg: '#FDECEC', fg: colors.danger, title: 'QR code suspect — paiement bloqué' },
+const TONE: Record<QrResult['verdict'], { bg: string; fg: string }> = {
+  official: OK,
+  'known-operator': OK,
+  'payment-platform': WARN,
+  'other-operator': WARN,
+  unknown: WARN,
+  dangerous: { bg: colors.dangerSoft, fg: colors.danger },
 };
 
 export default function Payer() {
+  const t = useT();
+  const P = t.payer;
   const insets = useSafeAreaInsets();
   const [station, setStation] = useState<Station | null>(store.current());
   const [ops, setOps] = useState<Operator[]>([]);
@@ -37,45 +49,191 @@ export default function Payer() {
   const [confirmUnknown, setConfirmUnknown] = useState(false);
   const locked = useRef(false);
   const [reported, setReported] = useState<string | null>(null);
+  // QR code d'un autre point ou d'une autre borne : confirmation explicite, jamais de bascule silencieuse
+  const [mismatch, setMismatch] = useState<Extract<QrTarget, { kind: 'point' | 'station' }> | null>(null);
+  const [lastRaw, setLastRaw] = useState('');
+  const [scannedPdc, setScannedPdc] = useState<string | null>(null);
+  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [community, setCommunity] = useState<Community | null>(null);
+  const [portals, setPortals] = useState<Portals>({});
+  const [offline, setOffline] = useState(false);
+  const params = useLocalSearchParams<{ from?: string }>();
+  const [plan, setPlanState] = useState(store.plan());
+  // Ouvert depuis le parcours « Recharger » (?from=recharger, conservé par un rechargement de la page) mais mémoire vide :
+  // plan relu sur l'appareil avant toute vérification de QR code. Un plan existait → retour au parcours « Recharger » de
+  // sa borne (point repris), jamais de vérification sans contexte. Sans plan : scan comme depuis l'accueil.
+  const [ready, setReady] = useState(params.from !== 'recharger' || !!store.current() || !!store.plan());
+  useEffect(() => {
+    if (ready) return;
+    let alive = true;
+    store.hydrate().then(({ plan: p }) => {
+      if (!alive) return;
+      if (p) {
+        router.replace({ pathname: '/recharger', params: { station: p.stationId } });
+        return;
+      }
+      setReady(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const planPoint = station && plan?.stationId === station.id ? pointById(station, plan.pdcId) : undefined;
+  // Pas de parcours « Recharger » avant (scan depuis l'accueil) : résumé prix + estimation avant « Payer »
+  const fromHome = !planPoint;
+  const pts = station ? pointsOf(station) : [];
+  const summaryPoint: ChargePoint | undefined = (station && scannedPdc ? pointById(station, scannedPdc) : undefined) ?? planPoint ?? (pts.length === 1 ? pts[0] : undefined);
+
+  // Depuis le parcours « Recharger » sur téléphone : appareil photo ouvert d'office (un geste de moins)
+  useEffect(() => {
+    if (ready && params.from === 'recharger' && Platform.OS !== 'web') startScan();
+  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function reportQr() {
     const at = station ?? store.current();
     if (!at || !apiEnabled()) {
-      setReported('Prévenez l’opérateur : son numéro figure sur la borne.');
+      setReported(P.reportPhone);
       return;
     }
     try {
       await postReport('qr_suspect', at);
-      setReported('Merci : le QR suspect est signalé aux autres utilisateurs.');
+      setReported(P.reportOk);
     } catch {
-      setReported('Signalement impossible pour le moment.');
+      setReported(P.reportFail);
     }
   }
 
   useEffect(() => {
     loadOperators().then(setOps);
+    loadPortals().then(setPortals);
+    loadVehicle().then(setVehicle).catch(() => undefined);
   }, []);
+  useEffect(() => {
+    if (station) getCommunity(station.id).then(setCommunity);
+  }, [station]);
 
   const opName = operatorLabel(station, ops);
   const knownUrl = station ? directPayUrl(station, ops) : null;
 
-  function check(raw: string) {
-    const r = verifyQr(raw, station?.ok ?? null, ops, { devHosts: DEV_HOSTS });
+  /** Voies officielles de la borne (page de paiement connue, lecteur CB déclaré) : un lien Stripe/SumUp y est bloqué. */
+  function officialOf(st: Station | null) {
+    if (!st) return undefined;
+    const o = payOptions(st, st.id === station?.id ? (planPoint ?? summaryPoint ?? null) : null, ops, { portals });
+    const rd = o.find((x) => x.id === 'reader');
+    return { page: !!o.find((x) => x.id === 'operator-link')?.available, reader: !!rd?.available && !rd.speculative };
+  }
+
+  async function check(raw: string, override?: Station) {
+    if (!ready) return;
+    let at = override ?? station;
+    setLastRaw(raw);
+    setOffline(false);
+    let r = verifyQr(raw, at?.ok ?? null, ops, { devHosts: DEV_HOSTS, official: officialOf(at) });
+    // Identifiant de point : QR code « identifiant seul », ou dans le lien (…?evse=FR*ABC*E123)
+    const evse = r.kind === 'evse' ? (r.evse ?? null) : /^https?:/i.test(raw.trim()) ? evseInText(raw) : null;
+    const chosenPdc = at && plan?.stationId === at.id ? (plan.pdcId ?? null) : null;
+    const local = at && evse ? pointById(at, evse) : undefined;
+    const found = evse && !local ? await findStation(evse, store.stations()) : null;
+    const target = qrTarget(at, chosenPdc, evse, found);
+    if (target.kind === 'select') {
+      at = target.station;
+      setStation(at);
+      store.setCurrent(at);
+      r = verifyQr(raw, at.ok ?? null, ops, { devHosts: DEV_HOSTS, official: officialOf(at) });
+    }
     if (r.kind === 'evse' && r.evse) {
-      const found = findByEvse(store.stations(), r.evse);
-      if (found && (!station || found.id === station.id)) {
-        setStation(found);
-        store.setCurrent(found);
-        r.reasons = [`Identifiant de ${displayName(found)}.`];
-      } else {
+      if (target.kind === 'select' || target.kind === 'same') {
+        // Le QR ne contient que l'identifiant : on ouvre le parcours sur ce point, sans lien de paiement.
+        setScanning(false);
+        router.replace({ pathname: '/recharger', params: { evse: r.evse, noLink: '1' } });
+        return;
+      }
+      if (target.kind === 'none') {
         r.verdict = 'unknown';
-        r.reasons = [station ? 'Cet identifiant ne correspond pas à la borne sélectionnée : vérifiez la borne ou l’autocollant.' : 'Identifiant absent de la base nationale des bornes.'];
+        r.reasons = [t.qr.evseUnknown];
       }
     }
+    setMismatch(target.kind === 'point' || target.kind === 'station' ? target : null);
+    if (target.kind === 'same' && target.point) setScannedPdc(target.point.id);
+    else if (target.kind === 'select') setScannedPdc(target.pdcId);
     setConfirmUnknown(false);
     setReported(null);
     setResult(r);
     setScanning(false);
+  }
+
+  /** L'utilisateur confirme le point ou la borne du QR code. */
+  function acceptMismatch() {
+    if (!mismatch || !result) return;
+    if (mismatch.kind === 'point') {
+      const pt = mismatch.point;
+      const pl = store.plan();
+      if (pl && station && pl.stationId === station.id) {
+        const next = { ...pl, pdcId: pt.id, pointKw: pt.kw, plugs: pt.plugs };
+        store.setPlan(next);
+        setPlanState(next);
+      }
+      setScannedPdc(pt.id);
+      setMismatch(null);
+      if (result.kind === 'evse') router.replace({ pathname: '/recharger', params: { evse: pt.id, noLink: '1' } });
+      return;
+    }
+    const next = mismatch.station;
+    setStation(next);
+    store.setCurrent(next);
+    store.setPlan(null);
+    setPlanState(null);
+    setScannedPdc(mismatch.pdcId);
+    setMismatch(null);
+    if (result.kind === 'evse') router.replace({ pathname: '/recharger', params: { evse: mismatch.pdcId ?? next.id, noLink: '1' } });
+    else check(lastRaw, next);
+  }
+
+  function rejectMismatch() {
+    setMismatch(null);
+    setResult(null);
+    setManual('');
+  }
+
+  /** Paiement depuis l'accueil : le suivi reprend le point et le tarif vus dans le résumé. */
+  function planFromHome(method: MethodId) {
+    if (station && fromHome && summaryPoint) {
+      const fresh = vehicle && Date.now() - vehicle.socUpdatedAt < 3 * 3600_000 ? vehicle.socPercent : null;
+      store.setPlan({
+        stationId: station.id,
+        pdcId: summaryPoint.id,
+        pointKw: summaryPoint.kw,
+        plugs: summaryPoint.plugs,
+        method,
+        socPercent: fresh,
+        vehicle: vehicle ? { name: vehicle.name, batteryKWh: vehicle.batteryKWh, maxDcKW: vehicle.maxDcKW, maxAcKW: vehicle.maxAcKW } : null,
+        tariffRaw: station.prix,
+        free: station.free,
+        stationKw: station.kw,
+        pay: station.pay,
+      });
+    } else {
+      // Parcours « Recharger » : la méthode réellement utilisée (voie officielle proposée) est reprise par le suivi
+      const pl = store.plan();
+      if (pl && station && pl.stationId === station.id && pl.method !== method) store.setPlan({ ...pl, method });
+    }
+  }
+
+  /**
+   * Sans réseau, rien n'est ouvert : « Pas de réseau : réessayez » (« payez au lecteur CB » seulement si la borne en
+   * déclare un). La méthode réellement utilisée est reprise par le reçu (lien non vérifié confirmé : `unverified`).
+   */
+  function pay(url: string, name: string, method: MethodId = 'scan') {
+    planFromHome(method);
+    setOffline(false);
+    openOperatorPayment(url, station, name, { method }).then((r) => setOffline(r === 'offline'));
+  }
+
+  /** Voie officielle proposée à la place d'un lien bloqué (page connue de l'opérateur ou lecteur CB de la borne). */
+  function payAtReader() {
+    if (!station) return;
+    planFromHome('reader');
+    startReaderCharge(station, opName);
   }
 
   function onScan(e: BarcodeScanningResult) {
@@ -95,72 +253,111 @@ export default function Payer() {
   }
 
   const payName = result?.operatorKey ? (ops.find((o) => o.key === result.operatorKey)?.names[0] ?? opName) : opName;
-  const tone = result ? TONE[result.verdict] : null;
-  const atStation = station?.pay.filter((p) => p === 'cb' || p === 'sans_contact').map((p) => PAY_LABEL[p]) ?? [];
+  const tone = result ? (mismatch ? WARN : TONE[result.verdict]) : null;
+  // Lecteur de carte : une seule source de vérité, l'option « reader » de payOptions (IRVE, ou « certains sites »)
+  const reader = station ? payOptions(station, planPoint ?? summaryPoint ?? null, ops, { portals }).find((o) => o.id === 'reader') : undefined;
+  const readerConfirmed = !!reader?.available && !reader.speculative;
+  const atStation = readerConfirmed ? (station?.pay.filter((p) => p === 'cb' || p === 'sans_contact').map((p) => payLabel(p)) ?? []) : [];
+  // Obligation AFIR (lecteur de carte) : seulement pour les bornes ≥ 50 kW
+  const refKw = summaryPoint?.kw ?? planPoint?.kw ?? station?.kw ?? 0;
+  const readerLines: string[] = !station || !reader
+    ? []
+    : readerConfirmed
+      ? [atStation.length ? P.reader(atStation) : reader.why]
+      : [...(reader.speculative ? [reader.why] : []), ...(reader2027Applies(refKw) ? [P.reader2027] : reader.speculative ? [] : [P.readerNone])];
+  const portal = station?.ok ? portals[station.ok] : undefined;
+  const title = !result
+    ? ''
+    : result.kind === 'evse'
+      ? result.verdict === 'unknown'
+        ? P.evseDiff
+        : P.evseOk
+      : result.source === 'site' && result.verdict === 'unknown'
+        ? P.toneSiteUnverified
+      : result.source === 'portal' && result.verdict === 'official'
+        ? P.toneOfficialPay
+        : result.source === 'site' && result.verdict === 'official'
+          ? P.toneOfficialSite
+        : result.source === 'portal' && result.verdict === 'known-operator'
+          ? P.toneKnownPay
+          : P.tone[result.verdict];
+  const canPay = !!result && !mismatch && result.kind === 'url' && PAYABLE.has(result.verdict) && !!result.url;
+  const canConfirm = !!result && !mismatch && result.kind === 'url' && (result.verdict === 'unknown' || result.verdict === 'other-operator' || result.verdict === 'payment-platform') && !!result.url;
+  // Lien bloqué alors qu'une voie officielle existe : cette voie, proposée en un geste
+  const officialLink = station ? payOptions(station, planPoint ?? summaryPoint ?? null, ops, { portals }).find((o) => o.id === 'operator-link' && o.available)?.url : undefined;
+  // Lien entre particuliers sans voie officielle connue ici (ou page connue mais sans lien pour ce point, sans lecteur) :
+  // borne payable la plus proche, comme dans le parcours « Recharger »
+  const wantNearest = !!result && !mismatch && (result.alternative === 'nearest' || (result.alternative === 'page' && !officialLink && !readerConfirmed));
+  const [nearAlt, setNearAlt] = useState<{ s: Station; d: number } | null | undefined>(undefined);
+  useEffect(() => {
+    if (!wantNearest || !station) return;
+    let alive = true;
+    setNearAlt(undefined);
+    (async () => {
+      const pool = store.stations().length ? store.stations() : await loadAround(station, 1).catch(() => [] as Station[]);
+      const near = nearest(pool.filter((x) => x.id !== station.id && x.acc !== 'reserve'), station, 40);
+      if (alive) setNearAlt(nearestPayable(near, ops, { portals }));
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [wantNearest, station, ops, portals]);
+  const summary = fromHome && station && summaryPoint && (canPay || canConfirm) ? <PriceSummary station={station} point={summaryPoint} vehicle={vehicle} community={community} preauthMax={preauthMaxOf(portal)} /> : null;
 
   return (
     <ScrollView style={{ backgroundColor: colors.surface }} contentContainerStyle={[styles.body, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 }]}>
-      <View style={styles.head}>
-        <Button label="Retour" variant="ghost" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={styles.back} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.h1} accessibilityRole="header">Payer la borne</Text>
-          {station ? <Text style={styles.sub} numberOfLines={2}>{displayName(station)} · {opName}</Text> : null}
-        </View>
-      </View>
+      <ScreenHeader title={t.titles.payer} sub={station ? `${displayName(station)} · ${opName}` : undefined} />
+      {planPoint ?? summaryPoint ? <Text style={styles.point}>{t.common.point((planPoint ?? summaryPoint)!.short)}</Text> : null}
 
-      <Text style={styles.p}>
-        Vous payez directement {opName} sur sa page de paiement, ouverte dans Branché et vérifiée avec la base nationale IRVE : sans compte, sans télécharger son application. Branché ne voit pas votre carte.
-      </Text>
+      <Text style={styles.p}>{P.intro(opName)}</Text>
 
       {knownUrl ? (
-        <Button label={`Ouvrir le paiement ${opName}`} onPress={() => openOperatorPayment(knownUrl, station, opName)} hint="Page de paiement officielle de l’opérateur" />
+        <Button label={P.openPay(opName)} onPress={() => pay(knownUrl, opName)} hint={P.openPayHint} />
       ) : null}
 
       {scanning ? (
         <View style={styles.camWrap}>
           <CameraView style={styles.cam} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={onScan} />
           <View pointerEvents="none" style={styles.frame} />
-          <Button label="Arrêter le scan" variant="light" onPress={() => setScanning(false)} style={styles.stop} />
+          <Button label={P.stopScan} variant="light" onPress={() => setScanning(false)} style={styles.stop} />
         </View>
       ) : (
         <Button
-          label="Scanner le QR code de la borne"
+          label={t.recharger.scanQr}
           variant={knownUrl ? 'secondary' : 'primary'}
           onPress={startScan}
-          hint="Ouvre l’appareil photo pour lire le QR code collé sur la borne"
+          hint={P.scanHint}
         />
       )}
       {perm && !perm.granted && !perm.canAskAgain ? (
-        <Notice tone="error">Appareil photo refusé : autorisez-le dans les réglages, ou saisissez le code ci-dessous.</Notice>
+        <Notice tone="error">{P.camDenied}</Notice>
       ) : null}
 
       <View style={styles.manual}>
         <Text style={styles.label} nativeID="manual-label">
-          Ou saisissez le lien ou l’identifiant inscrit sur la borne
+          {P.manualLabel}
         </Text>
         <View style={styles.row}>
           <TextInput
             value={manual}
             onChangeText={setManual}
-            placeholder="ex. FR*ABC*E1234 ou https://…"
+            placeholder={P.manualPh}
             placeholderTextColor="#7A8682"
             autoCapitalize="none"
             autoCorrect={false}
             accessibilityLabelledBy="manual-label"
-            aria-label="Lien ou identifiant de la borne"
+            aria-label={P.manualA11y}
             style={styles.input}
             onSubmitEditing={() => manual.trim() && check(manual)}
             returnKeyType="go"
           />
-          <Button label="Vérifier" variant="ghost" onPress={() => check(manual)} disabled={!manual.trim()} style={styles.verify} />
+          <Button label={P.verify} variant="ghost" onPress={() => check(manual)} disabled={!manual.trim() || !ready} style={styles.verify} />
         </View>
       </View>
 
       {result && tone ? (
         <View style={[styles.result, { backgroundColor: tone.bg }]} accessibilityLiveRegion="polite">
-          <Text style={[styles.resultTitle, { color: tone.fg }]}>
-            {result.kind === 'evse' ? (result.verdict === 'unknown' ? 'Identifiant différent de la borne sélectionnée' : 'Borne identifiée') : tone.title}
-          </Text>
+          <Text style={[styles.resultTitle, { color: tone.fg }]}>{title}</Text>
           {result.host ? <Text style={[styles.domain, { color: tone.fg }]}>{result.host}</Text> : null}
           {result.reasons.map((r) => (
             <Text key={r} style={[styles.reason, { color: tone.fg }]}>
@@ -168,17 +365,29 @@ export default function Payer() {
             </Text>
           ))}
 
-          {result.kind === 'url' && PAYABLE.has(result.verdict) && result.url ? (
-            <Text style={[styles.reason, { color: tone.fg }]}>Vérifiez que le QR code est imprimé sur la borne, pas collé par-dessus. Branché ne voit pas votre carte et n’encaisse rien.</Text>
-          ) : null}
-          {result.kind === 'url' && PAYABLE.has(result.verdict) && result.url ? (
-            <Button label={`Payer sur la page ${payName}`} onPress={() => openOperatorPayment(result.url!, station, payName)} />
+          {mismatch ? (
+            <View style={styles.mismatch} accessibilityLiveRegion="assertive">
+              <Text style={[styles.resultTitle, { color: tone.fg }]} accessibilityRole="header">
+                {mismatch.kind === 'point' ? P.otherPoint(mismatch.point.short, mismatch.chosen.short) : P.otherStation(displayName(mismatch.station))}
+              </Text>
+              <Text style={[styles.reason, { color: tone.fg }]}>{P.mismatchHelp}</Text>
+              <Button
+                label={mismatch.kind === 'point' ? P.usePoint(mismatch.point.short) : P.useStation(displayName(mismatch.station))}
+                variant="secondary"
+                onPress={acceptMismatch}
+              />
+              <Button label={P.keepChoice} variant="ghost" onPress={rejectMismatch} />
+            </View>
           ) : null}
 
-          {result.kind === 'url' && (result.verdict === 'unknown' || result.verdict === 'other-operator' || result.verdict === 'payment-platform') && result.url ? (
+          {canPay || canConfirm ? summary : null}
+          {canPay ? <Text style={[styles.reason, { color: tone.fg }]}>{P.printed}</Text> : null}
+          {canPay ? <Button label={P.payOn(payName)} onPress={() => pay(result.url!, payName)} /> : null}
+
+          {canConfirm ? (
             <>
               <Text style={[styles.reason, { color: tone.fg }]}>
-                Avant de payer, vérifiez que le QR code n’est pas un autocollant ajouté par-dessus l’original et que la page affiche bien le nom de l’opérateur.
+                {P.checkSticker}
               </Text>
               <Pressable
                 role="checkbox"
@@ -188,42 +397,77 @@ export default function Payer() {
                 style={styles.check}
               >
                 <View style={[styles.box, confirmUnknown && styles.boxOn]} />
-                <Text style={styles.checkText}>J’ai vérifié la borne et je veux continuer</Text>
+                <Text style={styles.checkText}>{P.confirm}</Text>
               </Pressable>
-              <Button label="Continuer vers ce site" variant="secondary" disabled={!confirmUnknown} onPress={() => openOperatorPayment(result.url!, station, result.host ?? 'site inconnu')} />
+              <Button label={P.continue} variant="secondary" disabled={!confirmUnknown} onPress={() => pay(result.url!, result.host ?? P.unknownSite, 'unverified')} />
             </>
           ) : null}
 
-          {result.verdict === 'dangerous' ? (
+          {result.verdict === 'dangerous' && !result.alternative ? (
             <Text style={[styles.reason, { color: tone.fg }]}>
-              Ne saisissez pas votre carte sur ce lien. {atStation.length ? `Payez plutôt sur le lecteur de la borne (${atStation.join(', ')}).` : 'Payez plutôt sur le lecteur de la borne ou prévenez l’opérateur.'}
+              {P.dangerous(atStation.length ? atStation.join(', ') : null)}
             </Text>
           ) : null}
+          {/* Sans réseau : message à côté du bouton qui vient d'échouer */}
+          {offline ? (
+            <View role="alert" accessibilityLiveRegion="assertive">
+              <Notice tone="error">{readerConfirmed ? t.common.noNetworkReader : t.common.noNetwork}</Notice>
+            </View>
+          ) : null}
+          {result.alternative === 'page' && officialLink ? <Button label={P.useOfficialPage(opName)} onPress={() => pay(officialLink, opName, 'operator-link')} /> : null}
+          {result.alternative === 'reader' || (result.alternative === 'page' && !officialLink && readerConfirmed) ? (
+            <Button label={P.useReader} variant={result.alternative === 'reader' ? 'primary' : 'secondary'} onPress={payAtReader} hint={t.recharger.hintReader} />
+          ) : null}
 
-          {result.kind === 'evse' ? (
+          {wantNearest ? (
+            station ? (
+              nearAlt ? (
+                <>
+                  <Text style={[styles.reason, { color: tone.fg }]}>{t.recharger.nearestPayable(displayName(nearAlt.s), km(nearAlt.d))}</Text>
+                  <Button
+                    label={t.recharger.goThere}
+                    hint={t.recharger.goThereHint(displayName(nearAlt.s))}
+                    onPress={() => {
+                      store.setCurrent(nearAlt.s);
+                      router.replace({ pathname: '/', params: { go: nearAlt.s.id } });
+                    }}
+                  />
+                </>
+              ) : (
+                <Text style={[styles.reason, { color: tone.fg }]}>{nearAlt === null ? t.recharger.noPayableNear : t.recharger.searchingPayable}</Text>
+              )
+            ) : (
+              <Button label={t.common.backToMap} variant="secondary" onPress={() => router.replace('/')} />
+            )
+          ) : null}
+
+          {result.kind === 'evse' && !mismatch ? (
             <Text style={[styles.reason, { color: tone.fg }]}>
-              Un identifiant ne contient pas de lien de paiement : scannez le QR code de paiement de la borne ou payez sur son lecteur de carte.
+              {P.evseNoLink}
             </Text>
           ) : null}
           {result.verdict !== 'official' && result.verdict !== 'known-operator' ? (
             <Pressable accessibilityRole="button" onPress={reportQr} style={styles.link} disabled={!!reported}>
-              <Text style={[styles.linkText, { color: tone.fg }]}>{reported ?? 'Signaler un faux QR code sur cette borne'}</Text>
+              <Text style={[styles.linkText, { color: tone.fg }]}>{reported ?? P.reportFake}</Text>
             </Pressable>
           ) : null}
         </View>
       ) : null}
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Autres moyens</Text>
-        <Text style={styles.p}>{atStation.length ? `Lecteur de la borne : ${atStation.join(' et ').toLowerCase()} accepté${atStation.length > 1 ? 's' : 'e'}.` : 'Lecteur de carte : obligatoire sur toutes les bornes rapides (≥ 50 kW) à partir de 2027.'}</Text>
-        <Text style={styles.p}>Carte Branché dans votre Wallet : bientôt. Une seule carte, acceptée sur tous les lecteurs CB.</Text>
+        <Text style={styles.cardTitle}>{P.others}</Text>
+        {readerLines.map((l) => (
+          <Text key={l} style={styles.p}>
+            {l}
+          </Text>
+        ))}
         {station?.tel ? (
           <Pressable accessibilityRole="link" style={styles.link} onPress={() => Linking.openURL(`tel:${station.tel!.replace(/[^+\d]/g, '')}`)}>
-            <Text style={styles.linkText}>Problème ? Appeler {opName}</Text>
+            <Text style={styles.linkText}>{P.call(opName)}</Text>
           </Pressable>
         ) : null}
       </View>
-      {Platform.OS === 'web' ? <Text style={styles.small}>Sur ordinateur, la page de l’opérateur s’ouvre dans un nouvel onglet.</Text> : null}
+      {Platform.OS === 'web' ? <Text style={styles.small}>{P.webTab}</Text> : null}
     </ScrollView>
   );
 }
@@ -234,6 +478,7 @@ const styles = StyleSheet.create({
   back: { minHeight: MIN_TOUCH, paddingHorizontal: 14 },
   h1: { fontFamily: fonts.display, fontSize: 24, color: colors.ink },
   sub: { fontFamily: fonts.medium, fontSize: 14, color: colors.inkMuted },
+  point: { fontFamily: fonts.display, fontSize: 16, color: colors.accentPressed },
   p: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.inkMuted },
   camWrap: { height: 340, borderRadius: radius.xl, overflow: 'hidden', backgroundColor: '#000' },
   cam: { flex: 1 },
@@ -248,7 +493,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#C9D3D0',
+    borderColor: colors.inputBorder,
     paddingHorizontal: 14,
     fontFamily: fonts.medium,
     fontSize: 16,
@@ -261,8 +506,9 @@ const styles = StyleSheet.create({
   domain: { fontFamily: fonts.semibold, fontSize: 15 },
   reason: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 20 },
   check: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: MIN_TOUCH },
-  box: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#7A3E06', backgroundColor: '#FFFFFF' },
-  boxOn: { backgroundColor: '#7A3E06' },
+  mismatch: { gap: 8, borderTopWidth: 1, borderTopColor: '#E5C9A8', paddingTop: 10 },
+  box: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: colors.warnText, backgroundColor: colors.surface },
+  boxOn: { backgroundColor: colors.warnText },
   checkText: { flex: 1, fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
   card: { backgroundColor: colors.surfaceAlt, borderRadius: radius.lg, padding: 16, gap: 6 },
   cardTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },

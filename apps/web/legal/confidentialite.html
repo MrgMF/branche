@@ -71,6 +71,18 @@
           <td>Ni enregistrée, ni envoyée</td>
         </tr>
         <tr>
+          <td>Photo du ticket de recharge (facultative, si vous la prenez)</td>
+          <td>Garder votre justificatif avec la recharge, dans l'historique. La photo est réduite et stockée <strong>uniquement sur votre appareil</strong></td>
+          <td>Sans objet pour nos serveurs (aucune collecte)</td>
+          <td>Jusqu'à ce que vous la supprimiez (photo seule, recharge ou tout l'historique). Jamais envoyée</td>
+        </tr>
+        <tr>
+          <td>Retour « Ça a marché ? » saisi hors connexion (borne, oui/non, montants facultatifs)</td>
+          <td>L'envoyer anonymement quand le réseau revient</td>
+          <td>Sans objet tant qu'il est sur l'appareil</td>
+          <td>File d'attente sur votre appareil, effacée dès l'envoi et au plus tard après 7 jours</td>
+        </tr>
+        <tr>
           <td>Session de paiement de démonstration : identifiant aléatoire (« ses_… »), borne choisie, horodatages, montants fictifs</td>
           <td>Faire fonctionner la démonstration de paiement et de recharge</td>
           <td>Exécution du service demandé (art. 6.1.b)</td>
@@ -104,6 +116,7 @@
     <h2>4. Destinataires et sous-traitants</h2>
     <ul>
       <li><strong>TomTom International B.V.</strong> (Pays-Bas) : calcul de l'itinéraire avec trafic. TomTom reçoit de notre serveur le départ, l'arrivée, l'heure de la requête et l'adresse IP de notre serveur (pas la vôtre). Il agit comme <strong>sous-traitant</strong> de Branché et utilise lui-même des hébergeurs (AWS, Microsoft Azure, Scalyr) dans des centres de données de l'Union européenne, selon son <a href="https://www.tomtom.com/legal/third-party-product-terms/data-processing-schedule">contrat de sous-traitance</a>. TomTom peut utiliser des données agrégées et anonymisées pour améliorer ses services. <a href="https://www.tomtom.com/privacy/">Politique de TomTom</a>.</li>
+      <li><strong>Anthropic PBC</strong> (États-Unis) — <em>uniquement si vous utilisez « Prendre en photo » pour reconnaître votre véhicule</em> : la photo, réduite par l'app, est transmise par notre serveur à l'API d'Anthropic pour identifier le modèle, puis oubliée. Branché ne la conserve pas et ne l'écrit dans aucun journal. Anthropic agit comme <strong>sous-traitant</strong> ; durée de conservation chez Anthropic et garanties de transfert : [À VÉRIFIER PAR UN AVOCAT : contrat de traitement (DPA) Anthropic, conservation des entrées API, clauses contractuelles types]. Vous pouvez toujours choisir votre véhicule dans la liste sans photo.</li>
       <li><strong>Serveur Valhalla</strong> [PRESTATAIRE À DÉFINIR : instance auto-hébergée ou fournisseur] : calcul de l'itinéraire sans trafic quand TomTom est indisponible. Il reçoit les mêmes points de départ et d'arrivée.</li>
       <li><strong>GitHub, Inc.</strong> (États-Unis) : hébergement du site et des données publiques (bornes, opérateurs, zones de danger) sur GitHub Pages. GitHub enregistre l'adresse IP des visiteurs pour des raisons de sécurité. <a href="https://docs.github.com/fr/site-policy/privacy-policies/github-general-privacy-statement">Politique de GitHub</a>.</li>
       <li><strong>Render Services, Inc.</strong> (États-Unis) : hébergement de notre API (itinéraire, perturbations, signalements, démo). <a href="https://render.com/privacy">Politique de Render</a>.</li>

@@ -31,6 +31,12 @@ export interface Config {
   reportsDisabled: ReportsDisabledZone[];
   /** Flux DATEX II Bison Futé (événements RRN non concédé). */
   incidentsUrl: string;
+  /** Photon (recherche d'adresse sans clé TomTom). null = désactivé (PHOTON_URL=off). */
+  photonUrl: string | null;
+  /** Clé API Anthropic (serveur uniquement) : identification du véhicule sur photo. Absente → fonction désactivée. */
+  anthropicApiKey: string | null;
+  /** Modèle vision utilisé (ANTHROPIC_MODEL). */
+  anthropicModel: string;
 }
 
 export interface ReportsDisabledZone {
@@ -64,8 +70,12 @@ export function parseReportsDisabled(raw: string | undefined): ReportsDisabledZo
     });
 }
 
+/** Modèle vision par défaut ; à ajuster avec ANTHROPIC_MODEL selon les modèles ouverts sur le compte. */
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-5-5';
 export const DEFAULT_VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
 export const DEFAULT_INCIDENTS_URL = 'https://www.data.gouv.fr/api/1/datasets/r/d16c8cb6-0123-44e7-b8b1-f99fc6a59497';
+/** Recherche d'adresse sans clé (données OSM). Usage raisonnable toléré par komoot ; « off » désactive. */
+export const DEFAULT_PHOTON_URL = 'https://photon.komoot.io/api/';
 
 function httpUrl(env: Env, name: string, def: string): string {
   const raw = env[name]?.trim() || def;
@@ -179,5 +189,8 @@ export function loadConfig(env: Env = process.env): Config {
     production,
     reportsDisabled: parseReportsDisabled(env.REPORTS_DISABLED),
     incidentsUrl: httpUrl(env, 'INCIDENTS_URL', DEFAULT_INCIDENTS_URL),
+    photonUrl: env.PHOTON_URL?.trim() === 'off' ? null : httpUrl(env, 'PHOTON_URL', DEFAULT_PHOTON_URL),
+    anthropicApiKey: env.ANTHROPIC_API_KEY?.trim() || null,
+    anthropicModel: env.ANTHROPIC_MODEL?.trim() || DEFAULT_ANTHROPIC_MODEL,
   };
 }

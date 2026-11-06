@@ -1,0 +1,106 @@
+{
+ "summary": {
+  "query": "10 rue de rivoli paris",
+  "queryType": "NON_NEAR",
+  "queryTime": 42,
+  "numResults": 4,
+  "offset": 0,
+  "totalResults": 4,
+  "fuzzyLevel": 1
+ },
+ "results": [
+  {
+   "type": "Point Address",
+   "id": "FR/PAD/p0/1",
+   "score": 12.1,
+   "address": {
+    "streetNumber": "10",
+    "streetName": "Rue de Rivoli",
+    "municipality": "Paris",
+    "countrySecondarySubdivision": "Paris",
+    "countrySubdivision": "Île-de-France",
+    "postalCode": "75004",
+    "countryCode": "FR",
+    "country": "France",
+    "countryCodeISO3": "FRA",
+    "freeformAddress": "10 Rue de Rivoli, 75004 Paris",
+    "localName": "Paris"
+   },
+   "position": {
+    "lat": 48.85564,
+    "lon": 2.35896
+   }
+  },
+  {
+   "type": "Street",
+   "id": "FR/STR/p0/2",
+   "score": 10.2,
+   "address": {
+    "streetName": "Rue de Rivoli",
+    "municipality": "Paris",
+    "postalCode": "75001",
+    "countryCode": "FR",
+    "country": "France",
+    "freeformAddress": "Rue de Rivoli, 75001 Paris"
+   },
+   "position": {
+    "lat": 48.86209,
+    "lon": 2.33656
+   }
+  },
+  {
+   "type": "POI",
+   "id": "FR/POI/p0/3",
+   "score": 9.8,
+   "poi": {
+    "name": "Musée du Louvre",
+    "categories": [
+     "museum"
+    ]
+   },
+   "address": {
+    "streetName": "Rue de Rivoli",
+    "municipality": "Paris",
+    "postalCode": "75001",
+    "countryCode": "FR",
+    "freeformAddress": "Rue de Rivoli, 75001 Paris"
+   },
+   "position": {
+    "lat": 48.86061,
+    "lon": 2.33764
+   }
+  },
+  {
+   "type": "Geography",
+   "id": "FR/GEO/p0/4",
+   "score": 8.0,
+   "entityType": "Municipality",
+   "address": {
+    "municipality": "Rivolet",
+    "countrySubdivision": "Auvergne-Rhône-Alpes",
+    "countryCode": "FR",
+    "country": "France",
+    "freeformAddress": "Rivolet"
+   },
+   "position": {
+    "lat": 46.0028,
+    "lon": 4.5793
+   }
+  },
+  {
+   "type": "Street",
+   "id": "ES/STR/p0/5",
+   "score": 6.0,
+   "address": {
+    "streetName": "Calle Rivoli",
+    "municipality": "Madrid",
+    "countryCode": "ES",
+    "freeformAddress": "Calle Rivoli, Madrid"
+   },
+   "position": {
+    "lat": 40.41,
+    "lon": -3.7
+   }
+  }
+ ]
+}

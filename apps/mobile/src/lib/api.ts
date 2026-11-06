@@ -1,4 +1,5 @@
 import { API_URL } from './config';
+import { tr } from '../i18n';
 
 export type SessionStatus = 'awaiting_payment' | 'starting' | 'charging' | 'completed' | 'cancelled' | 'failed';
 
@@ -46,13 +47,13 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
       headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
     });
   } catch {
-    throw new Error('Connexion au service de paiement impossible. Vérifiez votre réseau puis réessayez.');
+    throw new Error(tr().errors.payNet);
   } finally {
     clearTimeout(timer);
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const msg = (body as { error?: { message?: string } })?.error?.message ?? `Erreur ${res.status}`;
+    const msg = (body as { error?: { message?: string } })?.error?.message ?? tr().errors.http(res.status);
     throw new Error(msg);
   }
   return body as T;

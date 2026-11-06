@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Branché — Toutes les bornes. Une seule app.</title>
-  <meta name="description" content="Trouvez la borne de recharge la plus proche, voyez sa puissance, ses prises et ses moyens de paiement, payez depuis l'app sans télécharger l'application de chaque opérateur.">
+  <meta name="description" content="Trouvez la borne de recharge la plus proche, voyez sa puissance et ses prises, puis payez l'opérateur depuis Branché : QR code vérifié ou page officielle, sans compte ni appli d'opérateur.">
   <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0F1A17" media="(prefers-color-scheme: dark)">
   <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon.png">
@@ -13,7 +13,7 @@
   <meta property="og:locale" content="fr_FR">
   <meta property="og:site_name" content="Branché">
   <meta property="og:title" content="Branché — Toutes les bornes. Une seule app.">
-  <meta property="og:description" content="La borne la plus proche, sa puissance, ses prises. Payez depuis l'app, sans l'application de chaque opérateur.">
+  <meta property="og:description" content="La borne la plus proche, sa puissance, ses prises. Payez l'opérateur depuis Branché, sans compte ni appli d'opérateur.">
   <meta property="og:image" content="assets/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -23,6 +23,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap">
   <link rel="stylesheet" href="assets/site.css">
+  <link rel="alternate" hreflang="fr" href="./">
+  <link rel="alternate" hreflang="en" href="en/">
+  <link rel="alternate" hreflang="x-default" href="./">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -48,10 +51,26 @@
       </a>
       <nav class="site-nav" aria-label="Navigation principale">
         <a class="nav-optional" href="#fonctionnement">Fonctionnement</a>
+        <a class="lang-switch" href="en/" hreflang="en" lang="en" aria-label="English version"><span class="lang-long">English</span><span class="lang-short" aria-hidden="true">EN</span></a>
         <a class="btn btn-primary btn-small" href="./app/">Ouvrir l'app</a>
       </nav>
     </div>
   </header>
+
+  <div class="lang-suggest" id="lang-suggest" role="region" aria-label="Language suggestion" lang="en" hidden>
+    <div class="container lang-suggest__inner">
+      <p>This page is also available in English.</p>
+      <div class="lang-suggest__actions">
+        <a class="btn btn-primary btn-small" href="en/" hreflang="en">Read in English</a>
+        <button type="button" class="btn btn-secondary btn-small" data-dismiss>Keep French</button>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function(){try{var k='branche.langSuggest',b=document.getElementById('lang-suggest');if(localStorage.getItem(k))return;
+    var l=((navigator.languages&&navigator.languages[0])||navigator.language||'').toLowerCase();if(!l||!(l.indexOf('fr')!==0))return;
+    b.hidden=false;b.querySelector('[data-dismiss]').addEventListener('click',function(){localStorage.setItem(k,'1');b.hidden=true})}catch(e){}})();
+  </script>
 
   <main id="contenu">
     <section class="hero" aria-labelledby="hero-titre">
@@ -59,22 +78,22 @@
         <div>
           <span class="badge">Recharge de véhicule électrique</span>
           <h1 id="hero-titre" style="margin-top:16px">Toutes les bornes. <span>Une seule app.</span></h1>
-          <p class="hero__lead">Trouvez la borne la plus proche, voyez sa puissance, ses types de prise et ses tarifs publiés, puis payez depuis l'app, sans télécharger l'application de chaque opérateur.</p>
+          <p class="hero__lead">Trouvez la borne la plus proche, voyez sa puissance, ses prises et son prix quand l'opérateur le publie, puis payez l'opérateur directement depuis Branché : QR code de la borne vérifié ou page de paiement officielle, sans compte ni appli à installer.</p>
           <div class="hero__actions">
             <a class="btn btn-primary" href="./app/">
               Ouvrir l'app web
               <svg aria-hidden="true" focusable="false"><use href="#i-arrow"/></svg>
             </a>
             <div class="hero__stores">
-              <a class="btn btn-secondary" role="link" aria-disabled="true">Android — bientôt sur Google Play</a>
-              <a class="btn btn-secondary" role="link" aria-disabled="true">iPhone — bientôt</a>
+              <a class="btn btn-secondary btn-store" role="link" aria-disabled="true">Android — bientôt sur Google Play</a>
+              <a class="btn btn-secondary btn-store" role="link" aria-disabled="true">iPhone — bientôt</a>
             </div>
           </div>
           <p class="hero__note">L'app web fonctionne dès maintenant dans le navigateur de votre téléphone.</p>
         </div>
 
         <figure class="mock" style="margin:0">
-          <div class="phone" role="img" aria-label="Aperçu de l'app : une carte avec des épingles de prix, la fiche d'une borne sélectionnée et un bouton Charger.">
+          <div class="phone" role="img" aria-label="Aperçu de l'app : une carte avec la puissance des bornes en kW, la fiche d'une borne sélectionnée et le bouton Préparer ma recharge.">
             <div class="phone__screen" aria-hidden="true">
               <div class="phone__notch"></div>
               <div class="map">
@@ -89,38 +108,34 @@
                 <div class="map__road" style="left:-10%;top:52%;width:120%;height:8px;transform:rotate(6deg)"></div>
                 <div class="map__road" style="left:68%;top:10%;width:8px;height:60%;transform:rotate(-4deg)"></div>
                 <div class="map__me" style="left:46%;top:47%"></div>
-                <div class="pin pin--active" style="left:60%;top:33%"><span class="pin__dot"><svg><use href="#i-bolt"/></svg></span>0,39 €</div>
-                <div class="pin" style="left:22%;top:31%"><span class="pin__dot"><svg><use href="#i-bolt"/></svg></span>0,45 €</div>
-                <div class="pin pin--busy" style="left:82%;top:24%"><span class="pin__dot"><svg><use href="#i-bolt"/></svg></span>0,52 €</div>
-                <div class="pin" style="left:26%;top:54%"><span class="pin__dot"><svg><use href="#i-bolt"/></svg></span>0,35 €</div>
-                <div class="pin pin--off" style="left:80%;top:52%"><span class="pin__dot"><svg><use href="#i-bolt"/></svg></span>—</div>
+                <div class="dot dot--sel" style="left:60%;top:31%"><span>22 kW</span></div>
+                <div class="dot" style="left:22%;top:30%"><span>7 kW</span></div>
+                <div class="dot dot--fast" style="left:84%;top:25%"><span>150 kW</span></div>
+                <div class="dot" style="left:26%;top:53%"><span>11 kW</span></div>
+                <div class="dot dot--fast" style="left:80%;top:50%"><span>50 kW</span></div>
               </div>
-              <div class="mock__search">Bornes les plus proches</div>
+              <div class="mock__search"><svg><use href="#i-search"/></svg>Où allez-vous ? Adresse, lieu…</div>
               <div class="mock__chips">
-                <span class="mock__chip mock__chip--on">Rapide ≥ 50 kW</span>
+                <span class="mock__chip mock__chip--on"><svg><use href="#i-check"/></svg>Rapide</span>
                 <span class="mock__chip">CCS</span>
                 <span class="mock__chip">Type 2</span>
+                <span class="mock__chip">Accès public</span>
               </div>
               <div class="sheet">
                 <div class="sheet__grab"></div>
-                <div class="sheet__top">
-                  <div>
-                    <p class="sheet__title">Parking de la Gare</p>
-                    <p class="sheet__meta">Opérateur exemple · 22 kW</p>
-                  </div>
-                  <div class="sheet__price">0,39 €<small>par kWh</small></div>
+                <p class="sheet__title">Parking de la Gare</p>
+                <p class="sheet__meta">Opérateur exemple · 350 m · 2 min</p>
+                <div class="sheet__stats">
+                  <div><small>Puissance max</small>22 kW</div>
+                  <div><small>Points</small>4</div>
+                  <div><small>Accès</small>Libre</div>
                 </div>
-                <div class="sheet__tags">
-                  <span class="sheet__tag sheet__tag--ok">CCS</span>
-                  <span class="sheet__tag">Type 2</span>
-                  <span class="sheet__tag">Combo CCS</span>
-                </div>
-                <div class="sheet__cta"><svg><use href="#i-bolt"/></svg>Charger</div>
-                <p class="sheet__alt">Ou payer directement à la borne</p>
+                <div class="sheet__cta">Préparer ma recharge</div>
+                <p class="sheet__alt">Je suis déjà à la borne</p>
               </div>
             </div>
           </div>
-          <figcaption class="mock__caption">Illustration : station, opérateur et tarifs fictifs.</figcaption>
+          <figcaption class="mock__caption">Illustration : borne et opérateur fictifs.</figcaption>
         </figure>
       </div>
     </section>
@@ -139,13 +154,13 @@
           </li>
           <li class="step">
             <span class="step__num" aria-hidden="true">2</span>
-            <h3>Comparez</h3>
-            <p>Prix, puissance, type de prise : vous voyez d'un coup d'œil si la borne convient à votre voiture.</p>
+            <h3>Choisissez</h3>
+            <p>Puissance, prises, accès et prix quand l'opérateur le publie : vous voyez si la borne convient à votre voiture.</p>
           </li>
           <li class="step">
             <span class="step__num" aria-hidden="true">3</span>
-            <h3>Payez et chargez</h3>
-            <p>Lancez la charge depuis l'app, sans créer de compte chez chaque opérateur.</p>
+            <h3>Payez l'opérateur</h3>
+            <p>Scannez le QR code de la borne ou touchez « Recharger ici » : Branché vérifie que la page de paiement est bien celle de l'opérateur et l'ouvre, sans compte. L'opérateur encaisse et démarre la charge.</p>
           </li>
         </ol>
       </div>
@@ -155,14 +170,15 @@
       <div class="container honest">
         <div class="section__head">
           <span class="badge">Transparence</span>
-          <h2 id="honnete-titre" style="margin-top:14px">Honnête dès la V1</h2>
+          <h2 id="honnete-titre" style="margin-top:14px">Ce que Branché fait, et ne fait pas</h2>
         </div>
         <div class="honest__card">
-          <p>Les bornes affichées sont réelles : elles proviennent de la base nationale IRVE publiée sur data.gouv.fr. Le paiement dans l'app reste en mode démonstration tant que les accords d'itinérance avec les opérateurs ne sont pas signés, et le paiement direct à la borne vous est toujours proposé.</p>
+          <p>Les bornes affichées sont réelles : elles proviennent de la base nationale IRVE publiée sur data.gouv.fr. Branché n'encaisse rien : vous payez l'opérateur de la borne, sur sa page officielle vérifiée ou par carte bancaire à la borne quand elle l'accepte.</p>
           <ul class="honest__list">
             <li><svg aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Données publiques, sources citées</li>
-            <li><svg aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Mode démo signalé clairement dans l'app</li>
-            <li><svg aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Paiement direct à la borne indiqué quand il existe</li>
+            <li><svg aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Aucun compte, aucun débit par Branché</li>
+            <li><svg aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Pages de paiement des opérateurs vérifiées avant ouverture</li>
+            <li><svg aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Paiement par carte à la borne indiqué quand il existe</li>
           </ul>
         </div>
       </div>

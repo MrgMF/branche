@@ -1,4 +1,6 @@
 import { DATA_URL } from './config';
+import { tr } from '../i18n';
+import { freeCredible } from './tariff';
 
 export type Plug = 'ccs' | 't2' | 'chademo' | 'ef';
 export type PayMethod = 'cb' | 'sans_contact' | 'acte' | 'qr_dynamique' | 'site_web' | 'liquide' | 'badge';
@@ -22,8 +24,9 @@ export interface Station {
   h?: string;
   pmr?: string;
   maj?: string;
-  pdc?: [string, number][];
+  pdc?: [string, number, Plug[]?][]; // [id_pdc_itinerance, kW, prises du point (V2)]
   ok?: string; // clé opérateur (registre)
+  cab?: boolean; // câble Type 2 attaché sur au moins un point
 }
 
 export interface Meta {
@@ -120,16 +123,68 @@ export function displayName(s: Pick<Station, 'n' | 'o' | 'a'>): string {
   if (s.n && !LOOKS_LIKE_ID.test(s.n)) return s.n;
   const street = s.a?.split(/\d{5}/)[0]?.replace(/[,\s]+$/, '').trim();
   const op = s.o?.split('|').map((x) => x.trim()).find((x) => x && !x.includes('*'));
-  return [op, street].filter(Boolean).join(' — ') || 'Borne de recharge';
+  return [op, street].filter(Boolean).join(' — ') || tr().common.stationFallback;
+}
+
+const SMALL_WORDS = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'et', 'en', 'sur', 'sous', 'au', 'aux', 'à', 'd', 'l']);
+/** Sigles courants (IRVE) contenant une voyelle : conservés en capitales là où la règle « sans voyelle » ne suffit pas. */
+const ACRONYMS = new Set(['ZA', 'ZAC', 'ZAE', 'SDE', 'SDEA', 'SDEC', 'SDEY', 'EDF', 'RTE']);
+const VOWEL = /[aeiouyàâäéèêëïîôöùûüÿ]/i;
+/** Majuscule sur la première lettre minuscule d'un segment (article de commune : « la Seyne… » → « La Seyne… »). */
+const capFirst = (m: string, head: string, c: string) => head + c.toUpperCase();
+
+/**
+ * Nom saisi tout en capitales (IRVE brut : « L'HAY LES ROSES ») → casse de titre (« L'Hay les Roses ») ; un nom déjà en
+ * minuscules/majuscules mêlées est gardé tel quel. Sigles ≤ 4 lettres tout en majuscules conservés : sans voyelle
+ * (« SDCC », « ZI ») ou sigle connu (« ZAC », « SDE », « EDF »), sauf petits mots de liaison (« de », « sur »…).
+ * L'article de commune en tête (ou après un séparateur « - ») reçoit une capitale.
+ */
+export function tidyCaps(n: string): string {
+  let first = true;
+  const titled =
+    /\p{Ll}/u.test(n) || !/\p{Lu}{3}/u.test(n)
+      ? n
+      : n.replace(/\p{L}+/gu, (w) => {
+          const lw = w.toLowerCase();
+          const isFirst = first;
+          first = false;
+          if (!isFirst && SMALL_WORDS.has(lw)) return lw;
+          if (w.length <= 4 && w === w.toUpperCase() && (!VOWEL.test(w) || ACRONYMS.has(w))) return w;
+          return lw.charAt(0).toUpperCase() + lw.slice(1);
+        });
+  // Article de commune en tête (« la Seyne-sur-Mer ») ou après un séparateur « - » : capitale.
+  return titled.replace(/^(\s*)(\p{Ll})/u, capFirst).replace(/( - )(\p{Ll})/gu, capFirst);
+}
+
+/** Nom d'une borne pour le guidage (bandeau, voix, partage) : jamais le nom IRVE brut en capitales. */
+export const navName = (s: Pick<Station, 'n' | 'o' | 'a'>): string => tidyCaps(displayName(s));
+
+/**
+ * Un seul emplacement physique dépasse rarement quelques dizaines de points de charge. Au-delà, la valeur `p`
+ * publiée est jugée non fiable (agrégat de réseau, erreur de saisie IRVE).
+ */
+export const MAX_REALISTIC_POINTS = 60;
+
+/**
+ * Libellé du nombre de points de charge, robuste aux valeurs aberrantes (« Points 229 »).
+ * - `p` crédible → on l'affiche ;
+ * - sinon on compte les points réellement listés (`pdc`) s'il y en a un nombre crédible ;
+ * - sinon « non vérifié ».
+ */
+export function pointsLabel(s: Pick<Station, 'p' | 'pdc'>): string {
+  const listed = s.pdc?.length ?? 0;
+  if (s.p > 0 && s.p <= MAX_REALISTIC_POINTS) return String(s.p);
+  if (listed > 0 && listed <= MAX_REALISTIC_POINTS) return String(listed);
+  return tr().station.pointsUnverified;
 }
 
 /** Le champ tarification contient parfois une URL plutôt qu'un prix. */
-export function priceInfo(s: Pick<Station, 'prix' | 'free'>): { text: string; url?: string } {
-  if (s.free) return { text: 'Gratuit' };
+export function priceInfo(s: Pick<Station, 'prix' | 'free' | 'kw' | 'pay'>): { text: string; url?: string } {
+  if (s.free) return { text: freeCredible(s) ? tr().station.free : tr().tariff.freeDoubtful };
   const p = (s.prix ?? '').trim();
-  if (!p || p === '0') return { text: 'Tarif non publié dans la base nationale — affiché sur la borne.' };
+  if (!p || p === '0') return { text: tr().pricing.unpublished };
   const url = p.match(/https?:\/\/\S+/)?.[0];
-  if (url && p.replace(url, '').trim().length < 4) return { text: 'Voir les tarifs de l’opérateur', url };
+  if (url && p.replace(url, '').trim().length < 4) return { text: tr().pricing.seeOperator, url };
   return { text: p, url };
 }
 

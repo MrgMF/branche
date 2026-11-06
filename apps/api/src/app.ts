@@ -15,8 +15,15 @@ import { mockCheckoutRoutes } from './routes/mockCheckout.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { webhookRoutes } from './routes/webhook.js';
 import { navigationRoutes } from './routes/navigation.js';
+import { searchRoutes } from './routes/search.js';
+import { buildSearch, type SearchProvider } from './search/service.js';
+import { checkinRoutes } from './routes/checkins.js';
+import { availabilityRoutes } from './routes/availability.js';
+import { CheckinStore } from './checkins/store.js';
+import { featureRoutes, vehicleRoutes } from './routes/vehicle.js';
+import { AnthropicVehicleIdentifier, type VehicleIdentifier } from './vehicles/identify.js';
 import { IncidentService, ReportStore } from './incidents/service.js';
-import { TomTomRouteProvider, ValhallaRouteProvider, type RouteProvider } from './navigation/route.js';
+import { FallbackRouteProvider, TomTomRouteProvider, ValhallaRouteProvider, type RouteProvider } from './navigation/route.js';
 import { reqSerializer } from './lib/logRedact.js';
 import type { FetchLike } from './lib/ttlCache.js';
 import { SessionService } from './sessions/service.js';
@@ -34,12 +41,20 @@ export interface AppDeps {
   /** fetch injectable (tests : fixtures, aucun appel réseau). */
   fetch?: FetchLike;
   router?: RouteProvider;
+  search?: SearchProvider | null;
+  /** Identification du véhicule sur photo (tests : client simulé). */
+  vehicleIdentifier?: VehicleIdentifier | null;
 }
 
 function buildRouter(config: Config, fetchFn: FetchLike): RouteProvider | null {
-  if (config.tomtomApiKey) return new TomTomRouteProvider(config.tomtomApiKey, fetchFn);
-  if (config.valhallaUrl) return new ValhallaRouteProvider(config.valhallaUrl, fetchFn);
-  return null;
+  // Valhalla seulement si la configuration l'autorise (en production : VALHALLA_URL explicite, jamais FOSSGIS public).
+  const valhalla = config.valhallaUrl ? new ValhallaRouteProvider(config.valhallaUrl, fetchFn) : null;
+  if (config.tomtomApiKey) {
+    const tomtom = new TomTomRouteProvider(config.tomtomApiKey, fetchFn);
+    // TomTom en panne → repli Valhalla sans trafic (traffic:false dans la réponse).
+    return valhalla ? new FallbackRouteProvider(tomtom, valhalla) : tomtom;
+  }
+  return valhalla;
 }
 
 /** Journaux sans corps, sans IP ni coordonnées précises (voir lib/logRedact.ts). */
@@ -158,6 +173,23 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
     );
   }
   await app.register(async (scope) => navigationRoutes(scope, { router, incidents, reports }));
+  await app.register(async (scope) => searchRoutes(scope, { search: deps.search ?? buildSearch(config, fetchFn) }));
+  // Retours de recharge anonymes (fiabilité et prix constatés par la communauté) — docs/api-contract-v2.md
+  const checkins = new CheckinStore(now);
+  await app.register(async (scope) => checkinRoutes(scope, { checkins }));
+  // Disponibilité temps réel (IRVE dynamique consolidée) — docs/api-contract-v2-availability.md
+  await app.register(async (scope) => availabilityRoutes(scope, { fetchFn, now, log: app.log }));
+  // Véhicule sur photo (API Anthropic, clé serveur) ; GET /v1/meta expose features.vehicleIdentify
+  const identifier =
+    deps.vehicleIdentifier !== undefined
+      ? deps.vehicleIdentifier
+      : config.anthropicApiKey
+        ? new AnthropicVehicleIdentifier(config.anthropicApiKey, config.anthropicModel, fetchFn)
+        : null;
+  await app.register(async (scope) => vehicleRoutes(scope, { identifier }));
+  // Fournisseur d'itinéraire réellement configuré (attribution « À propos » de l'app : © TomTom seulement s'il est utilisé).
+  const routing = router ? { provider: router.name, fallback: router instanceof FallbackRouteProvider } : null;
+  await app.register(async (scope) => featureRoutes(scope, { identifier, routing }));
 
   return app;
 }

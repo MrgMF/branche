@@ -1,4 +1,14 @@
 import type { ExpoConfig } from 'expo/config';
+import vehicleApps from './src/lib/vehicle-apps.json';
+import operatorPortals from '../../pipeline/data/operator-portals.json';
+
+// Applis d'opérateurs ouvrables par « Démarrer avec l'appli » (operator-portals.json appLaunch) : schémas iOS et
+// paquets Android SOURCÉS seulement, pour que Linking.canOpenURL les voie (jamais QUERY_ALL_PACKAGES).
+const appLaunches = Object.values((operatorPortals as { operators: Record<string, { appLaunch?: { scheme?: string | null; android?: string | null } | null }> }).operators)
+  .map((o) => o.appLaunch)
+  .filter((a): a is { scheme?: string | null; android?: string | null } => !!a);
+const operatorSchemes = [...new Set(appLaunches.map((a) => a.scheme).filter((s): s is string => !!s).map((s) => s.replace(/:\/?\/?$/, '')))].sort();
+const operatorPackages = [...new Set(appLaunches.map((a) => a.android).filter((a): a is string => !!a))].sort();
 
 // Variables injectées au build (CI GitHub Actions ou EAS) :
 // BASE_URL : sous-chemin web (ex. /branche/app) · DATA_URL : base des tuiles IRVE · API_URL : API de paiement (vide = paiement in-app désactivé)
@@ -6,12 +16,16 @@ const baseUrl = process.env.BASE_URL ?? '';
 if (process.env.EAS_BUILD && [process.env.DATA_URL, process.env.SITE_URL, process.env.API_URL].some((v) => !v || v.includes('REPLACE_ME'))) {
   throw new Error('eas.json : remplacez REPLACE_ME par votre identifiant GitHub (DATA_URL, SITE_URL) et l’URL de votre API Render (API_URL) avant de lancer un build.');
 }
+// Un seul texte d'autorisation (iOS n'en garde qu'un, partagé par expo-camera et expo-image-picker) couvrant tous les usages.
+const CAMERA_TEXT =
+  'Branché utilise l’appareil photo pour lire le QR code de la borne (analysé sur votre téléphone, jamais enregistré ni envoyé) et, si vous le souhaitez, pour reconnaître votre véhicule (photo envoyée pour l’identification puis oubliée) ou photographier le ticket de recharge (gardé uniquement sur votre téléphone).';
 const config: ExpoConfig = {
   name: 'Branché',
   slug: 'branche',
   scheme: 'branche',
   version: '1.0.0',
-  orientation: 'portrait',
+  // Portrait et paysage (support voiture) : le guidage a une mise en page paysage (bandeau à gauche, carte à droite).
+  orientation: 'default',
   icon: './assets/icon.png',
   userInterfaceStyle: 'light',
   ios: {
@@ -21,6 +35,8 @@ const config: ExpoConfig = {
       NSLocationWhenInUseUsageDescription:
         'Branché utilise votre position pour trouver la borne la plus proche, sur votre appareil. Elle n’est envoyée à nos serveurs que si vous demandez un itinéraire ou faites un signalement.',
       ITSAppUsesNonExemptEncryption: false,
+      // Guidage écran verrouillé (avec accord explicite, pendant un guidage seulement) : position et voix en arrière-plan.
+      UIBackgroundModes: ['location', 'audio'],
     },
   },
   android: {
@@ -34,11 +50,28 @@ const config: ExpoConfig = {
     'expo-router',
     'expo-font',
     'expo-web-browser',
+    // Langue de l'appareil (src/i18n/device.ts)
+    'expo-localization',
+    // Rappels locaux de fin de charge et avant pénalité d'occupation (aucune notification distante)
+    ['expo-notifications', { color: '#0B7A55' }],
+    // Véhicule : photo facultative (envoyée pour identification, jamais conservée) ; ticket de recharge (local uniquement) ; marques des applis constructeur (<queries>)
+    ['expo-image-picker', { cameraPermission: CAMERA_TEXT, photosPermission: false, microphonePermission: false }],
+    ['./plugins/withVehicleAppQueries', { packages: (vehicleApps.android as { package: string }[]).map((a) => a.package) }],
+    // Passerelle « Démarrer avec l'appli » : schémas iOS et paquets Android d'opérateurs confirmés (sourcés)
+    ['./plugins/withOperatorAppQueries', { schemes: operatorSchemes, packages: operatorPackages }],
     ['expo-splash-screen', { image: './assets/splash-icon.png', imageWidth: 160, resizeMode: 'contain', backgroundColor: '#FFFFFF' }],
-    ['expo-camera', { cameraPermission: 'Branché utilise l’appareil photo pour lire le QR code de la borne. L’image est analysée sur votre téléphone, jamais enregistrée ni envoyée.', recordAudioAndroid: false }],
+    ['expo-camera', { cameraPermission: CAMERA_TEXT, recordAudioAndroid: false }],
     [
       'expo-location',
-      { locationWhenInUsePermission: 'Branché utilise votre position pour trouver la borne la plus proche, sur votre appareil. Elle n’est envoyée à nos serveurs que si vous demandez un itinéraire ou faites un signalement.' },
+      {
+        locationWhenInUsePermission: 'Branché utilise votre position pour trouver la borne la plus proche, sur votre appareil. Elle n’est envoyée à nos serveurs que si vous demandez un itinéraire ou faites un signalement.',
+        // Demandée seulement au démarrage d'un guidage, après un écran d'explication.
+        locationAlwaysAndWhenInUsePermission:
+          'Pendant un guidage seulement, Branché utilise votre position écran verrouillé pour continuer à vous guider à la voix, jusqu’à l’arrivée. Elle n’est pas enregistrée.',
+        isIosBackgroundLocationEnabled: true,
+        isAndroidBackgroundLocationEnabled: true,
+        isAndroidForegroundServiceEnabled: true,
+      },
     ],
   ],
   experiments: { typedRoutes: false, ...(baseUrl ? { baseUrl } : {}) },

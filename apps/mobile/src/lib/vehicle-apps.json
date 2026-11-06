@@ -1,0 +1,12 @@
+{
+  "_sources": "Noms de paquets Android vérifiés le 05/11/2026 (fiches publiques Google Play / AppGoblin / Similarweb / APKMirror / Exodus Privacy). Aucun schéma d'URL iOS n'a pu être confirmé par une source publique : détection iOS désactivée.",
+  "android": [
+    { "brand": "Tesla", "prefix": "tesla-", "package": "com.teslamotors.tesla", "source": "https://appgoblin.info/apps/com.teslamotors.tesla" },
+    { "brand": "Renault", "prefix": "renault-", "package": "com.renault.myrenault.one.fr", "source": "https://www.similarweb.com/app/google/com.renault.myrenault.one.fr" },
+    { "brand": "Kia", "prefix": "kia-", "package": "com.kia.connect.eu", "source": "https://similarweb.com/app/google/com.kia.connect.eu/vs/com.stationdm.bluelink" },
+    { "brand": "MG", "prefix": "mg4-", "package": "com.saicmotor.iov.europe", "source": "https://similarweb.com/app/google/com.saicmotor.iov.europe/vs/com.stationdm.bluelink" },
+    { "brand": "Peugeot", "prefix": "peugeot-", "package": "com.psa.mym.mypeugeot", "source": "https://appgoblin.info/apps/com.psa.mym.mypeugeot" },
+    { "brand": "Volkswagen", "prefix": "vw-", "package": "com.volkswagen.weconnect", "source": "https://appgoblin.info/apps/com.volkswagen.weconnect" }
+  ],
+  "iosSchemes": []
+}

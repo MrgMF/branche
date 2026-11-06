@@ -52,10 +52,14 @@ describe('POST /v1/route — TomTom', () => {
       travelMode: 'car',
       routeType: 'fastest',
       maxAlternatives: '2',
-      instructionsType: 'text',
+      instructionsType: 'tagged',
       language: 'fr-FR',
       computeTravelTimeFor: 'all',
+      sectionType: 'lanes',
     });
+    // Péages : sectionType `tollRoad` dans la requête (réponse : sections `TOLL_ROAD`), conforme à l'API TomTom Routing.
+    expect(url.searchParams.getAll('sectionType')).toEqual(['traffic', 'tollRoad', 'motorway', 'speedLimit', 'lanes']);
+    expect(url.searchParams.getAll('avoid')).toEqual([]);
     const r = res.json();
     // Route 2 de la fixture : 1720 s (la première, « principale », fait 1900 s).
     expect(r).toMatchObject({
@@ -68,7 +72,7 @@ describe('POST /v1/route — TomTom', () => {
       attribution: '© TomTom',
     });
     expect(Object.keys(r).sort()).toEqual(
-      ['alternativesConsidered', 'attribution', 'distanceM', 'durationS', 'geometry', 'provider', 'steps', 'traffic', 'trafficDelayS'].sort(),
+      ['alternativesConsidered', 'attribution', 'distanceM', 'durationS', 'geometry', 'provider', 'steps', 'traffic', 'trafficDelayS', 'hasTolls', 'routes', 'options'].sort(),
     );
     expect(res.headers['cache-control']).toBe('no-store');
   });
@@ -83,11 +87,13 @@ describe('POST /v1/route — TomTom', () => {
       [2.2546, 48.8442],
       [2.1301, 48.8049],
     ]);
-    expect(r.steps).toEqual([
+    // Champs V1.1 inchangés ; la V2 ajoute maneuver, street, offsetM, pointIndex (additifs).
+    expect(r.steps.map((s: Record<string, unknown>) => ({ instruction: s.instruction, distanceM: s.distanceM, lon: s.lon, lat: s.lat }))).toEqual([
       { instruction: 'Partez de Quai de la Mégisserie (le plus rapide)', distanceM: 850, lon: 2.347, lat: 48.858 },
       { instruction: 'Tournez à droite sur Avenue de Versailles', distanceM: 18550, lon: 2.3204, lat: 48.8609 },
       { instruction: 'Vous êtes arrivé à destination', distanceM: 0, lon: 2.1301, lat: 48.8049 },
     ]);
+    expect(r.steps.map((s: Record<string, unknown>) => s.maneuver)).toEqual(['depart', 'turn-right', 'arrive']);
   });
 
   it('ne renvoie jamais la clé, y compris en cas d’erreur du fournisseur', async () => {
@@ -153,7 +159,7 @@ describe('POST /v1/route — repli Valhalla', () => {
     expect(r.geometry[0]).toEqual([2.347, 48.858]);
     expect(r.geometry.at(-1)).toEqual([2.1301, 48.8049]);
     expect(r.geometry).toHaveLength(5);
-    expect(r.steps[1]).toEqual({ instruction: 'Tournez à droite sur Avenue de Versailles.', distanceM: 17300, lon: 2.3412, lat: 48.8566 });
+    expect(r.steps[1]).toMatchObject({ instruction: 'Tournez à droite sur Avenue de Versailles.', distanceM: 17300, lon: 2.3412, lat: 48.8566, maneuver: 'turn-right' });
   });
 
   it('VALHALLA_URL configurable (instance auto-hébergée)', async () => {

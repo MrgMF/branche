@@ -5,7 +5,8 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { join, resolve } from 'node:path';
 import { parse } from 'csv-parse';
-import { createAggregator, toTiles, TILE_SIZE } from './normalize.mjs';
+import { createAggregator, evseIndex, toTiles, TILE_SIZE } from './normalize.mjs';
+import { publishPortals } from './portals.mjs';
 
 const DEFAULT_URL = 'https://www.data.gouv.fr/api/1/datasets/r/eb76d20a-8501-400e-b336-d85724de5435';
 
@@ -33,6 +34,9 @@ const tiles = toTiles(agg.stations);
 await rm(outDir, { recursive: true, force: true });
 await mkdir(join(outDir, 'tiles'), { recursive: true });
 for (const [k, list] of tiles) await writeFile(join(outDir, 'tiles', `${k}.json`), JSON.stringify({ v: 1, s: list }));
+await mkdir(join(outDir, 'evse'), { recursive: true });
+const index = evseIndex(agg.stations);
+for (const [b, m] of index) await writeFile(join(outDir, 'evse', `${b}.json`), JSON.stringify({ v: 1, m }));
 const meta = {
   v: 1,
   generatedAt: new Date().toISOString(),
@@ -42,8 +46,17 @@ const meta = {
   stations: st.stations,
   pdc: st.pdc,
   tiles: [...tiles.keys()].sort(),
+  evseBuckets: index.size,
 };
 await writeFile(join(outDir, 'meta.json'), JSON.stringify(meta));
-const registry = agg.operators();
-await writeFile(join(outDir, 'operators.json'), JSON.stringify(registry));
+// Portails des opérateurs (site officiel, démarrage web, paiement ponctuel, badges, payDomains, payMethods) : validés puis publiés ;
+// les payDomains sont recopiés dans operators.json (vérificateur de QR codes de l'app).
+let registry = agg.operators();
+try {
+  registry = await publishPortals(outDir, registry);
+} catch (e) {
+  if (e?.code !== 'ENOENT') throw e;
+  console.warn('operator-portals.json absent : l’app utilise la base IRVE seule.');
+  await writeFile(join(outDir, 'operators.json'), JSON.stringify(registry));
+}
 console.log(`OK : ${st.rows} lignes, ${st.skipped} ignorées, ${st.stations} stations, ${st.pdc} points, ${tiles.size} tuiles, ${registry.operators.length} opérateurs → ${outDir}`);
