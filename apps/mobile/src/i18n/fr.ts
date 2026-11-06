@@ -1,10 +1,15 @@
 // Dictionnaire source (français). Toute clé ajoutée ici doit l'être dans chaque langue (erreur TypeScript sinon).
-import type { InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
+import type { IdEntryInfo, InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
 
 const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const s = (n: number) => (n > 1 ? 's' : '');
+/** « de » élidé devant voyelle (d’IZIVIA, d’ENGIE Vianeo) ; « de l’opérateur » inchangé. */
+const de = (op: string) => (/^[aeiouyàâéèêëîïôûüAEIOUYÀÂÉÈÊËÎÏÔÛÜ]/.test(op) ? `d’${op}` : `${de(op)}`);
 const ptOf = (c: MethodCtx) => (c.short ? `le point …⁠${c.short}` : 'le point choisi');
 const nearOf = (c: MethodCtx) => (c.short ? `du point …⁠${c.short}` : 'du point choisi');
+/** « du point … » : contraction de + le (l'identifiant du point, près du point). */
+const duPt = nearOf;
+const digitsFr = (d: [number, number] | null) => (d ? (d[0] === d[1] ? ` de ${d[0]} chiffres` : ` de ${d[0]} à ${d[1]} chiffres`) : '');
 const cableOf = (c: MethodCtx) => (c.stationCable ? `le câble ${c.plugs || 'de la borne'} de la borne` : 'votre câble Type 2');
 const onto = (p: InstrParts) => (p.street ? ` sur ${p.street}` : '');
 const toward = (p: InstrParts) => (p.towards ? ` vers ${p.towards}` : '');
@@ -36,7 +41,15 @@ export const fr = {
     recommended: 'Recommandé',
     powerUnknown: 'Puissance inconnue',
     unknownPrice: 'Prix inconnu',
-    saveFailed: 'Enregistrement impossible sur ce téléphone (stockage plein ou indisponible) : réessayez.',
+    saveFailed: 'Enregistrement impossible sur ce téléphone (stockage plein ou indisponible). Libérez de la place : exportez l’historique en CSV ou supprimez des photos de tickets, puis réessayez.',
+    deleteTickets: 'Supprimer des photos de tickets',
+    deleteTicketsQ: (n: number) => `Supprimer ${n} photo${s(n)} de ticket${s(n)} de ce téléphone ? Les recharges restent dans l’historique.`,
+    deleteTicketsYes: (n: number) => `Supprimer ${n} photo${s(n)}`,
+    ticketsDeleted: (n: number) => `${n} photo${s(n)} supprimée${s(n)} : réessayez.`,
+    noTickets: 'Aucune photo de ticket sur ce téléphone.',
+    noNetwork: 'Pas de réseau : payez au lecteur CB ou réessayez',
+    errorTitle: 'Un problème est survenu',
+    errorBody: 'Cet écran n’a pas pu s’afficher (connexion coupée ou erreur). Votre recharge en cours est conservée.',
     notProvided: 'Non renseigné',
     operatorFallback: 'l’opérateur',
     stationFallback: 'Borne de recharge',
@@ -140,6 +153,10 @@ export const fr = {
     fastA11y: 'Rapide, 50 kW et plus',
     open: 'Accès public',
     resume: (op: string, started = true) => (started ? `Recharge en cours chez ${op} · Reprendre` : `Paiement en attente chez ${op} · Reprendre`),
+    staleQ: 'Abandonner ce paiement ?',
+    staleBody: (op: string) => `Paiement chez ${op} jamais confirmé depuis plus de 6 h.`,
+    staleYes: 'Oui',
+    staleKeep: 'Toujours en cours',
     locDenied: 'Position non autorisée : déplacez la carte vers votre zone ou autorisez la localisation dans les réglages.',
     dataError: 'Impossible de charger les bornes. Vérifiez votre connexion, puis réessayez.',
     locating: 'Localisation en cours…',
@@ -497,6 +514,9 @@ export const fr = {
     goThereHint: (name: string) => `Itinéraire vers ${name}`,
     searchingPayable: 'Recherche de la borne payable la plus proche…',
     noPayableNear: 'Aucune borne payable depuis Branché trouvée à proximité.',
+    unconfirmedTitle: 'Non confirmé ici',
+    unconfirmedBody: (op: string) =>
+      `Aucun moyen de paiement déclaré pour cette borne : ${op} ne confirme ici ni QR code ni lecteur de carte. Vous pouvez essayer sur place, ou aller à une borne payable.`,
     preauthMax: (op: string, amount: string) =>
       `Jusqu’à ${amount} bloqués puis libérés : ${op} pré-autorise ce montant sur votre carte le temps de la recharge. Seul le montant réel est débité ; le reste est libéré par votre banque, en général sous quelques jours.`,
     myBadges: 'Mes badges',
@@ -529,10 +549,10 @@ export const fr = {
           : `${c.op} impose un compte. Créez-le ou connectez-vous une seule fois sur son site officiel, dans Branché ; ensuite Branché le réutilise automatiquement.`,
         steps: connected
           ? c.dc
-            ? [`Branchez ${cable} sur votre voiture.`, `Sur la page officielle de ${c.op}, vérifiez ${pt} et lancez la charge.`, 'Revenez dans Branché : le suivi démarre.']
-            : [`Sur la page officielle de ${c.op}, vérifiez ${pt} et lancez la charge.`, `Branchez ${cable}.`, 'Revenez dans Branché : le suivi démarre.']
+            ? [`Branchez ${cable} sur votre voiture.`, `Sur la page officielle ${de(c.op)}, vérifiez ${pt} et lancez la charge.`, 'Revenez dans Branché : le suivi démarre.']
+            : [`Sur la page officielle ${de(c.op)}, vérifiez ${pt} et lancez la charge.`, `Branchez ${cable}.`, 'Revenez dans Branché : le suivi démarre.']
           : [
-              `Sur le site officiel de ${c.op}, ouvert dans Branché, créez votre compte ou connectez-vous.`,
+              `Sur le site officiel ${de(c.op)}, ouvert dans Branché, créez votre compte ou connectez-vous.`,
               `Lancez la charge sur ${pt}${c.dc ? ' après avoir branché le câble' : ', puis branchez'}.`,
               'Revenez dans Branché : le suivi démarre, et le compte sera réutilisé la prochaine fois.',
             ],
@@ -545,23 +565,29 @@ export const fr = {
       return {
         label: 'QR code de la borne, vérifié par Branché',
         why: declared
-          ? `Paiement ponctuel sans compte déclaré par l’opérateur : Branché vérifie que le QR code mène bien au site de ${c.op}.`
-          : `Si un QR code de paiement est collé sur la borne. Branché vérifie qu’il mène bien au site de ${c.op}.`,
+          ? `Paiement ponctuel sans compte déclaré par l’opérateur : Branché vérifie que le QR code mène bien au site ${de(c.op)}.`
+          : `Si un QR code de paiement est collé sur la borne. Branché vérifie qu’il mène bien au site ${de(c.op)}.`,
         steps: c.dc
-          ? [`Branchez ${cable} sur votre voiture.`, `Scannez le QR code près ${near} : Branché vérifie l’adresse.`, `Payez sur la page officielle de ${c.op} (carte bancaire), puis revenez ici.`]
-          : [`Scannez le QR code près ${near} : Branché vérifie l’adresse.`, `Payez sur la page officielle de ${c.op}, puis revenez ici.`, `Branchez ${cable} : la charge démarre après validation.`],
+          ? [`Branchez ${cable} sur votre voiture.`, `Scannez le QR code près ${near} : Branché vérifie l’adresse.`, `Payez sur la page officielle ${de(c.op)} (carte bancaire), puis revenez ici.`]
+          : [`Scannez le QR code près ${near} : Branché vérifie l’adresse.`, `Payez sur la page officielle ${de(c.op)}, puis revenez ici.`, `Branchez ${cable} : la charge démarre après validation.`],
         cta: 'Scanner le QR code',
       };
     },
-    link: (c: MethodCtx, known: boolean): MethodTexts => {
+    link: (c: MethodCtx, known: boolean, id?: IdEntryInfo): MethodTexts => {
       const pt = ptOf(c);
       const cable = cableOf(c);
+      const idStep =
+        id?.entry === 'printed'
+          ? `Sur la page de paiement ${de(c.op)}, saisissez le numéro${digitsFr(id.digits)} inscrit sur la borne, près ${duPt(c)} (ce n’est pas l’identifiant affiché par Branché).`
+          : id?.entry === 'select'
+            ? `Sur la page de paiement ${de(c.op)}, choisissez ${pt} dans la liste (ou scannez son QR code).`
+            : `Sur la page de paiement ${de(c.op)}, collez l’identifiant ${duPt(c)} (copié par Branché).`;
       return {
         label: `Page de paiement ${c.op}`,
         why: known ? 'Adresse officielle de paiement sans compte connue pour cet opérateur.' : 'Pas de lien de paiement direct connu pour cet opérateur.',
         steps: c.dc
-          ? [`Branchez ${cable} sur votre voiture.`, `Sur la page de paiement de ${c.op}, collez l’identifiant de ${pt} (copié par Branché).`, 'Payez, puis revenez dans Branché.']
-          : [`Sur la page de paiement de ${c.op}, collez l’identifiant de ${pt} (copié par Branché).`, 'Payez, puis revenez dans Branché.', `Branchez ${cable} : la charge démarre.`],
+          ? [`Branchez ${cable} sur votre voiture.`, idStep, 'Payez, puis revenez dans Branché.']
+          : [idStep, 'Payez, puis revenez dans Branché.', `Branchez ${cable} : la charge démarre.`],
         cta: `Ouvrir la page ${c.op}`,
       };
     },
@@ -617,6 +643,10 @@ export const fr = {
     unknownDomain: 'Domaine absent de la base des opérateurs.',
     officialPay: (n: string) => `Adresse de paiement officielle publiée par ${n}.`,
     officialSite: (n: string) => `Domaine du site officiel de ${n} (sources vérifiées par Branché).`,
+    p2p: (p: string) => `Lien de paiement entre particuliers (${p}) : l’argent irait à une personne, pas à l’opérateur de la borne.`,
+    siteUnsourced: (n: string, d: string) => `Adresse sur le domaine de ${n} (${d}), mais absente des pages sourcées par Branché : vérifiez avant de payer.`,
+    platformBlocked: (p: string, op: string | null, way: 'page' | 'reader') =>
+      `Lien ${p} que n’importe qui peut créer, alors que ${op ?? 'l’opérateur de cette borne'} ${way === 'page' ? 'a une page de paiement officielle connue' : 'accepte la carte sur le lecteur de la borne'} : utilisez plutôt cette voie.`,
     otherPay: (n: string, st: string) => `Page de paiement officielle de ${n}, alors que cette borne est indiquée chez ${st} : vérifiez le nom affiché sur la borne.`,
     evseUnknown: 'Identifiant absent de la base nationale des bornes (ou connexion coupée).',
   },
@@ -661,6 +691,9 @@ export const fr = {
     readerNone: 'Aucun lecteur de carte déclaré pour cette borne.',
     toneOfficialPay: 'Page de paiement officielle de l’opérateur',
     toneOfficialSite: 'Site officiel de l’opérateur',
+    toneSiteUnverified: 'Site de l’opérateur, page non sourcée : à vérifier',
+    useOfficialPage: (op: string) => `Ouvrir la page officielle ${op}`,
+    useReader: 'Payer par carte sur la borne',
     toneKnownPay: 'Page officielle d’un autre opérateur',
     otherPoint: (scanned: string, chosen: string) => `Ce QR code concerne le point …${scanned}, pas le point …${chosen} que vous avez choisi.`,
     otherStation: (name: string) => `Ce QR code concerne une autre borne : ${name}.`,
@@ -693,7 +726,7 @@ export const fr = {
     energyEst: 'Énergie (estimée)',
     energy: 'Énergie',
     paid: 'Montant payé',
-    keptHere: (op: string) => `Gardé uniquement sur ce téléphone. Le justificatif officiel vient de ${op} (e-mail, ticket ou page de paiement).`,
+    keptHere: (op: string) => `Gardé uniquement sur ce téléphone. Le justificatif officiel vient ${de(op)} (e-mail, ticket ou page de paiement).`,
     seeHistory: 'Voir l’historique',
     none: 'Aucune recharge en cours',
     noneBody: 'Choisissez une borne sur la carte ou scannez son QR code pour démarrer.',
@@ -704,9 +737,9 @@ export const fr = {
     stateReader: 'Payez sur le lecteur de la borne',
     statePage: (op: string) => `Paiement chez ${op}`,
     bodyBadge: 'Passez votre badge sur le lecteur, suivez l’écran s’il y en a un, puis branchez. Branché suit la recharge ici.',
-    bodyAccount: (op: string) => `Lancez la charge sur la page de ${op}, branchez si ce n’est pas déjà fait, puis revenez ici.`,
+    bodyAccount: (op: string) => `Lancez la charge sur la page ${de(op)}, branchez si ce n’est pas déjà fait, puis revenez ici.`,
     bodyReader: (short: string | null) => `Payez par carte sur le lecteur${short ? ` (point …${short}, sur l’étiquette ou à l’écran)` : ''}, puis branchez. Branché suit la recharge ici.`,
-    bodyPage: (op: string) => `Finalisez le paiement sur la page de ${op}, branchez si ce n’est pas déjà fait, puis revenez ici.`,
+    bodyPage: (op: string) => `Finalisez le paiement sur la page ${de(op)}, branchez si ce n’est pas déjà fait, puis revenez ici.`,
     started: 'La charge a démarré',
     startedHint: 'Lance le suivi en direct et les rappels de fin de charge',
     notStarting: 'Ça ne démarre pas',
@@ -727,7 +760,7 @@ export const fr = {
     costEst: 'Coût estimé',
     elapsed: 'Écoulé',
     estimateNote: (v: string | null, from: number, kw: string, op: string) =>
-      `Estimation ${v ? `pour ${v}` : 'pour un véhicule moyen'} depuis ${from} %, à ${kw}. Le montant réel est celui de ${op}.`,
+      `Estimation ${v ? `pour ${v}` : 'pour un véhicule moyen'} depuis ${from} %, à ${kw}. Le montant réel est celui ${de(op)}.`,
     unplug: (p: number, idle: boolean) => `Votre batterie devrait être à ${p} % : débranchez pour libérer la place${idle ? ' et éviter les frais d’occupation' : ''}.`,
     idleNotice: (clock: string, rate: string) => `Occupation facturée à partir de ${clock} environ (${rate}). Rappel 5 min avant.`,
     freeSpot: 'Pensez à libérer la place en fin de charge.',
@@ -808,6 +841,7 @@ export const fr = {
     kwhEst: ' (estimés)',
     kwhUnknown: 'kWh inconnus',
     failed: ' · Échec signalé',
+    notStarted: ' · Non démarré',
     delA11y: (date: string) => `Supprimer la recharge du ${date}`,
     delAllQ: (n: number) => `Supprimer définitivement ${n > 1 ? `les ${n} recharges` : 'la recharge'} de ce téléphone ?`,
     delAll: 'Tout supprimer',

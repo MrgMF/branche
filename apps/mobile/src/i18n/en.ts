@@ -1,10 +1,11 @@
 // English.
 import type { Dict } from './fr';
-import type { InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
+import type { IdEntryInfo, InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
 
 const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const pl = (n: number, one: string, many: string) => (n === 1 ? one : many);
 const ptOf = (c: MethodCtx) => (c.short ? `point …⁠${c.short}` : 'the chosen point');
+const digitsEn = (d: [number, number] | null) => (d ? (d[0] === d[1] ? `${d[0]}-digit ` : `${d[0]}–${d[1]}-digit `) : '');
 const cableOf = (c: MethodCtx) => (c.stationCable ? `the station’s ${c.plugs || 'charging'} cable` : 'your Type 2 cable');
 const onto = (p: InstrParts) => (p.street ? ` onto ${p.street}` : '');
 const toward = (p: InstrParts) => (p.towards ? ` towards ${p.towards}` : '');
@@ -37,7 +38,15 @@ export const en: Dict = {
     recommended: 'Recommended',
     powerUnknown: 'Power unknown',
     unknownPrice: 'Price unknown',
-    saveFailed: 'Could not save on this phone (storage full or unavailable): please try again.',
+    saveFailed: 'Couldn’t save on this phone (storage full or unavailable). Free up space: export your history as CSV or delete receipt photos, then try again.',
+    deleteTickets: 'Delete receipt photos',
+    deleteTicketsQ: (n: number) => `Delete ${n} receipt ${pl(n, 'photo', 'photos')} from this phone? Your charges stay in the history.`,
+    deleteTicketsYes: (n: number) => `Delete ${n} ${pl(n, 'photo', 'photos')}`,
+    ticketsDeleted: (n: number) => `${n} ${pl(n, 'photo', 'photos')} deleted: try again.`,
+    noTickets: 'No receipt photos on this phone.',
+    noNetwork: 'No network: pay at the card reader or try again',
+    errorTitle: 'Something went wrong',
+    errorBody: 'This screen couldn’t be displayed (connection lost or error). Your ongoing charge is kept.',
     notProvided: 'Not entered',
     operatorFallback: 'the operator',
     stationFallback: 'Charging station',
@@ -141,6 +150,10 @@ export const en: Dict = {
     fastA11y: 'Fast, 50 kW and above',
     open: 'Public access',
     resume: (op: string, started = true) => (started ? `Charging with ${op} · Resume` : `Payment pending with ${op} · Resume`),
+    staleQ: 'Abandon this payment?',
+    staleBody: (op: string) => `Payment with ${op} not confirmed for over 6 hours.`,
+    staleYes: 'Yes',
+    staleKeep: 'Still in progress',
     locDenied: 'Location not allowed: move the map to your area or allow location in settings.',
     dataError: 'Could not load chargers. Check your connection, then try again.',
     locating: 'Finding your location…',
@@ -495,6 +508,9 @@ export const en: Dict = {
     goThereHint: (name: string) => `Route to ${name}`,
     searchingPayable: 'Looking for the nearest charger you can pay for…',
     noPayableNear: 'No nearby charger can be paid for from Branché.',
+    unconfirmedTitle: 'Not confirmed here',
+    unconfirmedBody: (op: string) =>
+      `No payment method declared for this charger: ${op} confirms neither a QR code nor a card reader here. You can try on site, or go to a payable charger.`,
     preauthMax: (op: string, amount: string) =>
       `Up to ${amount} held, then released: ${op} pre-authorises this amount on your card while you charge. Only the real amount is charged; your bank releases the rest, usually within a few days.`,
     myBadges: 'My cards',
@@ -547,15 +563,21 @@ export const en: Dict = {
         cta: 'Scan the QR code',
       };
     },
-    link: (c: MethodCtx, known: boolean): MethodTexts => {
+    link: (c: MethodCtx, known: boolean, id?: IdEntryInfo): MethodTexts => {
       const pt = ptOf(c);
       const cable = cableOf(c);
+      const idStep =
+        id?.entry === 'printed'
+          ? `On ${c.op}’s payment page, type the ${digitsEn(id.digits)}number printed on the charger, next to ${pt} (not the ID shown by Branché).`
+          : id?.entry === 'select'
+            ? `On ${c.op}’s payment page, pick ${pt} from the list (or scan its QR code).`
+            : `On ${c.op}’s payment page, paste the ID of ${pt} (copied by Branché).`;
       return {
         label: `${c.op} payment page`,
         why: known ? 'Official account-free payment address known for this operator.' : 'No direct payment link known for this operator.',
         steps: c.dc
-          ? [`Plug ${cable} into your car.`, `On ${c.op}’s payment page, paste the ID of ${pt} (copied by Branché).`, 'Pay, then come back to Branché.']
-          : [`On ${c.op}’s payment page, paste the ID of ${pt} (copied by Branché).`, 'Pay, then come back to Branché.', `Plug in ${cable}: charging starts.`],
+          ? [`Plug ${cable} into your car.`, idStep, 'Pay, then come back to Branché.']
+          : [idStep, 'Pay, then come back to Branché.', `Plug in ${cable}: charging starts.`],
         cta: `Open ${c.op} page`,
       };
     },
@@ -611,6 +633,10 @@ export const en: Dict = {
     unknownDomain: 'Domain not in the operator database.',
     officialPay: (n: string) => `Official payment address published by ${n}.`,
     officialSite: (n: string) => `Domain of ${n}’s official website (sources checked by Branché).`,
+    p2p: (p: string) => `Person-to-person payment link (${p}): the money would go to an individual, not to the charger’s operator.`,
+    siteUnsourced: (n: string, d: string) => `Address on ${n}’s domain (${d}), but not among the pages sourced by Branché: check before paying.`,
+    platformBlocked: (p: string, op: string | null, way: 'page' | 'reader') =>
+      `${p} link that anyone can create, while ${op ?? 'this charger’s operator'} ${way === 'page' ? 'has a known official payment page' : 'accepts cards on the charger’s reader'}: use that instead.`,
     otherPay: (n: string, st: string) => `Official payment page of ${n}, but this charger is listed under ${st}: check the name shown on the charger.`,
     evseUnknown: 'ID not in the national charger database (or connection down).',
   },
@@ -653,6 +679,9 @@ export const en: Dict = {
     readerNone: 'No card reader declared for this charger.',
     toneOfficialPay: 'Operator’s official payment page',
     toneOfficialSite: 'Operator’s official website',
+    toneSiteUnverified: 'Operator’s website, unsourced page: check it',
+    useOfficialPage: (op: string) => `Open ${op}’s official page`,
+    useReader: 'Pay by card at the charger',
     toneKnownPay: 'Another operator’s official page',
     otherPoint: (scanned: string, chosen: string) => `This QR code is for point …${scanned}, not point …${chosen} that you chose.`,
     otherStation: (name: string) => `This QR code is for another charger: ${name}.`,
@@ -798,6 +827,7 @@ export const en: Dict = {
     kwhEst: ' (estimated)',
     kwhUnknown: 'kWh unknown',
     failed: ' · Failure reported',
+    notStarted: ' · Not started',
     delA11y: (date: string) => `Delete the charge of ${date}`,
     delAllQ: (n: number) => `Permanently delete ${n > 1 ? `all ${n} charges` : 'this charge'} from this phone?`,
     delAll: 'Delete all',

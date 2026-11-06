@@ -1,10 +1,13 @@
 // Português (Portugal).
 import type { Dict } from './fr';
-import type { InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
+import type { IdEntryInfo, InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
 
 const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const pl = (n: number, one: string, many: string) => (n === 1 ? one : many);
 const ptOf = (c: MethodCtx) => (c.short ? `o ponto …⁠${c.short}` : 'o ponto escolhido');
+/** Contrações: de/a/em + o → do/ao/no. */
+const artPt = (prep: 'do' | 'ao' | 'no', c: MethodCtx) => `${prep} ${ptOf(c).slice(2)}`;
+const digitsPt = (d: [number, number] | null) => (d ? (d[0] === d[1] ? ` de ${d[0]} algarismos` : ` de ${d[0]} a ${d[1]} algarismos`) : '');
 const cableOf = (c: MethodCtx) => (c.stationCable ? `o cabo ${c.plugs || 'do posto'} do posto` : 'o seu cabo Tipo 2');
 const onto = (p: InstrParts) => (p.street ? ` para ${p.street}` : '');
 const toward = (p: InstrParts) => (p.towards ? ` em direção a ${p.towards}` : '');
@@ -36,7 +39,15 @@ export const pt: Dict = {
     recommended: 'Recomendado',
     powerUnknown: 'Potência desconhecida',
     unknownPrice: 'Preço desconhecido',
-    saveFailed: 'Não foi possível guardar neste telemóvel (armazenamento cheio ou indisponível): tente novamente.',
+    saveFailed: 'Não foi possível guardar neste telemóvel (armazenamento cheio ou indisponível). Liberte espaço: exporte o histórico em CSV ou apague fotos de talões e tente novamente.',
+    deleteTickets: 'Apagar fotos de talões',
+    deleteTicketsQ: (n: number) => `Apagar ${n} ${pl(n, 'foto de talão', 'fotos de talões')} deste telemóvel? Os carregamentos ficam no histórico.`,
+    deleteTicketsYes: (n: number) => `Apagar ${n} ${pl(n, 'foto', 'fotos')}`,
+    ticketsDeleted: (n: number) => `${n} ${pl(n, 'foto apagada', 'fotos apagadas')}: tente novamente.`,
+    noTickets: 'Nenhuma foto de talão neste telemóvel.',
+    noNetwork: 'Sem rede: pague no leitor de cartões ou tente novamente',
+    errorTitle: 'Ocorreu um problema',
+    errorBody: 'Não foi possível mostrar este ecrã (ligação perdida ou erro). O carregamento em curso é mantido.',
     notProvided: 'Não indicado',
     operatorFallback: 'o operador',
     stationFallback: 'Posto de carregamento',
@@ -140,6 +151,10 @@ export const pt: Dict = {
     fastA11y: 'Rápido, 50 kW ou mais',
     open: 'Acesso público',
     resume: (op: string, started = true) => (started ? `Carregamento em curso com ${op} · Retomar` : `Pagamento pendente com ${op} · Retomar`),
+    staleQ: 'Abandonar este pagamento?',
+    staleBody: (op: string) => `Pagamento com ${op} sem confirmação há mais de 6 h.`,
+    staleYes: 'Sim',
+    staleKeep: 'Ainda em curso',
     locDenied: 'Localização não permitida: mova o mapa para a sua zona ou permita a localização nas definições.',
     dataError: 'Não foi possível carregar os postos. Verifique a ligação e tente de novo.',
     locating: 'A obter a localização…',
@@ -493,6 +508,9 @@ export const pt: Dict = {
     goThereHint: (name: string) => `Percurso até ${name}`,
     searchingPayable: 'A procurar o posto pagável mais próximo…',
     noPayableNear: 'Nenhum posto próximo pode ser pago pelo Branché.',
+    unconfirmedTitle: 'Não confirmado aqui',
+    unconfirmedBody: (op: string) =>
+      `Nenhum meio de pagamento declarado para este posto: ${op} não confirma aqui nem código QR nem leitor de cartões. Pode tentar no local ou ir a um posto onde é possível pagar.`,
     preauthMax: (op: string, amount: string) =>
       `Até ${amount} cativos e depois libertados: ${op} pré-autoriza este montante no seu cartão durante o carregamento. Só é cobrado o montante real; o banco liberta o resto, normalmente em poucos dias.`,
     myBadges: 'Os meus cartões',
@@ -527,7 +545,7 @@ export const pt: Dict = {
           ? c.dc
             ? [`Ligue ${cable} ao seu carro.`, `Na página oficial de ${c.op}, confirme ${ptx} e inicie o carregamento.`, 'Volte ao Branché: o acompanhamento começa.']
             : [`Na página oficial de ${c.op}, confirme ${ptx} e inicie o carregamento.`, `Ligue ${cable}.`, 'Volte ao Branché: o acompanhamento começa.']
-          : [`No site oficial de ${c.op}, aberto no Branché, crie a sua conta ou inicie sessão.`, `Inicie o carregamento em ${ptx}${c.dc ? ' depois de ligar o cabo' : ' e depois ligue'}.`, 'Volte ao Branché: o acompanhamento começa e a conta será reutilizada da próxima vez.'],
+          : [`No site oficial de ${c.op}, aberto no Branché, crie a sua conta ou inicie sessão.`, `Inicie o carregamento ${artPt('no', c)}${c.dc ? ' depois de ligar o cabo' : ' e depois ligue'}.`, 'Volte ao Branché: o acompanhamento começa e a conta será reutilizada da próxima vez.'],
         cta: connected ? `Iniciar com a minha conta ${connected}` : `Adicionar a minha conta ${c.op}`,
       };
     },
@@ -540,20 +558,26 @@ export const pt: Dict = {
           ? `Pagamento pontual sem conta declarado pelo operador: o Branché verifica que o código QR leva mesmo ao site de ${c.op}.`
           : `Se houver um código QR de pagamento colado no posto. O Branché verifica que leva mesmo ao site de ${c.op}.`,
         steps: c.dc
-          ? [`Ligue ${cable} ao seu carro.`, `Leia o código QR junto a ${ptx}: o Branché verifica o endereço.`, `Pague na página oficial de ${c.op} (cartão) e volte aqui.`]
-          : [`Leia o código QR junto a ${ptx}: o Branché verifica o endereço.`, `Pague na página oficial de ${c.op} e volte aqui.`, `Ligue ${cable}: o carregamento começa após a validação.`],
+          ? [`Ligue ${cable} ao seu carro.`, `Leia o código QR junto ${artPt('ao', c)}: o Branché verifica o endereço.`, `Pague na página oficial de ${c.op} (cartão) e volte aqui.`]
+          : [`Leia o código QR junto ${artPt('ao', c)}: o Branché verifica o endereço.`, `Pague na página oficial de ${c.op} e volte aqui.`, `Ligue ${cable}: o carregamento começa após a validação.`],
         cta: 'Ler o código QR',
       };
     },
-    link: (c: MethodCtx, known: boolean): MethodTexts => {
+    link: (c: MethodCtx, known: boolean, id?: IdEntryInfo): MethodTexts => {
       const ptx = ptOf(c);
       const cable = cableOf(c);
+      const idStep =
+        id?.entry === 'printed'
+          ? `Na página de pagamento de ${c.op}, introduza o número${digitsPt(id.digits)} inscrito no posto, junto ${artPt('ao', c)} (não é o identificador mostrado pelo Branché).`
+          : id?.entry === 'select'
+            ? `Na página de pagamento de ${c.op}, escolha ${ptx} na lista (ou leia o seu código QR).`
+            : `Na página de pagamento de ${c.op}, cole o identificador ${artPt('do', c)} (copiado pelo Branché).`;
       return {
         label: `Página de pagamento ${c.op}`,
         why: known ? 'Endereço oficial de pagamento sem conta conhecido para este operador.' : 'Nenhum link de pagamento direto conhecido para este operador.',
         steps: c.dc
-          ? [`Ligue ${cable} ao seu carro.`, `Na página de pagamento de ${c.op}, cole o identificador de ${ptx} (copiado pelo Branché).`, 'Pague e volte ao Branché.']
-          : [`Na página de pagamento de ${c.op}, cole o identificador de ${ptx} (copiado pelo Branché).`, 'Pague e volte ao Branché.', `Ligue ${cable}: o carregamento começa.`],
+          ? [`Ligue ${cable} ao seu carro.`, idStep, 'Pague e volte ao Branché.']
+          : [idStep, 'Pague e volte ao Branché.', `Ligue ${cable}: o carregamento começa.`],
         cta: `Abrir a página ${c.op}`,
       };
     },
@@ -609,6 +633,10 @@ export const pt: Dict = {
     unknownDomain: 'Domínio ausente da base de operadores.',
     officialPay: (n: string) => `Endereço de pagamento oficial publicado por ${n}.`,
     officialSite: (n: string) => `Domínio do site oficial de ${n} (fontes verificadas pelo Branché).`,
+    p2p: (p: string) => `Link de pagamento entre particulares (${p}): o dinheiro iria para uma pessoa, não para o operador do posto.`,
+    siteUnsourced: (n: string, d: string) => `Endereço no domínio de ${n} (${d}), mas fora das páginas com fonte verificada pelo Branché: confirme antes de pagar.`,
+    platformBlocked: (p: string, op: string | null, way: 'page' | 'reader') =>
+      `Link ${p} que qualquer pessoa pode criar, quando ${op ?? 'o operador deste posto'} ${way === 'page' ? 'tem uma página de pagamento oficial conhecida' : 'aceita cartão no leitor do posto'}: use antes essa via.`,
     otherPay: (n: string, st: string) => `Página de pagamento oficial de ${n}, mas este posto está indicado como ${st}: verifique o nome apresentado no posto.`,
     evseUnknown: 'Identificador ausente da base nacional de postos (ou sem ligação).',
   },
@@ -651,6 +679,9 @@ export const pt: Dict = {
     readerNone: 'Nenhum leitor de cartões declarado para este posto.',
     toneOfficialPay: 'Página de pagamento oficial do operador',
     toneOfficialSite: 'Site oficial do operador',
+    toneSiteUnverified: 'Site do operador, página sem fonte: a verificar',
+    useOfficialPage: (op: string) => `Abrir a página oficial ${op}`,
+    useReader: 'Pagar com cartão no posto',
     toneKnownPay: 'Página oficial de outro operador',
     otherPoint: (scanned: string, chosen: string) => `Este código QR é do ponto …${scanned}, não do ponto …${chosen} que escolheu.`,
     otherStation: (name: string) => `Este código QR é de outro posto: ${name}.`,
@@ -796,6 +827,7 @@ export const pt: Dict = {
     kwhEst: ' (estimados)',
     kwhUnknown: 'kWh desconhecidos',
     failed: ' · Falha assinalada',
+    notStarted: ' · Não iniciado',
     delA11y: (date: string) => `Eliminar o carregamento de ${date}`,
     delAllQ: (n: number) => `Eliminar definitivamente ${n > 1 ? `os ${n} carregamentos` : 'o carregamento'} deste telemóvel?`,
     delAll: 'Eliminar tudo',

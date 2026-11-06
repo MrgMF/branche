@@ -14,6 +14,11 @@ export interface Operator {
    * hors sites tiers (presse, forums) : domaines connus de l'opérateur, jamais traités comme des sosies.
    */
   siteDomains?: string[];
+  /**
+   * Hôtes exacts des URL sourcées sur ces siteDomains (support.alizecharge.com…), publiés par le pipeline : seuls eux
+   * valent « Site officiel » ; un autre sous-domaine du même site (pay.alizecharge.com) demande une confirmation.
+   */
+  siteHosts?: string[];
 }
 
 export type Verdict = 'official' | 'known-operator' | 'other-operator' | 'payment-platform' | 'unknown' | 'dangerous';
@@ -32,11 +37,18 @@ export interface QrResult {
    */
   source?: 'irve' | 'portal' | 'site';
   reasons: string[];
+  /** Lien bloqué alors qu'une voie officielle existe pour cette borne : la proposer à la place. */
+  alternative?: 'page' | 'reader';
 }
 
 export interface VerifyOptions {
   /** Hôtes de test autorisés en http (développement uniquement). */
   devHosts?: string[];
+  /**
+   * Voies officielles de la borne (methods.ts payOptions) : page de paiement connue de l'opérateur, lecteur CB déclaré.
+   * Un lien Stripe/SumUp y est alors bloqué et la voie officielle proposée.
+   */
+  official?: { page?: boolean; reader?: boolean };
 }
 
 const SHORTENERS = new Set([
@@ -56,6 +68,27 @@ export const PAYMENT_PLATFORMS: Record<string, string> = {
   'chargemap.com': 'Chargemap',
   'plugsurfing.com': 'Plugsurfing',
 };
+
+/**
+ * Liens de paiement entre particuliers : aucun opérateur de recharge n'encaisse ainsi (argent envoyé à une personne,
+ * sans recours) → toujours bloqués. Domaines entiers, hôtes précis, et chemins PayPal.me hébergés sur paypal.com.
+ */
+const P2P_DOMAINS: Record<string, string> = { 'paypal.me': 'PayPal.me', 'lydia-app.com': 'Lydia', 'revolut.me': 'Revolut', 'sumup.me': 'SumUp (lien personnel)' };
+const P2P_HOSTS: Record<string, string> = { 'checkout.revolut.com': 'Revolut' };
+export function p2pPlatform(host: string, path: string): string | null {
+  const h = host.toLowerCase().replace(/^www\./, '');
+  const d = registrableDomain(h);
+  if (P2P_DOMAINS[d]) return P2P_DOMAINS[d];
+  if (P2P_HOSTS[h]) return P2P_HOSTS[h];
+  if (d === 'paypal.com' && /^\/paypalme(\/|$)/i.test(path)) return 'PayPal.me';
+  return null;
+}
+
+/**
+ * Liens de paiement que n'importe qui crée en quelques minutes (Stripe Payment Links, SumUp) : bloqués sur une borne
+ * dont l'opérateur a une page officielle connue ou un lecteur CB déclaré (voie proposée à la place).
+ */
+const SELF_SERVE_LINKS = new Set(['stripe.com', 'sumup.com']);
 
 // Suffixes publics à deux niveaux les plus courants (domaine enregistrable).
 const TWO_LEVEL = new Set(['co.uk', 'com.fr', 'gouv.fr', 'asso.fr', 'co.jp', 'com.au', 'co.nz', 'com.br', 'com.es', 'co.za']);
@@ -138,6 +171,9 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
   if (SHORTENERS.has(domain) || SHORTENERS.has(host)) reasons.push(tr().qr.shortener);
   if (reasons.length) return { ...base, verdict: 'dangerous' };
 
+  const p2p = p2pPlatform(host, u.pathname);
+  if (p2p) return { ...base, verdict: 'dangerous', reasons: [tr().qr.p2p(p2p)] };
+
   const stationOp = stationOperatorKey ? operators.find((o) => o.key === stationOperatorKey) : undefined;
   const hostKey = isDevHost ? u.host.toLowerCase() : host;
 
@@ -164,6 +200,11 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
   if (owner) {
     if (!stationOperatorKey || owner.key === stationOperatorKey) {
       const irve = irveOwns(owner);
+      // Site sourcé : « Site officiel » seulement sur un hôte exact des sources ; autre sous-domaine → confirmation
+      const sourcedHost = irve || (owner.siteHosts ?? []).includes(host.replace(/^www\./, ''));
+      if (!sourcedHost) {
+        return { ...base, verdict: 'unknown', operatorKey: owner.key, source: 'site', reasons: [tr().qr.siteUnsourced(owner.names[0], domain)] };
+      }
       return {
         ...base,
         verdict: stationOperatorKey ? 'official' : 'known-operator',
@@ -203,6 +244,19 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
   }
 
   const platform = PAYMENT_PLATFORMS[domain];
+  if (platform && SELF_SERVE_LINKS.has(domain)) {
+    // Page officielle connue (gabarit ou page sourcée de l'opérateur de la borne) ou lecteur CB déclaré : lien bloqué
+    const page = !!opts.official?.page || !!stationOp?.payUrl || !!stationOp?.payDomains?.length;
+    const reader = !!opts.official?.reader;
+    if (page || reader) {
+      return {
+        ...base,
+        verdict: 'dangerous',
+        alternative: page ? 'page' : 'reader',
+        reasons: [tr().qr.platformBlocked(platform, stationOp?.names[0] ?? null, page ? 'page' : 'reader')],
+      };
+    }
+  }
   if (platform) {
     return {
       ...base,

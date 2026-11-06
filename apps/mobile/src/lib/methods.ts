@@ -6,7 +6,7 @@ import type { MethodId } from './history';
 import { operatorPayUrl, type Operator } from './qr';
 import type { Station } from './stations';
 import { acceptedBadges, type Wallet } from './accounts';
-import { webStartUrl, type Portals } from './portals';
+import { idEntryOf, webStartUrl, type Portals } from './portals';
 import { tr } from '../i18n';
 import type { MethodCtx } from '../i18n/types';
 
@@ -130,15 +130,19 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
       ...(declaredAdHoc ? {} : { speculative: true as const }),
     },
   });
+  // Saisie du point sur la page (notes sourcées) : identifiant IRVE à coller (défaut), numéro inscrit sur la borne
+  // (Virta), ou choix dans la liste (Ionity). Seul l'identifiant IRVE est copié : ailleurs, le copier tromperait.
+  const idEntry = idEntryOf(portal);
+  const copyIrveId = idEntry.entry === null || idEntry.entry === 'emi3';
   ranked.push({
     rank: 1.5,
     o: {
       id: 'operator-link',
-      ...M.link(mc, !!link),
+      ...M.link(mc, !!link, idEntry),
       available: !!link,
       order,
       url: link ?? undefined,
-      copyId: link && !link.includes(encodeURIComponent(pointId ?? '¤')) ? pointId : undefined,
+      copyId: link && copyIrveId && !link.includes(encodeURIComponent(pointId ?? '¤')) ? pointId : undefined,
     },
   });
   ranked.push({

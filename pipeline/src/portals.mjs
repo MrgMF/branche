@@ -39,6 +39,18 @@ export const THIRD_PARTY = new Set([
   'univ-amu.fr', 'bordeaux-metropole.fr', 'islesurlasorgue.fr', 'intercom.help', 'evc-net.com', 'orios-infos.com',
 ]);
 
+/**
+ * Hôtes exacts des URL sourcées d'une entrée, hors sites tiers (alizecharge.com, support.alizecharge.com…) : seuls ces
+ * hôtes valent « Site officiel » au vérificateur de QR ; un autre sous-domaine du même site demande confirmation.
+ */
+export function siteHostsOf(entry) {
+  const out = new Set();
+  for (const h of sourcedHosts(entry)) {
+    if (HOST_RE.test(h) && !THIRD_PARTY.has(registrableDomain(h))) out.add(h.replace(/^www\./, ''));
+  }
+  return out;
+}
+
 /** Domaines enregistrables des URL sourcées d'une entrée, hors sites tiers (alizecharge.com, reveocharge.com…). */
 export function siteDomainsOf(entry) {
   const out = new Set();
@@ -49,6 +61,12 @@ export function siteDomainsOf(entry) {
   }
   return out;
 }
+
+/**
+ * Saisie du point sur la page de paiement : `emi3` (identifiant IRVE, copié par Branché), `printed` (numéro inscrit sur
+ * la borne, ex. Virta : 4–5 chiffres), `select` (choix du point dans une liste sur la page), null si non documenté.
+ */
+export const ID_ENTRIES = new Set(['emi3', 'printed', 'select']);
 
 /** Erreurs de forme : payDomains hors des URL sourcées, preauthMax non numérique, clés de registre invalides. */
 export function validatePortals(portals) {
@@ -66,6 +84,12 @@ export function validatePortals(portals) {
       }
     }
     if (e.preauthMax != null && !(typeof e.preauthMax === 'number' && e.preauthMax > 0 && e.preauthMax <= 500)) errors.push(`${key}.preauthMax : montant en € attendu`);
+    if (e.idEntry != null && !ID_ENTRIES.has(e.idEntry)) errors.push(`${key}.idEntry : emi3, printed ou select attendu`);
+    if (e.idDigits != null) {
+      const ok = Array.isArray(e.idDigits) && e.idDigits.length === 2 && e.idDigits.every((n) => Number.isInteger(n) && n > 0 && n <= 20) && e.idDigits[0] <= e.idDigits[1];
+      if (!ok) errors.push(`${key}.idDigits : [min, max] attendu`);
+      else if (e.idEntry !== 'printed') errors.push(`${key}.idDigits : réservé à idEntry « printed »`);
+    }
     if (e.registryKeys != null && !(Array.isArray(e.registryKeys) && e.registryKeys.every((k) => typeof k === 'string' && k))) errors.push(`${key}.registryKeys : clés attendues`);
   }
   return errors;
@@ -73,12 +97,13 @@ export function validatePortals(portals) {
 
 /**
  * Recopie dans le registre, par clé et via `registryKeys` pour une enseigne hors registre (ex. Carrefour Energies,
- * stations exploitées par Allego et Driveco) : les payDomains, et les domaines des sites sourcés (`siteDomains`,
- * hors domaines IRVE déjà connus). Ne crée aucun opérateur.
+ * stations exploitées par Allego et Driveco) : les payDomains, les domaines des sites sourcés (`siteDomains`,
+ * hors domaines IRVE déjà connus) et leurs hôtes exacts (`siteHosts`). Ne crée aucun opérateur.
  */
 export function attachPayDomains(registry, portals) {
   const pay = new Map();
   const site = new Map();
+  const siteHosts = new Map();
   const add = (map, k, list) => {
     const set = map.get(k) ?? new Set();
     for (const d of list) set.add(d);
@@ -87,18 +112,27 @@ export function attachPayDomains(registry, portals) {
   for (const [key, e] of Object.entries(portals?.operators ?? {})) {
     const keys = [key, ...(Array.isArray(e.registryKeys) ? e.registryKeys : [])];
     const sites = siteDomainsOf(e);
+    const hosts = siteHostsOf(e);
     for (const k of keys) {
       if (Array.isArray(e.payDomains) && e.payDomains.length) add(pay, k, e.payDomains);
       if (sites.size) add(site, k, sites);
+      if (hosts.size) add(siteHosts, k, hosts);
     }
   }
   return {
     ...registry,
     operators: registry.operators.map((o) => {
-      const { payDomains: _old, siteDomains: _oldSite, ...rest } = o;
+      const { payDomains: _old, siteDomains: _oldSite, siteHosts: _oldHosts, ...rest } = o;
       const p = pay.get(o.key);
       const sd = [...(site.get(o.key) ?? [])].filter((d) => !(o.domains ?? []).includes(d)).sort();
-      return { ...rest, ...(p ? { payDomains: [...p].sort() } : {}), ...(sd.length ? { siteDomains: sd } : {}) };
+      // Hôtes sourcés des seuls siteDomains publiés (les domaines IRVE gardent leur propre règle)
+      const sh = [...(siteHosts.get(o.key) ?? [])].filter((h) => sd.includes(registrableDomain(h))).sort();
+      return {
+        ...rest,
+        ...(p ? { payDomains: [...p].sort() } : {}),
+        ...(sd.length ? { siteDomains: sd } : {}),
+        ...(sh.length ? { siteHosts: sh } : {}),
+      };
     }),
   };
 }

@@ -1,6 +1,7 @@
 // Portails des opérateurs (data/operator-portals.json, publié avec les tuiles par le pipeline) :
 // site officiel, page de démarrage web, paiement ponctuel, badges acceptés. Absent → {} (dégradation propre).
 import { DATA_URL } from './config';
+import type { IdEntryInfo } from '../i18n/types';
 
 export interface Portal {
   name: string;
@@ -10,6 +11,13 @@ export interface Portal {
   webStart?: { status?: string; url?: string | null } | null;
   /** Paiement ponctuel sans compte sur le web (true, ou URL). */
   adhocWeb?: boolean | string | null;
+  /**
+   * Saisie du point sur la page de paiement (notes sourcées) : `emi3` identifiant IRVE copié par Branché, `printed`
+   * numéro inscrit sur la borne (Virta : 4–5 chiffres), `select` choix dans une liste (Ionity). Absent → emi3.
+   */
+  idEntry?: 'emi3' | 'printed' | 'select' | null;
+  /** Nombre de chiffres du numéro inscrit ([min, max]), seulement pour `printed` et s'il est publié. */
+  idDigits?: [number, number] | null;
   cardReader?: boolean | null;
   /** N'accepte que son appli (ou un badge). */
   appOnly?: boolean | null;
@@ -47,4 +55,13 @@ export function webStartUrl(portal: Portal | undefined, evse: string | undefined
 export function preauthMaxOf(portal: Portal | undefined): number | null {
   const v = portal?.preauthMax;
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
+}
+
+/** Saisie du point sur la page de l'opérateur (textes de methods.link), valeurs inattendues ignorées. */
+export function idEntryOf(portal: Portal | undefined): IdEntryInfo {
+  const e = portal?.idEntry;
+  const entry = e === 'emi3' || e === 'printed' || e === 'select' ? e : null;
+  const d = portal?.idDigits;
+  const digits = entry === 'printed' && Array.isArray(d) && d.length === 2 && d.every((n) => Number.isInteger(n) && n > 0) && d[0] <= d[1] ? ([d[0], d[1]] as [number, number]) : null;
+  return { entry, digits };
 }

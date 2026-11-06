@@ -248,14 +248,27 @@ describe('badge mentionné seulement si l’IRVE le déclare (ou badge de l’ut
 describe('lien de secours sans QR : page de démarrage sourcée (webStart https) + identifiant à copier', () => {
   const P = (realPortals as { operators: Portals }).operators;
   it.each([
-    ['virta', 'https://chge.eu', 'FRVIRE269470'],
     ['engie-vianeo', 'https://charge.engie-vianeo.com/', 'FRVIAE12345955331'],
     ['qwello', 'https://wa.qwello.eu/', 'FRQWEE0001'],
-    ['ionity', 'https://payment.ionity.eu', 'FRIONE0001'],
-  ])('%s → %s, identifiant %s à copier', (ok, url, id) => {
+  ])('%s → %s, identifiant %s à copier (saisie non documentée : identifiant IRVE)', (ok, url, id) => {
     const s: Station = { ...base, ok, kw: 150, c: ['ccs'], pay: [], pdc: [[id, 150, ['ccs']]] };
     const link = payOptions(s, pt(s), ops, { portals: P }).find((o) => o.id === 'operator-link')!;
     expect(link).toMatchObject({ available: true, url, copyId: id });
+    expect(link.steps.join(' ')).toContain('collez l’identifiant du point …');
+  });
+  it('Virta (idEntry printed) : numéro de 4 à 5 chiffres inscrit sur la borne, rien à copier', () => {
+    const s: Station = { ...base, ok: 'virta', kw: 22, c: ['t2'], pay: [], pdc: [['FRVIRE269470', 22, ['t2']]] };
+    const link = payOptions(s, pt(s), ops, { portals: P }).find((o) => o.id === 'operator-link')!;
+    expect(link).toMatchObject({ available: true, url: 'https://chge.eu' });
+    expect(link.copyId).toBeUndefined();
+    expect(link.steps[0]).toBe('Sur la page de paiement de Virta, saisissez le numéro de 4 à 5 chiffres inscrit sur la borne, près du point …⁠9470 (ce n’est pas l’identifiant affiché par Branché).');
+  });
+  it('Ionity (idEntry select) : choix du point dans la liste, rien à copier', () => {
+    const s: Station = { ...base, ok: 'ionity', kw: 350, c: ['ccs'], pay: [], pdc: [['FRIONE0001', 350, ['ccs']]] };
+    const link = payOptions(s, pt(s), ops, { portals: P }).find((o) => o.id === 'operator-link')!;
+    expect(link).toMatchObject({ available: true, url: 'https://payment.ionity.eu' });
+    expect(link.copyId).toBeUndefined();
+    expect(link.steps[1]).toBe('Sur la page de paiement de l’opérateur, choisissez le point …⁠0001 dans la liste (ou scannez son QR code).');
   });
   it('jamais en http (Electric 55 : map.e55c.com publié en http) ni chez un opérateur « appli seule »', () => {
     const e55: Station = { ...base, ok: 'electric-55-charging', pay: [] };
@@ -266,5 +279,45 @@ describe('lien de secours sans QR : page de démarrage sourcée (webStart https)
   it('sourceHosts : domaines exacts des sources, sans www', () => {
     expect(sourceHosts(['https://www.tesla.com/a', 'https://www.tesla.com/b', 'https://blog.chargemap.com/?p=1'])).toBe('tesla.com, blog.chargemap.com');
     expect(sourceHosts([])).toBeNull();
+  });
+});
+
+describe('gabarits du point : élision et contraction dans toutes les langues', async () => {
+  const { DICTS } = await import('../i18n');
+  type Ctx = Parameters<(typeof DICTS)['fr']['methods']['link']>[0];
+  const ctxs: Ctx[] = [];
+  for (const short of ['0001', null]) for (const dc of [true, false]) for (const connected of [true, false]) ctxs.push({ op: 'X', short, plugs: 'Type 2', stationCable: dc, dc, contactless: connected });
+  // Tournures fautives (préposition + article non contractés)
+  const BAD: Record<string, RegExp> = {
+    fr: /\b(de le|à le|de les|à les)\b/,
+    es: /\b(de el|a el)\b/,
+    it: /\b(di il|a il|su il|de il|da il)\b/,
+    pt: /\b(de o|em o|a o)\s+ponto/,
+    de: /\b(an den|bei den|an Ladepunkt|bei Ladepunkt)\b/,
+    en: /\bthe the\b/,
+    nl: /\bde het\b/,
+  };
+  it.each(Object.keys(DICTS))('%s', (lang) => {
+    const M = DICTS[lang as keyof typeof DICTS].methods;
+    const texts: string[] = [];
+    for (const c of ctxs) {
+      for (const k of [false, true]) {
+        texts.push(...M.account(c, k ? 'X' : null).steps);
+        texts.push(...M.scan(c, k).steps);
+        for (const entry of [null, 'emi3', 'printed', 'select'] as const) texts.push(...M.link(c, k, { entry, digits: entry === 'printed' ? [4, 5] : null }).steps);
+        texts.push(...M.reader(c, { source: k ? 'irve' : null, refs: null }).steps);
+        texts.push(...M.badge(c, { accepted: [], maybe: false, name: null }).steps);
+      }
+    }
+    for (const t of texts) expect(t, t).not.toMatch(BAD[lang]);
+  });
+  it('français : « l’identifiant du point », « près du point »', () => {
+    const c: Ctx = { op: 'X', short: '0001', plugs: '', stationCable: false, dc: false, contactless: false };
+    expect(DICTS.fr.methods.link(c, true).steps[0]).toContain('l’identifiant du point …⁠0001');
+    expect(DICTS.fr.methods.link({ ...c, short: null }, true).steps[0]).toContain('l’identifiant du point choisi');
+    expect(DICTS.es.methods.link(c, true).steps[0]).toContain('identificador del punto');
+    expect(DICTS.it.methods.scan(c, true).steps[0]).toContain('vicino al punto');
+    expect(DICTS.pt.methods.link(c, true).steps[0]).toContain('identificador do ponto');
+    expect(DICTS.de.methods.scan(c, true).steps[0]).toContain('beim Ladepunkt');
   });
 });

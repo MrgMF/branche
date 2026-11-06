@@ -1,9 +1,13 @@
 // Deutsch.
 import type { Dict } from './fr';
-import type { InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
+import type { IdEntryInfo, InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
 
 const pl = (n: number, one: string, many: string) => (n === 1 ? one : many);
 const ptOf = (c: MethodCtx) => (c.short ? `Ladepunkt …⁠${c.short}` : 'den gewählten Ladepunkt');
+/** Artikel und Präposition: den (Akk.), am / beim (an/bei + dem). */
+const denPt = (c: MethodCtx) => (c.short ? `den Ladepunkt …⁠${c.short}` : 'den gewählten Ladepunkt');
+const datPt = (prep: 'am' | 'beim', c: MethodCtx) => (c.short ? `${prep} Ladepunkt …⁠${c.short}` : `${prep} gewählten Ladepunkt`);
+const digitsDe = (d: [number, number] | null) => (d ? (d[0] === d[1] ? `${d[0]}-stellige ` : `${d[0]}- bis ${d[1]}-stellige `) : '');
 const cableOf = (c: MethodCtx) => (c.stationCable ? `das ${c.plugs ? `${c.plugs}-` : ''}Kabel der Ladesäule` : 'Ihr Typ-2-Kabel');
 const onto = (p: InstrParts) => (p.street ? ` auf ${p.street}` : '');
 const toward = (p: InstrParts) => (p.towards ? ` Richtung ${p.towards}` : '');
@@ -35,7 +39,15 @@ export const de: Dict = {
     recommended: 'Empfohlen',
     powerUnknown: 'Leistung unbekannt',
     unknownPrice: 'Preis unbekannt',
-    saveFailed: 'Speichern auf diesem Telefon nicht möglich (Speicher voll oder nicht verfügbar): bitte erneut versuchen.',
+    saveFailed: 'Speichern auf diesem Telefon nicht möglich (Speicher voll oder nicht verfügbar). Schaffen Sie Platz: Verlauf als CSV exportieren oder Belegfotos löschen, dann erneut versuchen.',
+    deleteTickets: 'Belegfotos löschen',
+    deleteTicketsQ: (n: number) => `${n} ${pl(n, 'Belegfoto', 'Belegfotos')} von diesem Telefon löschen? Die Ladevorgänge bleiben im Verlauf.`,
+    deleteTicketsYes: (n: number) => `${n} ${pl(n, 'Foto', 'Fotos')} löschen`,
+    ticketsDeleted: (n: number) => `${n} ${pl(n, 'Foto', 'Fotos')} gelöscht: bitte erneut versuchen.`,
+    noTickets: 'Keine Belegfotos auf diesem Telefon.',
+    noNetwork: 'Kein Netz: am Kartenleser zahlen oder erneut versuchen',
+    errorTitle: 'Ein Problem ist aufgetreten',
+    errorBody: 'Dieser Bildschirm konnte nicht angezeigt werden (Verbindung unterbrochen oder Fehler). Ihr laufender Ladevorgang bleibt erhalten.',
     notProvided: 'Nicht angegeben',
     operatorFallback: 'der Betreiber',
     stationFallback: 'Ladestation',
@@ -139,6 +151,10 @@ export const de: Dict = {
     fastA11y: 'Schnell, ab 50 kW',
     open: 'Öffentlich',
     resume: (op: string, started = true) => (started ? `Laufender Ladevorgang bei ${op} · Fortsetzen` : `Zahlung ausstehend bei ${op} · Fortsetzen`),
+    staleQ: 'Diese Zahlung aufgeben?',
+    staleBody: (op: string) => `Zahlung bei ${op} seit über 6 Std. nicht bestätigt.`,
+    staleYes: 'Ja',
+    staleKeep: 'Läuft noch',
     locDenied: 'Standort nicht erlaubt: Karte in Ihre Gegend verschieben oder Standort in den Einstellungen erlauben.',
     dataError: 'Ladesäulen konnten nicht geladen werden. Verbindung prüfen und erneut versuchen.',
     locating: 'Standort wird ermittelt…',
@@ -492,6 +508,9 @@ export const de: Dict = {
     goThereHint: (name: string) => `Route zu ${name}`,
     searchingPayable: 'Suche nach der nächsten bezahlbaren Säule…',
     noPayableNear: 'In der Nähe ist keine Säule über Branché bezahlbar.',
+    unconfirmedTitle: 'Hier nicht bestätigt',
+    unconfirmedBody: (op: string) =>
+      `Für diese Säule ist kein Zahlungsweg angegeben: ${op} bestätigt hier weder QR-Code noch Kartenleser. Sie können es vor Ort versuchen oder zu einer bezahlbaren Säule fahren.`,
     preauthMax: (op: string, amount: string) =>
       `Bis zu ${amount} reserviert, dann freigegeben: ${op} reserviert diesen Betrag während des Ladens auf Ihrer Karte. Abgebucht wird nur der tatsächliche Betrag; den Rest gibt Ihre Bank frei, meist innerhalb weniger Tage.`,
     myBadges: 'Meine Karten',
@@ -524,9 +543,9 @@ export const de: Dict = {
           : `${c.op} verlangt ein Konto. Legen Sie es einmalig auf der offiziellen Website in Branché an oder melden Sie sich an; danach nutzt Branché es automatisch.`,
         steps: connected
           ? c.dc
-            ? [`Stecken Sie ${cable} in Ihr Auto.`, `Prüfen Sie auf der offiziellen Seite von ${c.op} ${pt} und starten Sie das Laden.`, 'Kehren Sie zu Branché zurück: Die Verfolgung startet.']
-            : [`Prüfen Sie auf der offiziellen Seite von ${c.op} ${pt} und starten Sie das Laden.`, `Stecken Sie ${cable} ein.`, 'Kehren Sie zu Branché zurück: Die Verfolgung startet.']
-          : [`Legen Sie auf der offiziellen Website von ${c.op} (in Branché geöffnet) Ihr Konto an oder melden Sie sich an.`, `Starten Sie das Laden an ${pt}${c.dc ? ', nachdem Sie das Kabel eingesteckt haben' : ' und stecken Sie dann ein'}.`, 'Kehren Sie zu Branché zurück: Die Verfolgung startet, und das Konto wird beim nächsten Mal wiederverwendet.'],
+            ? [`Stecken Sie ${cable} in Ihr Auto.`, `Prüfen Sie auf der offiziellen Seite von ${c.op} ${denPt(c)} und starten Sie das Laden.`, 'Kehren Sie zu Branché zurück: Die Verfolgung startet.']
+            : [`Prüfen Sie auf der offiziellen Seite von ${c.op} ${denPt(c)} und starten Sie das Laden.`, `Stecken Sie ${cable} ein.`, 'Kehren Sie zu Branché zurück: Die Verfolgung startet.']
+          : [`Legen Sie auf der offiziellen Website von ${c.op} (in Branché geöffnet) Ihr Konto an oder melden Sie sich an.`, `Starten Sie das Laden ${datPt('am', c)}${c.dc ? ', nachdem Sie das Kabel eingesteckt haben' : ' und stecken Sie dann ein'}.`, 'Kehren Sie zu Branché zurück: Die Verfolgung startet, und das Konto wird beim nächsten Mal wiederverwendet.'],
         cta: connected ? `Mit meinem ${connected}-Konto starten` : `Mein ${c.op}-Konto hinzufügen`,
       };
     },
@@ -539,20 +558,26 @@ export const de: Dict = {
           ? `Vom Betreiber gemeldete Einmalzahlung ohne Konto: Branché prüft, dass der QR-Code wirklich zur Website von ${c.op} führt.`
           : `Falls ein Zahlungs-QR-Code an der Säule klebt. Branché prüft, dass er wirklich zur Website von ${c.op} führt.`,
         steps: c.dc
-          ? [`Stecken Sie ${cable} in Ihr Auto.`, `Scannen Sie den QR-Code bei ${pt}: Branché prüft die Adresse.`, `Zahlen Sie auf der offiziellen Seite von ${c.op} (Karte) und kehren Sie hierher zurück.`]
-          : [`Scannen Sie den QR-Code bei ${pt}: Branché prüft die Adresse.`, `Zahlen Sie auf der offiziellen Seite von ${c.op} und kehren Sie hierher zurück.`, `Stecken Sie ${cable} ein: Das Laden startet nach der Freigabe.`],
+          ? [`Stecken Sie ${cable} in Ihr Auto.`, `Scannen Sie den QR-Code ${datPt('beim', c)}: Branché prüft die Adresse.`, `Zahlen Sie auf der offiziellen Seite von ${c.op} (Karte) und kehren Sie hierher zurück.`]
+          : [`Scannen Sie den QR-Code ${datPt('beim', c)}: Branché prüft die Adresse.`, `Zahlen Sie auf der offiziellen Seite von ${c.op} und kehren Sie hierher zurück.`, `Stecken Sie ${cable} ein: Das Laden startet nach der Freigabe.`],
         cta: 'QR-Code scannen',
       };
     },
-    link: (c: MethodCtx, known: boolean): MethodTexts => {
+    link: (c: MethodCtx, known: boolean, id?: IdEntryInfo): MethodTexts => {
       const pt = ptOf(c);
       const cable = cableOf(c);
+      const idStep =
+        id?.entry === 'printed'
+          ? `Geben Sie auf der Zahlungsseite von ${c.op} die ${digitsDe(id.digits)}Nummer ein, die an der Säule ${datPt('beim', c)} steht (nicht die von Branché angezeigte Kennung).`
+          : id?.entry === 'select'
+            ? `Wählen Sie auf der Zahlungsseite von ${c.op} ${denPt(c)} in der Liste (oder scannen Sie seinen QR-Code).`
+            : `Fügen Sie auf der Zahlungsseite von ${c.op} die Kennung für ${denPt(c)} ein (von Branché kopiert).`;
       return {
         label: `Zahlungsseite ${c.op}`,
         why: known ? 'Offizielle Zahlungsadresse ohne Konto für diesen Betreiber bekannt.' : 'Kein direkter Zahlungslink für diesen Betreiber bekannt.',
         steps: c.dc
-          ? [`Stecken Sie ${cable} in Ihr Auto.`, `Fügen Sie auf der Zahlungsseite von ${c.op} die Kennung für ${pt} ein (von Branché kopiert).`, 'Bezahlen Sie und kehren Sie zu Branché zurück.']
-          : [`Fügen Sie auf der Zahlungsseite von ${c.op} die Kennung für ${pt} ein (von Branché kopiert).`, 'Bezahlen Sie und kehren Sie zu Branché zurück.', `Stecken Sie ${cable} ein: Das Laden startet.`],
+          ? [`Stecken Sie ${cable} in Ihr Auto.`, idStep, 'Bezahlen Sie und kehren Sie zu Branché zurück.']
+          : [idStep, 'Bezahlen Sie und kehren Sie zu Branché zurück.', `Stecken Sie ${cable} ein: Das Laden startet.`],
         cta: `Seite von ${c.op} öffnen`,
       };
     },
@@ -562,7 +587,7 @@ export const de: Dict = {
       const maybe = r?.source === 'operator';
       const card = c.contactless ? 'Halten Sie Ihre Karte an das Lesegerät (Kontaktlos-Logo)' : 'Stecken Sie Ihre Karte ins Lesegerät';
       // Écran ou étiquette selon la borne (beaucoup de bornes AC n'ont pas d'écran)
-      const pick = c.short ? `Suchen Sie ${ptx} auf dem Etikett der Steckdose; hat die Säule einen Bildschirm, wählen Sie ihn dort und dann „Kartenzahlung“.` : 'Hat die Säule einen Bildschirm, wählen Sie die Steckdose und dann „Kartenzahlung“; sonst erkennen Sie sie am Etikett.';
+      const pick = c.short ? `Suchen Sie ${denPt(c)} auf dem Etikett der Steckdose; hat die Säule einen Bildschirm, wählen Sie ihn dort und dann „Kartenzahlung“.` : 'Hat die Säule einen Bildschirm, wählen Sie die Steckdose und dann „Kartenzahlung“; sonst erkennen Sie sie am Etikett.';
       return {
         label: `${c.contactless ? 'Kontaktlose Bankkarte an der Säule' : 'Bankkarte an der Säule'}${maybe ? ' (an manchen Standorten möglich)' : ''}`,
         why: r?.source === 'irve' ? 'Für diese Säule in der nationalen IRVE-Datenbank gemeldetes Kartenlesegerät. Keine App, kein Konto, und Branché sieht Ihre Karte nicht.' : maybe ? `Kartenlesegerät laut ${c.op} nur an manchen Standorten (Recherche von Branché${r.refs ? `: ${r.refs}` : ''}), für diese Säule nicht in der IRVE-Datenbank gemeldet: vor Ort prüfen.` : 'Für diese Säule ist kein Kartenlesegerät gemeldet.',
@@ -581,8 +606,8 @@ export const de: Dict = {
             ? 'Roaming-Karten laut IRVE-Datenbank akzeptiert, ohne Angabe der Netze: Ihre Karte könnte funktionieren.'
             : 'Keine Ihrer Karten ist hier als akzeptiert angegeben.',
         steps: c.dc
-          ? [`Stecken Sie ${cable} in Ihr Auto.`, `Halten Sie Ihre Karte an das Lesegerät und wählen Sie ${pt}, falls verlangt.`, 'Das Laden startet: Branché verfolgt es hier.']
-          : [`Halten Sie Ihre Karte an das Lesegerät und wählen Sie ${pt}, falls verlangt.`, `Stecken Sie ${cable} ein.`, 'Das Laden startet: Branché verfolgt es hier.'],
+          ? [`Stecken Sie ${cable} in Ihr Auto.`, `Halten Sie Ihre Karte an das Lesegerät und wählen Sie ${denPt(c)}, falls verlangt.`, 'Das Laden startet: Branché verfolgt es hier.']
+          : [`Halten Sie Ihre Karte an das Lesegerät und wählen Sie ${denPt(c)}, falls verlangt.`, `Stecken Sie ${cable} ein.`, 'Das Laden startet: Branché verfolgt es hier.'],
         cta: 'Ich habe meine Karte vorgehalten',
       };
     },
@@ -608,6 +633,10 @@ export const de: Dict = {
     unknownDomain: 'Domain nicht in der Betreiberdatenbank.',
     officialPay: (n: string) => `Offizielle Zahlungsadresse, veröffentlicht von ${n}.`,
     officialSite: (n: string) => `Domain der offiziellen Website von ${n} (von Branché geprüfte Quellen).`,
+    p2p: (p: string) => `Zahlungslink zwischen Privatpersonen (${p}): Das Geld ginge an eine Person, nicht an den Betreiber der Säule.`,
+    siteUnsourced: (n: string, d: string) => `Adresse auf der Domain von ${n} (${d}), aber nicht unter den von Branché belegten Seiten: vor dem Bezahlen prüfen.`,
+    platformBlocked: (p: string, op: string | null, way: 'page' | 'reader') =>
+      `${p}-Link, den jeder erstellen kann, obwohl ${op ?? 'der Betreiber dieser Säule'} ${way === 'page' ? 'eine bekannte offizielle Zahlungsseite hat' : 'Karten am Lesegerät der Säule akzeptiert'}: Nutzen Sie besser diesen Weg.`,
     otherPay: (n: string, st: string) => `Offizielle Zahlungsseite von ${n}, diese Säule ist aber bei ${st} geführt: Prüfen Sie den Namen auf der Säule.`,
     evseUnknown: 'Kennung nicht in der nationalen Datenbank (oder Verbindung unterbrochen).',
   },
@@ -650,6 +679,9 @@ export const de: Dict = {
     readerNone: 'Für diese Säule ist kein Kartenlesegerät gemeldet.',
     toneOfficialPay: 'Offizielle Zahlungsseite des Betreibers',
     toneOfficialSite: 'Offizielle Website des Betreibers',
+    toneSiteUnverified: 'Website des Betreibers, nicht belegte Seite: bitte prüfen',
+    useOfficialPage: (op: string) => `Offizielle Seite von ${op} öffnen`,
+    useReader: 'Mit Karte an der Säule zahlen',
     toneKnownPay: 'Offizielle Seite eines anderen Betreibers',
     otherPoint: (scanned: string, chosen: string) => `Dieser QR-Code gehört zu Ladepunkt …${scanned}, nicht zum gewählten Ladepunkt …${chosen}.`,
     otherStation: (name: string) => `Dieser QR-Code gehört zu einer anderen Säule: ${name}.`,
@@ -795,6 +827,7 @@ export const de: Dict = {
     kwhEst: ' (geschätzt)',
     kwhUnknown: 'kWh unbekannt',
     failed: ' · Fehlschlag gemeldet',
+    notStarted: ' · Nicht gestartet',
     delA11y: (date: string) => `Ladevorgang vom ${date} löschen`,
     delAllQ: (n: number) => `${n > 1 ? `Alle ${n} Ladevorgänge` : 'Diesen Ladevorgang'} endgültig von diesem Telefon löschen?`,
     delAll: 'Alle löschen',

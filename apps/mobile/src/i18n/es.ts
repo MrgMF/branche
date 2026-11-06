@@ -1,10 +1,14 @@
 // Español.
 import type { Dict } from './fr';
-import type { InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
+import type { IdEntryInfo, InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
 
 const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const s = (n: number) => (n === 1 ? '' : 's');
 const ptOf = (c: MethodCtx) => (c.short ? `el punto …⁠${c.short}` : 'el punto elegido');
+/** Contracciones: de + el → del, a + el → al. */
+const delPt = (c: MethodCtx) => `del ${ptOf(c).slice(3)}`;
+const alPt = (c: MethodCtx) => `al ${ptOf(c).slice(3)}`;
+const digitsEs = (d: [number, number] | null) => (d ? (d[0] === d[1] ? ` de ${d[0]} cifras` : ` de ${d[0]} a ${d[1]} cifras`) : '');
 const cableOf = (c: MethodCtx) => (c.stationCable ? `el cable ${c.plugs || 'del cargador'} del cargador` : 'tu cable Tipo 2');
 const onto = (p: InstrParts) => (p.street ? ` por ${p.street}` : '');
 const toward = (p: InstrParts) => (p.towards ? ` hacia ${p.towards}` : '');
@@ -36,7 +40,15 @@ export const es: Dict = {
     recommended: 'Recomendado',
     powerUnknown: 'Potencia desconocida',
     unknownPrice: 'Precio desconocido',
-    saveFailed: 'No se pudo guardar en este teléfono (almacenamiento lleno o no disponible): inténtalo de nuevo.',
+    saveFailed: 'No se pudo guardar en este teléfono (almacenamiento lleno o no disponible). Libera espacio: exporta el historial en CSV o borra fotos de tiques y vuelve a intentarlo.',
+    deleteTickets: 'Borrar fotos de tiques',
+    deleteTicketsQ: (n: number) => `¿Borrar ${n} foto${s(n)} de tique${s(n)} de este teléfono? Las recargas siguen en el historial.`,
+    deleteTicketsYes: (n: number) => `Borrar ${n} foto${s(n)}`,
+    ticketsDeleted: (n: number) => `${n} foto${s(n)} borrada${s(n)}: vuelve a intentarlo.`,
+    noTickets: 'No hay fotos de tiques en este teléfono.',
+    noNetwork: 'Sin red: paga en el lector de tarjetas o vuelve a intentarlo',
+    errorTitle: 'Se ha producido un problema',
+    errorBody: 'Esta pantalla no se ha podido mostrar (conexión cortada o error). Tu recarga en curso se conserva.',
     notProvided: 'No indicado',
     operatorFallback: 'el operador',
     stationFallback: 'Punto de recarga',
@@ -140,6 +152,10 @@ export const es: Dict = {
     fastA11y: 'Rápida, 50 kW o más',
     open: 'Acceso público',
     resume: (op: string, started = true) => (started ? `Recarga en curso con ${op} · Reanudar` : `Pago pendiente con ${op} · Reanudar`),
+    staleQ: '¿Abandonar este pago?',
+    staleBody: (op: string) => `Pago con ${op} sin confirmar desde hace más de 6 h.`,
+    staleYes: 'Sí',
+    staleKeep: 'Sigue en curso',
     locDenied: 'Ubicación no permitida: mueve el mapa a tu zona o permite la ubicación en los ajustes.',
     dataError: 'No se pudieron cargar los cargadores. Comprueba tu conexión y vuelve a intentarlo.',
     locating: 'Buscando tu ubicación…',
@@ -493,6 +509,9 @@ export const es: Dict = {
     goThereHint: (name: string) => `Ruta hacia ${name}`,
     searchingPayable: 'Buscando el cargador con pago más cercano…',
     noPayableNear: 'No hay cerca ningún cargador que se pueda pagar desde Branché.',
+    unconfirmedTitle: 'No confirmado aquí',
+    unconfirmedBody: (op: string) =>
+      `Ningún medio de pago declarado para este cargador: ${op} no confirma aquí ni código QR ni lector de tarjetas. Puedes probar in situ o ir a un cargador donde se pueda pagar.`,
     preauthMax: (op: string, amount: string) =>
       `Hasta ${amount} retenidos y luego liberados: ${op} preautoriza este importe en tu tarjeta durante la recarga. Solo se cobra el importe real; tu banco libera el resto, normalmente en pocos días.`,
     myBadges: 'Mis tarjetas',
@@ -540,20 +559,26 @@ export const es: Dict = {
           ? `Pago puntual sin cuenta declarado por el operador: Branché verifica que el código QR lleva a la web de ${c.op}.`
           : `Si hay un código QR de pago pegado en el cargador. Branché verifica que lleva a la web de ${c.op}.`,
         steps: c.dc
-          ? [`Conecta ${cable} a tu coche.`, `Escanea el código QR junto a ${pt}: Branché verifica la dirección.`, `Paga en la página oficial de ${c.op} (tarjeta) y vuelve aquí.`]
-          : [`Escanea el código QR junto a ${pt}: Branché verifica la dirección.`, `Paga en la página oficial de ${c.op} y vuelve aquí.`, `Conecta ${cable}: la carga empieza tras la validación.`],
+          ? [`Conecta ${cable} a tu coche.`, `Escanea el código QR junto ${alPt(c)}: Branché verifica la dirección.`, `Paga en la página oficial de ${c.op} (tarjeta) y vuelve aquí.`]
+          : [`Escanea el código QR junto ${alPt(c)}: Branché verifica la dirección.`, `Paga en la página oficial de ${c.op} y vuelve aquí.`, `Conecta ${cable}: la carga empieza tras la validación.`],
         cta: 'Escanear el código QR',
       };
     },
-    link: (c: MethodCtx, known: boolean): MethodTexts => {
+    link: (c: MethodCtx, known: boolean, id?: IdEntryInfo): MethodTexts => {
       const pt = ptOf(c);
       const cable = cableOf(c);
+      const idStep =
+        id?.entry === 'printed'
+          ? `En la página de pago de ${c.op}, escribe el número${digitsEs(id.digits)} inscrito en el cargador, junto ${alPt(c)} (no es el identificador que muestra Branché).`
+          : id?.entry === 'select'
+            ? `En la página de pago de ${c.op}, elige ${pt} en la lista (o escanea su código QR).`
+            : `En la página de pago de ${c.op}, pega el identificador ${delPt(c)} (copiado por Branché).`;
       return {
         label: `Página de pago de ${c.op}`,
         why: known ? 'Dirección oficial de pago sin cuenta conocida para este operador.' : 'No se conoce enlace de pago directo para este operador.',
         steps: c.dc
-          ? [`Conecta ${cable} a tu coche.`, `En la página de pago de ${c.op}, pega el identificador de ${pt} (copiado por Branché).`, 'Paga y vuelve a Branché.']
-          : [`En la página de pago de ${c.op}, pega el identificador de ${pt} (copiado por Branché).`, 'Paga y vuelve a Branché.', `Conecta ${cable}: la carga empieza.`],
+          ? [`Conecta ${cable} a tu coche.`, idStep, 'Paga y vuelve a Branché.']
+          : [idStep, 'Paga y vuelve a Branché.', `Conecta ${cable}: la carga empieza.`],
         cta: `Abrir la página de ${c.op}`,
       };
     },
@@ -609,6 +634,10 @@ export const es: Dict = {
     unknownDomain: 'Dominio ausente de la base de operadores.',
     officialPay: (n: string) => `Dirección de pago oficial publicada por ${n}.`,
     officialSite: (n: string) => `Dominio del sitio oficial de ${n} (fuentes verificadas por Branché).`,
+    p2p: (p: string) => `Enlace de pago entre particulares (${p}): el dinero iría a una persona, no al operador del cargador.`,
+    siteUnsourced: (n: string, d: string) => `Dirección en el dominio de ${n} (${d}), pero fuera de las páginas con fuente de Branché: compruébala antes de pagar.`,
+    platformBlocked: (p: string, op: string | null, way: 'page' | 'reader') =>
+      `Enlace de ${p} que cualquiera puede crear, mientras que ${op ?? 'el operador de este cargador'} ${way === 'page' ? 'tiene una página de pago oficial conocida' : 'acepta tarjeta en el lector del cargador'}: usa mejor esa vía.`,
     otherPay: (n: string, st: string) => `Página de pago oficial de ${n}, pero este cargador figura en ${st}: comprueba el nombre que aparece en el cargador.`,
     evseUnknown: 'Identificador ausente de la base nacional de cargadores (o sin conexión).',
   },
@@ -651,6 +680,9 @@ export const es: Dict = {
     readerNone: 'No se declara lector de tarjetas en este cargador.',
     toneOfficialPay: 'Página de pago oficial del operador',
     toneOfficialSite: 'Sitio oficial del operador',
+    toneSiteUnverified: 'Web del operador, página sin fuente: compruébala',
+    useOfficialPage: (op: string) => `Abrir la página oficial de ${op}`,
+    useReader: 'Pagar con tarjeta en el cargador',
     toneKnownPay: 'Página oficial de otro operador',
     otherPoint: (scanned: string, chosen: string) => `Este código QR corresponde al punto …${scanned}, no al punto …${chosen} que elegiste.`,
     otherStation: (name: string) => `Este código QR corresponde a otro cargador: ${name}.`,
@@ -796,6 +828,7 @@ export const es: Dict = {
     kwhEst: ' (estimados)',
     kwhUnknown: 'kWh desconocidos',
     failed: ' · Fallo indicado',
+    notStarted: ' · No iniciada',
     delA11y: (date: string) => `Eliminar la recarga del ${date}`,
     delAllQ: (n: number) => `¿Eliminar definitivamente ${n > 1 ? `las ${n} recargas` : 'la recarga'} de este teléfono?`,
     delAll: 'Eliminar todo',

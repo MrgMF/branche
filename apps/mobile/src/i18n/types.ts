@@ -36,3 +36,11 @@ export interface InstrParts {
   exit?: number;
   exitNumber?: string;
 }
+
+/** Saisie du point sur la page de paiement de l'opérateur (operator-portals.json `idEntry`, `idDigits`). */
+export interface IdEntryInfo {
+  /** emi3 : identifiant IRVE copié par Branché ; printed : numéro inscrit sur la borne ; select : choix dans une liste. */
+  entry: 'emi3' | 'printed' | 'select' | null;
+  /** Nombre de chiffres du numéro inscrit (Virta : 4 à 5), si publié. */
+  digits: [number, number] | null;
+}

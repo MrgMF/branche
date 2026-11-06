@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { attachPayDomains, publishPortals, readPortals, siteDomainsOf, sourcedHosts, THIRD_PARTY, validatePortals } from '../src/portals.mjs';
+import { attachPayDomains, ID_ENTRIES, publishPortals, readPortals, siteDomainsOf, siteHostsOf, sourcedHosts, THIRD_PARTY, validatePortals } from '../src/portals.mjs';
 
 test('operator-portals.json réel : valide, payDomains tous tirés des URL sourcées de leur entrée', async () => {
   const p = await readPortals();
@@ -22,8 +22,26 @@ test('operator-portals.json réel : valide, payDomains tous tirés des URL sourc
 test('preauthMax seulement quand la source publie le montant', async () => {
   const p = await readPortals();
   const withMax = Object.entries(p.operators).filter(([, e]) => e.preauthMax != null).map(([k, e]) => [k, e.preauthMax]);
-  assert.deepEqual(Object.fromEntries(withMax), { 'bouygues-energies-services': 75, 'engie-vianeo': 50, 'reveo-syaden': 75 });
-  for (const [k] of withMax) assert.match(`${p.operators[k].adhocWeb ?? ''} ${p.operators[k].notes ?? ''}`, /75 €|50 €/, k);
+  assert.deepEqual(Object.fromEntries(withMax), { 'bouygues-energies-services': 75, 'engie-vianeo': 50, 'reveo-syaden': 75, ionity: 40 });
+  // Le montant figure dans le texte sourcé de l'entrée (« caution jusqu'à 75 € », « pré-autorisation ~40 € »)
+  for (const [k, v] of withMax) assert.match(`${p.operators[k].adhocWeb ?? ''} ${p.operators[k].notes ?? ''}`, new RegExp(`${v} €`), k);
+});
+
+test('idEntry : saisie du point selon les notes sourcées (Virta : numéro de 4–5 chiffres inscrit ; Ionity : sélection)', async () => {
+  const p = await readPortals();
+  for (const [k, e] of Object.entries(p.operators)) {
+    assert.ok('idEntry' in e, `${k} : idEntry présent (null si non documenté)`);
+    assert.ok(e.idEntry === null || ID_ENTRIES.has(e.idEntry), k);
+  }
+  assert.equal(p.operators.virta.idEntry, 'printed');
+  assert.deepEqual(p.operators.virta.idDigits, [4, 5]);
+  assert.match(p.operators.virta.adhocWeb, /4–5 chiffres/);
+  assert.equal(p.operators.ionity.idEntry, 'select');
+  assert.match(p.operators.ionity.adhocWeb, /sélection manuelle/);
+  assert.equal(p.operators.izivia.idEntry, 'printed');
+  assert.equal(p.operators.lidl.idEntry, null);
+  const bad = validatePortals({ v: 1, operators: { x: { idEntry: 'scan' }, y: { idEntry: 'select', idDigits: [4, 5] }, z: { idEntry: 'printed', idDigits: [5, 4] } } });
+  assert.equal(bad.length, 3);
 });
 
 test('validation : domaine inventé, montant non numérique', () => {
@@ -88,6 +106,17 @@ test('registre : siteDomains recopiés (hors domaines IRVE déjà connus), aussi
   assert.equal(out.operators[1].siteDomains, undefined); // reveocharge.com déjà domaine IRVE
   assert.deepEqual(out.operators[2].siteDomains, ['carrefour.fr']);
   assert.deepEqual(out.operators[2].payDomains, ['recharge.carrefour.fr']);
+  // Hôtes exacts des seuls siteDomains publiés (www. retiré), jamais ceux des sites tiers ni des domaines IRVE
+  assert.deepEqual(out.operators[0].siteHosts, ['alizecharge.com', 'support.reveocharge.com']);
+  assert.equal(out.operators[1].siteHosts, undefined);
+  assert.deepEqual(out.operators[2].siteHosts, ['recharge.carrefour.fr']);
+});
+
+test('siteHosts réels : Bouygues sans pay.alizecharge.com (non sourcé)', async () => {
+  const p = await readPortals();
+  const h = [...siteHostsOf(p.operators['bouygues-energies-services'])].sort();
+  assert.deepEqual(h, ['alizecharge.com', 'my2.alizecharge.com', 'reveocharge.com', 'support.alizecharge.com', 'support.reveocharge.com']);
+  assert.ok(![...siteHostsOf(p.operators.tesla)].some((x) => x.includes('tesla-mag')));
 });
 
 test('Tesla : appli seule (source Tesla), lecteur CB seulement « sur certains sites »', async () => {

@@ -10,6 +10,7 @@
         "url": "https://paynow.izivia.com/"
       },
       "adhocWeb": "https://paynow.izivia.com/",
+      "idEntry": "printed",
       "payDomains": [
         "paynow.izivia.com"
       ],
@@ -33,6 +34,7 @@
         "url": null
       },
       "adhocWeb": "QR code sur la borne -> page de paiement sécurisée (non-abonné, caution jusqu’à 75 €)",
+      "idEntry": null,
       "preauthMax": 75,
       "cardReader": null,
       "appOnly": false,
@@ -55,6 +57,7 @@
         "url": "https://charge.freshmile.com/map"
       },
       "adhocWeb": "https://xfm.fr/{code} (lien court imprimé sur l’autocollant de la borne) ou QR code -> autorisation CB",
+      "idEntry": "printed",
       "payDomains": [
         "charge.freshmile.com",
         "xfm.fr"
@@ -79,6 +82,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -97,6 +101,7 @@
         "url": null
       },
       "adhocWeb": "Paiement CB en ligne sur smartphone (QR code de la borne)",
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -118,6 +123,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -136,6 +142,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -155,6 +162,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": [
@@ -175,6 +183,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": true,
       "roamingBadgesAccepted": null,
@@ -193,6 +202,7 @@
         "url": null
       },
       "adhocWeb": "QR code présent sur chaque borne -> interface de paiement CB sécurisée",
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -213,6 +223,7 @@
         "url": null
       },
       "adhocWeb": "QR code sur la borne -> paiement par carte bancaire",
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -238,6 +249,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -259,6 +271,11 @@
         "url": "https://chge.eu"
       },
       "adhocWeb": "https://chge.eu (saisie de l’ID du point de charge, 4–5 chiffres, puis CB)",
+      "idEntry": "printed",
+      "idDigits": [
+        4,
+        5
+      ],
       "payDomains": [
         "chge.eu"
       ],
@@ -280,6 +297,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -298,6 +316,7 @@
         "url": "https://app.metropolis-recharge.fr/"
       },
       "adhocWeb": "CB sur le site/appli après choix de la borne ou scan du QR code",
+      "idEntry": "select",
       "payDomains": [
         "app.metropolis-recharge.fr"
       ],
@@ -321,6 +340,7 @@
         "url": null
       },
       "adhocWeb": "QR code -> page web : choix du connecteur, CB + e-mail, démarrage (invité)",
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -341,6 +361,7 @@
         "url": null
       },
       "adhocWeb": "QR code -> page web : choix du connecteur, CB + e-mail, démarrage (invité)",
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -361,6 +382,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -381,6 +403,7 @@
         "url": "http://map.e55c.com"
       },
       "adhocWeb": "http://map.e55c.com (« Démarrer maintenant » -> choix station/point -> e-mail -> CB)",
+      "idEntry": "select",
       "payDomains": [
         "map.e55c.com"
       ],
@@ -407,6 +430,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -425,6 +449,7 @@
         "url": "https://charge.engie-vianeo.com/"
       },
       "adhocWeb": "https://charge.engie-vianeo.com/ (ou QR code affiché sur l’écran de la borne) -> page de paiement CB",
+      "idEntry": null,
       "payDomains": [
         "charge.engie-vianeo.com"
       ],
@@ -454,6 +479,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -470,6 +496,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -491,6 +518,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -507,6 +535,7 @@
         "url": null
       },
       "adhocWeb": "QR code affiché -> plateforme de paiement sécurisée",
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": null,
@@ -525,6 +554,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -545,6 +575,7 @@
         "url": null
       },
       "adhocWeb": "QR code sur la trappe -> page de paiement CB (sans badge ni appli), caution jusqu’à 75 €",
+      "idEntry": null,
       "preauthMax": 75,
       "cardReader": null,
       "appOnly": false,
@@ -566,6 +597,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": true,
       "roamingBadgesAccepted": null,
@@ -584,6 +616,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -600,6 +633,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -618,6 +652,7 @@
         "url": "https://wa.qwello.eu/"
       },
       "adhocWeb": "https://wa.qwello.eu/ (scan du QR code du connecteur)",
+      "idEntry": null,
       "payDomains": [
         "wa.qwello.eu"
       ],
@@ -639,6 +674,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -655,6 +691,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": true,
       "roamingBadgesAccepted": [
@@ -681,6 +718,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -696,6 +734,7 @@
         "url": null
       },
       "adhocWeb": "QR code sur la borne -> paiement par carte bancaire",
+      "idEntry": null,
       "cardReader": null,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -720,6 +759,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -736,6 +776,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -751,6 +792,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -767,6 +809,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": true,
       "roamingBadgesAccepted": null,
@@ -785,6 +828,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -804,6 +848,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -819,9 +864,11 @@
         "url": "https://payment.ionity.eu"
       },
       "adhocWeb": "https://payment.ionity.eu (QR code ou sélection manuelle du point de charge)",
+      "idEntry": "select",
       "payDomains": [
         "payment.ionity.eu"
       ],
+      "preauthMax": 40,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -844,6 +891,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": true,
       "appOnly": true,
       "roamingBadgesAccepted": [
@@ -868,6 +916,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -885,6 +934,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -903,6 +953,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": true,
       "roamingBadgesAccepted": null,
@@ -920,6 +971,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -938,6 +990,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -956,6 +1009,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -976,6 +1030,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": null,
@@ -994,6 +1049,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -1014,6 +1070,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -1032,6 +1089,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -1050,6 +1108,7 @@
         "url": "https://recharge.carrefour.fr/"
       },
       "adhocWeb": "https://recharge.carrefour.fr/ (« Scanner le QR Code »)",
+      "idEntry": null,
       "payDomains": [
         "recharge.carrefour.fr"
       ],
@@ -1075,6 +1134,7 @@
         "url": null
       },
       "adhocWeb": "QR code sur la borne pour paiement CB (compte non précisé)",
+      "idEntry": null,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": null,
@@ -1091,6 +1151,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -1109,6 +1170,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -1127,6 +1189,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -1143,6 +1206,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,
@@ -1161,6 +1225,7 @@
         "url": null
       },
       "adhocWeb": null,
+      "idEntry": null,
       "cardReader": null,
       "appOnly": null,
       "roamingBadgesAccepted": null,

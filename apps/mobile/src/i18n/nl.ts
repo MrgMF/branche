@@ -1,10 +1,11 @@
 // Nederlands.
 import type { Dict } from './fr';
-import type { InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
+import type { IdEntryInfo, InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
 
 const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const pl = (n: number, one: string, many: string) => (n === 1 ? one : many);
 const ptOf = (c: MethodCtx) => (c.short ? `laadpunt …⁠${c.short}` : 'het gekozen laadpunt');
+const digitsNl = (d: [number, number] | null) => (d ? (d[0] === d[1] ? `${d[0]}-cijferige ` : `${d[0]}- tot ${d[1]}-cijferige `) : '');
 const cableOf = (c: MethodCtx) => (c.stationCable ? `de ${c.plugs ? `${c.plugs}-` : ''}kabel van de laadpaal` : 'je Type 2-kabel');
 const onto = (p: InstrParts) => (p.street ? ` naar ${p.street}` : '');
 const toward = (p: InstrParts) => (p.towards ? ` richting ${p.towards}` : '');
@@ -36,7 +37,15 @@ export const nl: Dict = {
     recommended: 'Aanbevolen',
     powerUnknown: 'Vermogen onbekend',
     unknownPrice: 'Prijs onbekend',
-    saveFailed: 'Opslaan op deze telefoon mislukt (opslag vol of niet beschikbaar): probeer het opnieuw.',
+    saveFailed: 'Opslaan op deze telefoon lukt niet (opslag vol of niet beschikbaar). Maak ruimte vrij: exporteer de geschiedenis als CSV of verwijder bonfoto’s en probeer opnieuw.',
+    deleteTickets: 'Bonfoto’s verwijderen',
+    deleteTicketsQ: (n: number) => `${n} ${pl(n, 'bonfoto', 'bonfoto’s')} van deze telefoon verwijderen? De laadsessies blijven in de geschiedenis.`,
+    deleteTicketsYes: (n: number) => `${n} ${pl(n, 'foto', 'foto’s')} verwijderen`,
+    ticketsDeleted: (n: number) => `${n} ${pl(n, 'foto', 'foto’s')} verwijderd: probeer opnieuw.`,
+    noTickets: 'Geen bonfoto’s op deze telefoon.',
+    noNetwork: 'Geen netwerk: betaal bij de kaartlezer of probeer opnieuw',
+    errorTitle: 'Er ging iets mis',
+    errorBody: 'Dit scherm kon niet worden weergegeven (verbinding weg of fout). Je lopende laadsessie blijft bewaard.',
     notProvided: 'Niet ingevuld',
     operatorFallback: 'de exploitant',
     stationFallback: 'Laadstation',
@@ -140,6 +149,10 @@ export const nl: Dict = {
     fastA11y: 'Snel, vanaf 50 kW',
     open: 'Openbaar toegankelijk',
     resume: (op: string, started = true) => (started ? `Bezig met laden bij ${op} · Hervatten` : `Betaling in afwachting bij ${op} · Hervatten`),
+    staleQ: 'Deze betaling opgeven?',
+    staleBody: (op: string) => `Betaling bij ${op} al meer dan 6 uur niet bevestigd.`,
+    staleYes: 'Ja',
+    staleKeep: 'Nog bezig',
     locDenied: 'Locatie niet toegestaan: verschuif de kaart naar je omgeving of sta locatie toe in de instellingen.',
     dataError: 'Laadpalen konden niet worden geladen. Controleer je verbinding en probeer het opnieuw.',
     locating: 'Locatie bepalen…',
@@ -493,6 +506,9 @@ export const nl: Dict = {
     goThereHint: (name: string) => `Route naar ${name}`,
     searchingPayable: 'Dichtstbijzijnde betaalbare paal zoeken…',
     noPayableNear: 'Geen paal in de buurt is via Branché te betalen.',
+    unconfirmedTitle: 'Hier niet bevestigd',
+    unconfirmedBody: (op: string) =>
+      `Geen betaalmiddel opgegeven voor deze laadpaal: ${op} bevestigt hier geen QR-code en geen kaartlezer. Je kunt het ter plekke proberen, of naar een laadpaal gaan waar je kunt betalen.`,
     preauthMax: (op: string, amount: string) =>
       `Tot ${amount} gereserveerd en daarna vrijgegeven: ${op} reserveert dit bedrag op je kaart tijdens het laden. Alleen het werkelijke bedrag wordt afgeschreven; je bank geeft de rest vrij, meestal binnen enkele dagen.`,
     myBadges: 'Mijn passen',
@@ -545,15 +561,21 @@ export const nl: Dict = {
         cta: 'QR-code scannen',
       };
     },
-    link: (c: MethodCtx, known: boolean): MethodTexts => {
+    link: (c: MethodCtx, known: boolean, id?: IdEntryInfo): MethodTexts => {
       const ptx = ptOf(c);
       const cable = cableOf(c);
+      const idStep =
+        id?.entry === 'printed'
+          ? `Typ op de betaalpagina van ${c.op} het ${digitsNl(id.digits)}nummer dat op de laadpaal staat, bij ${ptx} (niet de code die Branché toont).`
+          : id?.entry === 'select'
+            ? `Kies op de betaalpagina van ${c.op} ${ptx} in de lijst (of scan de QR-code ervan).`
+            : `Plak op de betaalpagina van ${c.op} de code van ${ptx} (gekopieerd door Branché).`;
       return {
         label: `Betaalpagina ${c.op}`,
         why: known ? 'Officieel betaaladres zonder account bekend voor deze exploitant.' : 'Geen directe betaallink bekend voor deze exploitant.',
         steps: c.dc
-          ? [`Sluit ${cable} aan op je auto.`, `Plak op de betaalpagina van ${c.op} de code van ${ptx} (gekopieerd door Branché).`, 'Betaal en ga terug naar Branché.']
-          : [`Plak op de betaalpagina van ${c.op} de code van ${ptx} (gekopieerd door Branché).`, 'Betaal en ga terug naar Branché.', `Sluit ${cable} aan: het laden start.`],
+          ? [`Sluit ${cable} aan op je auto.`, idStep, 'Betaal en ga terug naar Branché.']
+          : [idStep, 'Betaal en ga terug naar Branché.', `Sluit ${cable} aan: het laden start.`],
         cta: `Pagina van ${c.op} openen`,
       };
     },
@@ -609,6 +631,10 @@ export const nl: Dict = {
     unknownDomain: 'Domein niet in de database van exploitanten.',
     officialPay: (n: string) => `Officieel betaaladres, gepubliceerd door ${n}.`,
     officialSite: (n: string) => `Domein van de officiële website van ${n} (bronnen gecontroleerd door Branché).`,
+    p2p: (p: string) => `Betaallink tussen particulieren (${p}): het geld zou naar een persoon gaan, niet naar de exploitant van de laadpaal.`,
+    siteUnsourced: (n: string, d: string) => `Adres op het domein van ${n} (${d}), maar niet bij de door Branché gecontroleerde pagina’s: controleer vóór het betalen.`,
+    platformBlocked: (p: string, op: string | null, way: 'page' | 'reader') =>
+      `${p}-link die iedereen kan maken, terwijl ${op ?? 'de exploitant van deze laadpaal'} ${way === 'page' ? 'een bekende officiële betaalpagina heeft' : 'bankpassen accepteert bij de kaartlezer van de paal'}: gebruik liever die weg.`,
     otherPay: (n: string, st: string) => `Officiële betaalpagina van ${n}, maar deze paal staat bij ${st}: controleer de naam op de paal.`,
     evseUnknown: 'Code niet in de nationale database (of geen verbinding).',
   },
@@ -651,6 +677,9 @@ export const nl: Dict = {
     readerNone: 'Geen paslezer gemeld voor deze paal.',
     toneOfficialPay: 'Officiële betaalpagina van de exploitant',
     toneOfficialSite: 'Officiële website van de exploitant',
+    toneSiteUnverified: 'Website van de exploitant, pagina zonder bron: controleren',
+    useOfficialPage: (op: string) => `Officiële pagina van ${op} openen`,
+    useReader: 'Met bankpas betalen bij de paal',
     toneKnownPay: 'Officiële pagina van een andere exploitant',
     otherPoint: (scanned: string, chosen: string) => `Deze QR-code hoort bij laadpunt …${scanned}, niet bij het gekozen laadpunt …${chosen}.`,
     otherStation: (name: string) => `Deze QR-code hoort bij een andere paal: ${name}.`,
@@ -796,6 +825,7 @@ export const nl: Dict = {
     kwhEst: ' (geschat)',
     kwhUnknown: 'kWh onbekend',
     failed: ' · Mislukking gemeld',
+    notStarted: ' · Niet gestart',
     delA11y: (date: string) => `Laadsessie van ${date} verwijderen`,
     delAllQ: (n: number) => `${n > 1 ? `Alle ${n} laadsessies` : 'Deze laadsessie'} definitief van deze telefoon verwijderen?`,
     delAll: 'Alles verwijderen',
