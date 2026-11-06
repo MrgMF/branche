@@ -14,7 +14,7 @@ import { Button, Notice } from '../components/ui';
 import { loadWallet, markConnected } from '../lib/accounts';
 import { apiEnabled } from '../lib/api';
 import { sendCheckin } from '../lib/community';
-import { estimateCharge, progressAt, type EstimateInput } from '../lib/estimate';
+import { estimateCharge, IDLE_ALERT_LEAD_MIN, progressAt, type EstimateInput } from '../lib/estimate';
 import { parseEuros, invalidAmount } from '../lib/amount';
 import { durationShort, euros, withUnit } from '../lib/format';
 import { abandonUnconfirmed, autoFinish, departed, distanceToStation, recordOf, AUTO_END_M } from '../lib/autoEnd';
@@ -168,7 +168,8 @@ export default function Recharge() {
     const alerts: Alert[] = [{ at: endAt, title: N.endTitle, body: N.endBody(d.station.name) }];
     if (tariff.idle) {
       const idleAt = endAt + tariff.idle.afterMin * 60_000;
-      alerts.push({ at: idleAt - 5 * 60_000, title: N.idleTitle, body: N.idleBody(d.operatorName, clock(idleAt)) });
+      // Rappel 10 min avant le début des frais d'occupation
+      alerts.push({ at: idleAt - IDLE_ALERT_LEAD_MIN * 60_000, title: N.idleTitle, body: N.idleBody(d.operatorName, clock(idleAt)) });
     }
     if (tariff.perMinLater) {
       alerts.push({ at: t0 + (tariff.perMinLater.afterMin - 5) * 60_000, title: N.perMinTitle, body: N.perMinBody(tariff.perMinLater.afterMin, d.operatorName) });
@@ -403,6 +404,12 @@ export default function Recharge() {
             </Text>
           </View>
           {prog.done ? <Notice tone="demo">{C.unplug(est.toSoc, !!idleAt)}</Notice> : null}
+          {/* Moins de 10 min avant les frais d'occupation (ou déjà commencés) : alerte dans l'écran, en plus de la notification */}
+          {idleAt && now >= idleAt - IDLE_ALERT_LEAD_MIN * 60_000 ? (
+            <View accessibilityRole="alert" accessibilityLiveRegion="assertive" testID="idle-soon">
+              <Notice tone="error">{withUnit(t.price.idleSoon(clock(idleAt)))}</Notice>
+            </View>
+          ) : null}
           {idleAt ? (
             <Notice tone="demo">
               {C.idleNotice(clock(idleAt), withUnit(num(tariff!.idle!.perMin * ttc, 3), '€/min'))}

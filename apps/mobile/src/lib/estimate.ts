@@ -165,3 +165,111 @@ const round2 = (x: number) => Math.round(x * 100) / 100;
 
 /** Durée lisible : « 42 min », « 1 h 05 ». */
 export const durationLabel = durationMin;
+
+// ——— Coût total réel de MA recharge (V2.1 prix) ———
+// Énergie + temps de charge + forfait de session + pénalité d'occupation estimée selon la durée de stationnement prévue.
+// Tarif inconnu ou seulement partiel → total null (affiché « Inconnu »), jamais 0.
+
+/** Durée de stationnement prévue : la durée de charge (par défaut), ~1 h, ~2 h ou la nuit. */
+export type Stay = 'charge' | '1h' | '2h' | 'night';
+export const STAYS: readonly Stay[] = ['charge', '1h', '2h', 'night'];
+/** « La nuit » : 10 h supposées (20 h → 6 h), annoncées dans le libellé. */
+export const STAY_MIN: Record<Exclude<Stay, 'charge'>, number> = { '1h': 60, '2h': 120, night: 600 };
+export const stayMinutes = (s: Stay): number | null => (s === 'charge' ? null : STAY_MIN[s]);
+
+export interface TotalCost {
+  /** Énergie facturée (kWh, pertes incluses). */
+  kWh: number;
+  /** Minutes de charge réelles (écourtées si l'on repart avant la fin). */
+  chargeMin: number;
+  /** Batterie de départ et objectif (%), comme estimateCharge. */
+  fromSoc: number;
+  toSoc: number;
+  /** Minutes de stationnement (≥ durée de charge). */
+  stayMin: number;
+  /** On repart avant d'avoir atteint l'objectif : kWh et coût de la charge partielle. */
+  cutShort: boolean;
+  /** Postes TTC (€), null si le tarif est inconnu. */
+  energy: number | null;
+  time: number | null;
+  session: number | null;
+  idle: number | null;
+  /** Recharge seule (énergie + temps + forfait), TTC. */
+  charge: number | null;
+  /** Coût total TTC (recharge + occupation), null = « Inconnu ». */
+  total: number | null;
+  /** Prix effectif : coût total / kWh facturés (€/kWh TTC), null si inconnu. */
+  effectivePerKwh: number | null;
+  /** Prix au kWh publié, TTC (null si non publié). */
+  perKwh: number | null;
+  /** Minutes après le branchement à partir desquelles l'occupation est facturée (null : pas d'occupation publiée). */
+  idleFromMin: number | null;
+  unknown: boolean;
+  free: boolean;
+}
+
+export function totalCost(i: EstimateInput & { stayMin?: number | null }): TotalCost {
+  const est = estimateCharge(i);
+  const t = i.tariff;
+  const wanted = i.stayMin ?? est.minutes;
+  const cutShort = wanted < est.minutes;
+  const chargeMin = cutShort ? wanted : est.minutes;
+  const kWh = cutShort ? progressAt(i, wanted).kWhBilled : est.kWhBilled;
+  const stayMin = Math.max(chargeMin, wanted);
+  const f = ttcFactor(t);
+  const idleFromMin = t.kind === 'priced' && t.idle ? est.minutes + t.idle.afterMin : null;
+  const base = { kWh, chargeMin, fromSoc: est.fromSoc, toSoc: est.toSoc, stayMin, cutShort, idleFromMin, perKwh: t.kind === 'priced' && t.perKwh !== undefined ? round4(t.perKwh * f) : null, free: t.kind === 'free' };
+  // Seulement une occupation publiée (estimation partielle) : coût de la recharge inconnu.
+  // Recharge complète : mêmes montants que estimateCharge (kWh non arrondis) ; écourtée : kWh atteints au départ.
+  const c = est.partial ? null : !cutShort && est.cost != null && est.parts ? { total: est.cost, ...est.parts } : costOf(t, kWh, chargeMin);
+  if (!c) return { ...base, energy: null, time: null, session: null, idle: null, charge: null, total: null, effectivePerKwh: null, unknown: true };
+  const idle = t.kind === 'priced' && t.idle && idleFromMin !== null ? t.idle.perMin * Math.max(0, stayMin - idleFromMin) * f : 0;
+  const total = c.total + idle;
+  return {
+    ...base,
+    energy: round2(c.energy),
+    time: round2(c.time),
+    session: round2(c.session),
+    idle: round2(idle),
+    charge: round2(c.total),
+    total: round2(total),
+    effectivePerKwh: kWh > 0 ? round4(total / kWh) : null,
+    unknown: false,
+  };
+}
+
+/** Pièges tarifaires (une ligne chacun), calculés pour MA recharge. */
+export type PriceTrap =
+  /** Facturation au temps : prix ramené au kWh pour ce véhicule (recharge seule, hors occupation). */
+  | { kind: 'perMin'; perKwh: number; worse: boolean }
+  /** Forfait de session > 20 % du total. */
+  | { kind: 'session'; share: number }
+  /** Occupation facturée `afterMin` min après la fin de charge, soit `inMin` min après le branchement ; `at` si l'heure est connue. */
+  | { kind: 'idle'; afterMin: number; inMin: number; at: number | null };
+
+/** Seuils des alertes (spécification V2.1). */
+export const TRAP_SESSION_SHARE = 0.2;
+export const TRAP_TIME_RATIO = 1.3;
+
+/**
+ * `plugAt` : heure de branchement (ms) si elle est connue (sur place : maintenant), sinon l'alerte d'occupation donne un délai.
+ * Honnête : rien sans tarif publié ; « minute » seulement s'il y a réellement une part au temps facturée pour cette recharge
+ * (`worse` : effectif > 1,3 × le prix au kWh publié).
+ */
+export function priceTraps(t: Tariff, c: TotalCost, plugAt: number | null = null): PriceTrap[] {
+  const out: PriceTrap[] = [];
+  if (t.kind !== 'priced') return out;
+  if (c.charge != null && c.kWh > 0) {
+    const eff = c.charge / c.kWh;
+    // Part au temps facturée (seule cause possible d'un effectif > 1,3 × le kWh hors forfait, signalé à part)
+    if ((c.time ?? 0) > 0) out.push({ kind: 'perMin', perKwh: round2(eff), worse: c.perKwh != null && eff > TRAP_TIME_RATIO * c.perKwh });
+  }
+  if (c.total != null && c.total > 0 && (c.session ?? 0) / c.total > TRAP_SESSION_SHARE) out.push({ kind: 'session', share: round2((c.session ?? 0) / c.total) });
+  if (t.idle && c.idleFromMin != null) out.push({ kind: 'idle', afterMin: t.idle.afterMin, inMin: c.idleFromMin, at: plugAt != null ? plugAt + c.idleFromMin * 60_000 : null });
+  return out;
+}
+
+/** Rappel d'occupation : 10 min avant le début des frais. */
+export const IDLE_ALERT_LEAD_MIN = 10;
+
+const round4 = (x: number) => Math.round(x * 10000) / 10000;

@@ -19,10 +19,14 @@ import { availabilityDown, getAvailability, stationStatus, stationSummary, type 
 import { groupColocated } from '../lib/colocated';
 import { apiEnabled, getConfigWithRetry, type ApiConfig } from '../lib/api';
 import { DEFAULT_CENTER } from '../lib/config';
-import { km, kw, minutes, plugLabel } from '../lib/format';
+import { euros, km, kw, minutes, plugLabel, withUnit } from '../lib/format';
+import { bestNearby, rankCheapest, type Ranked } from '../lib/cheapest';
+import { durationLabel } from '../lib/estimate';
+import { loadVehicle, type Vehicle } from '../lib/vehicle';
+import { eur, perKwh } from '../i18n/format';
 import { operatorLabel } from '../lib/connectors';
 import type { Operator } from '../lib/qr';
-import { applyFilters, displayName, distanceKm, loadAround, loadOperators, nearest, NO_FILTERS, type Filters, type Station } from '../lib/stations';
+import { applyFilters, displayName, navName, distanceKm, loadAround, loadOperators, nearest, NO_FILTERS, type Filters, type Station } from '../lib/stations';
 import { staleUnconfirmed, store } from '../lib/store';
 import { abandonUnconfirmed } from '../lib/autoEnd';
 import { SaveFailed } from '../components/SaveFailed';
@@ -58,6 +62,10 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(true);
   const [dataError, setDataError] = useState(false);
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  // « Moins cher » : classement par coût total estimé de MA recharge (lib/cheapest.ts), option « inclure le détour »
+  const [cheap, setCheap] = useState(false);
+  const [detour, setDetour] = useState(false);
+  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [api, setApi] = useState<ApiConfig | null>(null);
   const [apiError, setApiError] = useState(false);
@@ -90,6 +98,7 @@ export default function MapScreen() {
         setStale(staleUnconfirmed(d) ? d.operatorName : null);
       });
       chargeState().then(setBadge);
+      loadVehicle().then(setVehicle);
     }, []),
   );
 
@@ -198,6 +207,20 @@ export default function MapScreen() {
   const selected = selectedId ? byId.get(selectedId) ?? null : null;
   const nav = useTrip(map, geo.fix ?? user, Math.round(height * 0.55));
   const { trip, plan } = nav;
+  // Itinéraire connu vers une borne (dernier trajet calculé) : détour réel plutôt qu'à vol d'oiseau.
+  const routeId = trip?.dest.station?.id;
+  const routeDist = trip?.route?.distanceM;
+  const routeDur = trip?.route?.durationS;
+  const ranked = useMemo<Ranked[]>(() => {
+    if (!cheap) return [];
+    const soc = vehicle && Date.now() - vehicle.socUpdatedAt < 3 * 3600_000 ? vehicle.socPercent : null;
+    const routes = routeId && routeDist != null && routeDur != null ? { [routeId]: { distanceM: routeDist, durationS: routeDur } } : undefined;
+    return rankCheapest(visible, { vehicle, socPercent: soc, from: ref, user, includeDetour: detour, routes });
+  }, [cheap, visible, vehicle, ref.lat, ref.lon, user?.lat, user?.lon, detour, routeId, routeDist, routeDur]); // eslint-disable-line react-hooks/exhaustive-deps
+  const best = useMemo(() => (cheap ? bestNearby(ranked, user ?? ref) : null), [cheap, ranked]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pricedList = ranked.filter((r) => r.score != null).slice(0, 10);
+  const unpricedAll = ranked.filter((r) => r.score == null);
+  const unpricedList = unpricedAll.slice(0, 3);
   // Compteur hors guidage (dès 5 km/h) : limitation de la dernière route calculée, si l'on roule dessus.
   // Purge à l'arrivée et à l'annulation du trajet : aucune limitation d'un trajet terminé/abandonné ne doit subsister.
   const lastRoute = useRef<RouteOption | null>(null);
@@ -368,6 +391,7 @@ export default function MapScreen() {
           </View>
         </View>
         <ScrollView horizontal style={[{ flexGrow: 0, paddingBottom: 8 }, searching || trip ? { display: 'none' } : null]} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityLabel={t.map.filters}>
+          <Chip label={t.price.cheap} a11y={t.price.cheapA11y} active={cheap} onPress={() => setCheap((x) => !x)} />
           <Chip label={t.map.fast} a11y={t.map.fastA11y} active={filters.fast} onPress={() => toggle('fast')} />
           <Chip label={t.plugs.ccs.split(' ')[0]} a11y={t.plugs.ccs} active={filters.ccs} onPress={() => toggle('ccs')} />
           <Chip label={t.plugs.t2} active={filters.t2} onPress={() => toggle('t2')} />
@@ -429,7 +453,7 @@ export default function MapScreen() {
             <>
               <View style={[styles.titleRow, large && { flexDirection: 'column', alignItems: 'flex-start' }]}>
                 <Text style={[styles.h1, !large && { flex: 1 }]} accessibilityRole="header" numberOfLines={large ? 4 : 2}>
-                  {panned || !user ? t.map.around : t.map.nearest}
+                  {cheap ? t.price.cheapTitle : panned || !user ? t.map.around : t.map.nearest}
                 </Text>
                 <Pressable accessibilityRole="button" accessibilityLabel={t.map.scanA11y} testID="scan" onPress={() => router.push('/payer')} style={({ pressed }) => [styles.scanBtn, pressed && { backgroundColor: colors.border }]}>
                   <Icon name="qr" size={20} />
@@ -487,7 +511,19 @@ export default function MapScreen() {
                   ))}
                 </View>
               ) : null}
-              {!loading && !dataError && !closest.length ? (
+              {cheap && !skeleton && !(loading && !closest.length) ? (
+                <CheapList
+                  ranked={[...pricedList, ...unpricedList]}
+                  more={unpricedAll.length - unpricedList.length}
+                  best={best}
+                  detour={detour}
+                  onDetour={() => setDetour((x) => !x)}
+                  vehicle={vehicle}
+                  large={large}
+                  onPick={select}
+                />
+              ) : null}
+              {!cheap && !loading && !dataError && !closest.length ? (
                 <View style={styles.empty}>
                   <Text style={styles.muted}>{t.map.empty}</Text>
                   {filters.fast || filters.ccs || filters.t2 || filters.open ? (
@@ -497,7 +533,7 @@ export default function MapScreen() {
                   ) : null}
                 </View>
               ) : null}
-              {(skeleton ? [] : closest).map(({ s }, i) => {
+              {(skeleton || cheap ? [] : closest).map(({ s }, i) => {
                 // Distance seulement depuis la position réelle (jamais depuis le centre de la carte).
                 const d = user ? distanceKm(user, s) : null;
                 const st = status[s.id];
@@ -545,7 +581,100 @@ export default function MapScreen() {
   );
 }
 
+/** Coût de la ligne : « ≈ 14,20 € · 0,42 €/kWh effectif », « Gratuit » ou « Prix non publié ». */
+function costLine(r: Ranked, t: ReturnType<typeof useT>): string {
+  if (r.score == null) return t.price.unpublished;
+  if (r.cost.free) return t.station.free;
+  const eff = r.detour?.cost != null && r.cost.kWh > 0 ? r.score / r.cost.kWh : r.cost.effectivePerKwh;
+  return withUnit(t.price.item(euros(Math.round(r.score * 100)), eff != null ? perKwh(eff) : '—'));
+}
+
+/** Économie lisible et jamais arrondie à la hausse : « 5,60 € », « 12 € ». */
+const savingText = (x: number) => withUnit(x < 10 ? euros(Math.round(x * 100)) : eur(Math.floor(x), 0));
+
+function CheapList(props: {
+  ranked: Ranked[];
+  more: number;
+  best: ReturnType<typeof bestNearby>;
+  detour: boolean;
+  onDetour: () => void;
+  vehicle: Vehicle | null;
+  large: boolean;
+  onPick: (s: Station) => void;
+}) {
+  const t = useT();
+  const R = t.recharger;
+  const { ranked, best, large } = props;
+  const first = ranked[0]?.cost;
+  return (
+    <View style={{ gap: 12 }} testID="cheap-list">
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <Chip label={t.price.detour} a11y={t.price.detourA11y} active={props.detour} onPress={props.onDetour} />
+      </View>
+      {first ? (
+        <Text style={styles.small}>
+          {withUnit(R.estimateFor(props.vehicle ? props.vehicle.name : R.avgVehicle55, first.fromSoc, first.toSoc))}. {t.price.cheapNote}
+        </Text>
+      ) : null}
+      {best ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t.price.bestA11y(savingText(best.saving), best.best.d != null ? km(best.best.d) : null, navName(best.best.s))}
+          onPress={() => props.onPick(best.best.s)}
+          style={({ pressed }) => [styles.best, pressed && { backgroundColor: colors.accentSoft }]}
+          testID="best-nearby"
+        >
+          <Text style={styles.bestKicker}>{t.price.bestTitle}</Text>
+          <Text style={styles.bestBody}>{withUnit(t.price.bestBody(savingText(best.saving), best.best.d != null ? km(best.best.d) : null))}</Text>
+          <Text style={styles.itemTitle} numberOfLines={large ? 4 : 2}>{navName(best.best.s)}</Text>
+          <Text style={styles.itemSub}>{costLine(best.best, t)}</Text>
+          <Text style={styles.small}>{t.price.bestVs(navName(best.nearest.s))}</Text>
+        </Pressable>
+      ) : null}
+      {!ranked.length ? <Text style={styles.muted}>{t.price.empty}</Text> : null}
+      {ranked.map((r, i) => {
+        const cost = costLine(r, t);
+        const det = r.detour;
+        return (
+          <Pressable
+            key={r.s.id}
+            onPress={() => props.onPick(r.s)}
+            accessibilityRole="button"
+            accessibilityLabel={t.price.itemA11y(navName(r.s), cost, r.d != null ? km(r.d) : null)}
+            style={({ pressed }) => [styles.item, large && styles.itemLarge, i === 0 && r.score != null && !best && styles.itemFirst, pressed && { backgroundColor: colors.surfaceAlt }]}
+            testID="cheap-item"
+          >
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text style={styles.itemTitle} numberOfLines={large ? 4 : 2}>{navName(r.s)}</Text>
+              <Text style={r.score == null ? styles.itemSub : styles.cost}>{cost}</Text>
+              <Text style={styles.itemSub} numberOfLines={large ? 3 : 1}>
+                {[kw(r.s.kw), r.s.c.map((c) => plugLabel(c)).join(', ')].filter(Boolean).join(' · ')}
+              </Text>
+              {det ? (
+                <Text style={styles.itemSub}>
+                  {withUnit(t.price.detourLine(km(det.km), det.routed, det.min != null ? durationLabel(det.min) : minutes(det.km), det.cost != null ? euros(Math.round(det.cost * 100)) : null))}
+                </Text>
+              ) : null}
+            </View>
+            {r.d != null ? (
+              <View style={{ alignItems: large ? 'flex-start' : 'flex-end' }}>
+                <Text style={styles.dist}>{km(r.d)}</Text>
+                <Text style={styles.itemSub}>{minutes(r.d)}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        );
+      })}
+      {props.more > 0 ? <Text style={styles.small}>{t.price.more(props.more)}</Text> : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  best: { gap: 4, borderRadius: radius.md, borderWidth: 2, borderColor: colors.accent, backgroundColor: colors.surface, padding: 12, minHeight: MIN_TOUCH },
+  bestKicker: { fontFamily: fonts.semibold, fontSize: 13, color: colors.accentPressed },
+  bestBody: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
+  cost: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
   root: { flex: 1, backgroundColor: colors.mapGround },
   top: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8 },
   chips: { gap: 8, paddingRight: 8 },

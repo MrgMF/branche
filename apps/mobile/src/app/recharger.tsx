@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CopyId } from '../components/CopyId';
-import { costLabel, TariffLines } from '../components/Pricing';
+import { costLabel, MyChargeCost, TariffLines } from '../components/Pricing';
 import { Button, Notice, Tag } from '../components/ui';
 import { getCommunity, preauthText, reliabilityText, type Community } from '../lib/community';
 import { operatorLabel, payOptions, runPlan, type PayOption } from '../lib/connectors';
@@ -360,6 +360,13 @@ export default function Recharger() {
                 {est.partial ? R.partial : ''}
                 {est.unknownPrice && !est.freeDoubtful && (describeTariff(tariff).length || tariff.kind === 'link') ? R.unknownPriceNote : ''}
               </Text>
+              {/* Coût total réel selon la durée de stationnement + pièges (minute, forfait, occupation) ; sur place : heure de débranchement */}
+              <MyChargeCost
+                tariff={tariff}
+                input={{ vehicle: vehicle ?? null, socPercent: soc, pointKw: point.kw, plugs: point.plugs }}
+                plugAt={preparing ? null : Date.now()}
+                paidNetwork={paidNetwork}
+              />
               <View style={[styles.socRow, large && styles.socRowLarge]}>
                 <Text style={[styles.p, !large && { flex: 1 }, large && { width: '100%' }]}>{R.socNow(soc == null)}</Text>
                 {/* Texte agrandi : valeur sur sa ligne, puis − et + côte à côte (tient dans 195 px) */}

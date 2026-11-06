@@ -3,14 +3,15 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { lastPriceText, reliabilityText, type Community } from '../lib/community';
 import type { ChargePoint } from '../lib/evse';
-import { durationLabel, estimateCharge } from '../lib/estimate';
-import { euros, withUnit } from '../lib/format';
+import { durationLabel, estimateCharge, priceTraps, STAYS, stayMinutes, totalCost, type PriceTrap, type Stay, type TotalCost } from '../lib/estimate';
+import { euros, NBSP, withUnit } from '../lib/format';
 import type { Operator } from '../lib/qr';
 import { loadPortals, portalPaid } from '../lib/portals';
 import { loadOperators, type Station } from '../lib/stations';
-import { describeTariff, safeTariffUrl, stationTariff } from '../lib/tariff';
+import { describeTariff, safeTariffUrl, stationTariff, type Tariff } from '../lib/tariff';
 import type { Vehicle } from '../lib/vehicle';
-import { eur, kwhText } from '../i18n/format';
+import { clock, eur, kwhText, perKwh } from '../i18n/format';
+import { Chip } from './ui';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { tr, useT } from '../i18n';
 
@@ -110,12 +111,15 @@ export function PriceSummary({
   const fresh = vehicle && Date.now() - vehicle.socUpdatedAt < 3 * 3600_000 ? vehicle.socPercent : null;
   const est = estimateCharge({ vehicle, socPercent: fresh, pointKw: point.kw, plugs: point.plugs, tariff });
   const cost = costLabel(est, paidNetwork);
+  // Scan depuis l'accueil : on est à la borne, l'heure de débranchement part de maintenant.
+  const total = totalCost({ vehicle, socPercent: fresh, pointKw: point.kw, plugs: point.plugs, tariff });
   return (
     <View style={styles.summary} accessibilityRole="summary">
       <Text style={styles.summaryTitle} accessibilityRole="header">
         {R.priceBefore}
       </Text>
       <TariffLines station={station} community={community} compact paidNetwork={paidNetwork} />
+      <PriceTrapLines traps={priceTraps(tariff, total, Date.now())} avg={!vehicle} />
       <Text style={styles.src}>{withUnit(R.estimateFor(est.assumedVehicle ? R.avgVehicle55 : vehicle?.name ?? '', est.fromSoc, est.toSoc))}</Text>
       <Text style={styles.line}>
         {withUnit(`${R.energy} ${kwhText(est.kWhBilled)} · ${R.duration} ≈ ${durationLabel(est.minutes)} · ${R.cost} ${cost}`)}
@@ -123,6 +127,78 @@ export function PriceSummary({
       {/* Tarif non publié : le conseil « vérifiez l'écran » est déjà affiché au-dessus */}
       {est.unknownPrice && !est.freeDoubtful && (describeTariff(tariff).length || tariff.kind === 'link') ? <Text style={styles.src}>{R.unknownPriceNote.trim()}</Text> : null}
       <Text style={styles.line}>{preauthMax != null ? `${R.preauth} · ${eur(preauthMax, 0)}` : R.preauthGeneric}</Text>
+    </View>
+  );
+}
+
+/** Une ligne par piège tarifaire, calculée pour MA recharge (rien sans tarif publié). */
+export function trapText(t: PriceTrap, avg = false): string {
+  const P = tr().price;
+  if (t.kind === 'perMin') return withUnit(P.trapPerMin(perKwh(t.perKwh), avg));
+  if (t.kind === 'session') return P.trapSession;
+  return withUnit(t.at != null ? P.trapIdleAt(t.afterMin, clock(t.at)) : P.trapIdleIn(t.afterMin, durationLabel(t.inMin)));
+}
+
+/** `avg` : aucun véhicule renseigné (estimation pour un véhicule moyen, dite comme telle). */
+export function PriceTrapLines({ traps, avg }: { traps: PriceTrap[]; avg?: boolean }) {
+  const T = useT();
+  if (!traps.length) return null;
+  return (
+    <View style={styles.traps} accessibilityLabel={T.price.trapsA11y} testID="price-traps">
+      {traps.map((x) => (
+        <View key={x.kind} style={styles.trap} testID={`trap-${x.kind}`}>
+          <View style={styles.trapDot} accessibilityElementsHidden importantForAccessibility="no" />
+          <Text style={styles.trapText}>{trapText(x, avg)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** « Coût total ≈ 14,20 € · 0,42 €/kWh effectif » (ou « Inconnu », jamais 0 inventé). */
+export function totalText(c: TotalCost, paidNetwork: boolean, freeDoubtful: boolean): string {
+  const P = tr().price;
+  if (c.total == null) return `${P.total}${NBSP}: ${freeDoubtful && !paidNetwork ? tr().recharger.toConfirm : tr().recharger.unknown}`;
+  const amount = euros(Math.round(c.total * 100));
+  return withUnit(c.effectivePerKwh != null ? `${P.total} ${P.item(amount, perKwh(c.effectivePerKwh))}` : `${P.total} ≈ ${amount}`);
+}
+
+/** Postes non nuls : « Dont énergie 10,00 € · temps 1,40 € · forfait 1,00 € ». */
+export function breakdownText(c: TotalCost): string | null {
+  const P = tr().price;
+  const parts: [string, number | null][] = [[P.partEnergy, c.energy], [P.partTime, c.time], [P.partSession, c.session], [P.partIdle, c.idle]];
+  const shown = parts.filter(([, v]) => v != null && v > 0).map(([k, v]) => `${k} ${euros(Math.round(v! * 100))}`);
+  return shown.length > 1 ? withUnit(P.breakdown(shown.join(' · '))) : null;
+}
+
+/**
+ * Coût total réel de MA recharge selon la durée de stationnement (« Je reste ~1 h / 2 h / la nuit ») et pièges tarifaires.
+ * `plugAt` : heure de branchement (sur place : maintenant ; préparation : null, l'alerte d'occupation donne un délai).
+ */
+export function MyChargeCost({ tariff, input, plugAt, paidNetwork }: {
+  tariff: Tariff;
+  input: Omit<Parameters<typeof totalCost>[0], 'tariff' | 'stayMin'>;
+  plugAt: number | null;
+  paidNetwork: boolean;
+}) {
+  const T = useT();
+  const P = T.price;
+  const [stay, setStay] = useState<Stay>('charge');
+  const c = totalCost({ ...input, tariff, stayMin: stayMinutes(stay) });
+  const traps = priceTraps(tariff, c, plugAt);
+  const detail = breakdownText(c);
+  return (
+    <View style={styles.wrap} testID="my-charge-cost">
+      <PriceTrapLines traps={traps} avg={!input.vehicle} />
+      <Text style={styles.estLabel} accessibilityRole="header">{P.stayTitle}</Text>
+      <View style={styles.stays}>
+        {STAYS.map((k) => (
+          <Chip key={k} label={withUnit(P.stay[k])} a11y={P.stayA11y(P.stay[k])} active={stay === k} onPress={() => setStay(k)} />
+        ))}
+      </View>
+      <Text style={styles.total} testID="total-cost">{totalText(c, paidNetwork, !!tariff.freeDoubtful)}</Text>
+      {detail ? <Text style={styles.src}>{detail}</Text> : null}
+      {c.cutShort ? <Text style={styles.src}>{P.cutShort}</Text> : null}
     </View>
   );
 }
@@ -138,4 +214,11 @@ const styles = StyleSheet.create({
   linkText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.accent },
   badge: { borderRadius: radius.sm, paddingVertical: 8, paddingHorizontal: 10 },
   badgeText: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
+  traps: { gap: 6 },
+  trap: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: radius.sm, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: colors.warnSoft },
+  trapDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6, backgroundColor: colors.busy },
+  trapText: { flex: 1, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20, color: colors.warnText },
+  estLabel: { fontFamily: fonts.semibold, fontSize: 13, color: colors.inkMuted },
+  stays: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  total: { fontFamily: fonts.bold, fontSize: 16, lineHeight: 22, color: colors.ink },
 });

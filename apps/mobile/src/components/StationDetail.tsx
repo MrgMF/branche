@@ -5,7 +5,7 @@ import type { ApiConfig } from '../lib/api';
 import { navigationLinks, startCharge } from '../lib/charge';
 import { euros, km, kw, minutes, payLabel, plugLabel } from '../lib/format';
 import { availabilityDown, getAvailability, stationSummary, type AvailItem } from '../lib/availability';
-import { getCommunity, type Community } from '../lib/community';
+import { getCommunity, lastPriceText, type Community } from '../lib/community';
 import { loadWallet, type Wallet } from '../lib/accounts';
 import { appLaunchOption, appOnly, badgeMentioned, badgeNames, confirmedChannels, payOptions, surelyPayable } from '../lib/methods';
 import { AcceptedMethods } from './AcceptedMethods';
@@ -14,8 +14,11 @@ import type { Operator } from '../lib/qr';
 import { displayName, loadOperators, type Station } from '../lib/stations';
 import { store } from '../lib/store';
 import { colors, fonts, mapColors, MIN_TOUCH, radius } from '../theme';
-import { TariffLines } from './Pricing';
-import { freeCredible } from '../lib/tariff';
+import { PriceTrapLines, TariffLines } from './Pricing';
+import { freeCredible, stationTariff } from '../lib/tariff';
+import { priceTraps, totalCost } from '../lib/estimate';
+import { bestPoint } from '../lib/cheapest';
+import { loadVehicle, type Vehicle } from '../lib/vehicle';
 import { allDown, nearestFree } from '../lib/nearestFree';
 import { useLargeText } from '../lib/useLargeText';
 import { Button, Notice, Stat, Tag } from './ui';
@@ -57,6 +60,22 @@ export function StationDetail(props: {
     };
   }, []);
   const live = useLive(s);
+  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadVehicle().then((v) => alive && setVehicle(v));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  // Pièges tarifaires pour MON véhicule (point compatible le plus puissant) ; pas encore branché : délai, pas d'heure.
+  const tariff = stationTariff(s);
+  const pt = bestPoint(s, vehicle);
+  const fresh = vehicle && Date.now() - vehicle.socUpdatedAt < 3 * 3600_000 ? vehicle.socPercent : null;
+  const traps = priceTraps(tariff, totalCost({ vehicle, socPercent: fresh, pointKw: pt.kw, plugs: pt.plugs, tariff }));
+  // Source du prix affiché : base nationale (tarif publié) et/ou prix constaté par la communauté
+  const irvePrice = tariff.kind === 'priced';
+  const seen = !!lastPriceText(community);
   const near = distance != null && distance < 0.3;
   const tel = s.tel ? phone(s.tel) : null;
   const large = useLargeText();
@@ -178,6 +197,8 @@ export function StationDetail(props: {
         {payCtx ? <StationAccepted s={s} ctx={payCtx} /> : null}
         <Text style={styles.boxTitle}>{t.station.priceTitle}</Text>
         <TariffLines station={s} community={community} compact />
+        <PriceTrapLines traps={traps} avg={!vehicle} />
+        {irvePrice || seen ? <Text style={styles.small} testID="price-direct">{t.price.direct(irvePrice && seen ? 'both' : irvePrice ? 'irve' : 'community')}</Text> : null}
         {payAtStation.length ? <Text style={styles.small}>{t.station.acceptedOnSite(payAtStation.join(' · '))}</Text> : null}
       </View>
 
