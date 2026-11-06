@@ -17,10 +17,14 @@ export interface Settings {
   units: Units;
   avoidTolls: boolean;
   avoidMotorways: boolean;
+  /** Compteur de vitesse (et limitation) en roulant, en guidage comme sur la carte. */
+  showSpeed: boolean;
+  /** Compteur et bords de l'écran en rouge au-delà de la limitation. */
+  speedAlert: boolean;
 }
 
 const KEY = 'branche.settings.v1';
-const DEFAULTS: Settings = { lang: 'auto', units: 'km', avoidTolls: false, avoidMotorways: false };
+const DEFAULTS: Settings = { lang: 'auto', units: 'km', avoidTolls: false, avoidMotorways: false, showSpeed: true, speedAlert: true };
 let current: Settings = DEFAULTS;
 const listeners = new Set<() => void>();
 
@@ -41,6 +45,8 @@ export async function loadSettings(): Promise<Settings> {
       units: p.units === 'mi' ? 'mi' : 'km',
       avoidTolls: p.avoidTolls === true,
       avoidMotorways: p.avoidMotorways === true,
+      showSpeed: p.showSpeed !== false,
+      speedAlert: p.speedAlert !== false,
     };
   } catch {
     current = DEFAULTS;
