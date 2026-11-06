@@ -7,7 +7,8 @@ import { euros, km, kw, minutes, payLabel, plugLabel } from '../lib/format';
 import { availabilityDown, getAvailability, stationSummary, type AvailItem } from '../lib/availability';
 import { getCommunity, type Community } from '../lib/community';
 import { loadWallet, type Wallet } from '../lib/accounts';
-import { appOnly, badgeMentioned, badgeNames, payOptions, surelyPayable } from '../lib/methods';
+import { appOnly, badgeMentioned, badgeNames, confirmedChannels, payOptions, surelyPayable } from '../lib/methods';
+import { AcceptedMethods } from './AcceptedMethods';
 import { loadPortals, type Portals } from '../lib/portals';
 import type { Operator } from '../lib/qr';
 import { displayName, loadOperators, type Station } from '../lib/stations';
@@ -173,6 +174,7 @@ export function StationDetail(props: {
       <View style={styles.payCard}>
         <Text style={styles.payTitle}>{t.station.payTitle}</Text>
         {payCtx ? <Text style={styles.payText} testID="station-pay-text">{payTextFor(s, opName, payCtx)}</Text> : null}
+        {payCtx ? <StationAccepted s={s} ctx={payCtx} /> : null}
         <Text style={styles.boxTitle}>{t.station.priceTitle}</Text>
         <TariffLines station={s} community={community} compact />
         {payAtStation.length ? <Text style={styles.small}>{t.station.acceptedOnSite(payAtStation.join(' · '))}</Text> : null}
@@ -208,6 +210,20 @@ function payTextFor(s: Station, op: string, ctx: { ops: Operator[]; portals: Por
   if (!appOnly(options)) return t.recharger.unconfirmedBody(op);
   const portal = s.ok ? ctx.portals[s.ok] : undefined;
   return t.recharger.blockedBody(op, badgeNames(portal?.roamingBadgesAccepted).join(', ') || null, badgeMentioned(s));
+}
+
+/** Moyens acceptés (payMethods sourcés) des seuls canaux déclarés pour cette borne : page de paiement, lecteur. */
+function StationAccepted({ s, ctx }: { s: Station; ctx: { ops: Operator[]; portals: Portals; wallet: Wallet } }) {
+  const portal = s.ok ? ctx.portals[s.ok] : undefined;
+  if (!portal?.payMethods) return null;
+  const ch = confirmedChannels(payOptions(s, null, ctx.ops, { portals: ctx.portals, wallet: ctx.wallet }));
+  if (!ch.web && !ch.reader) return null;
+  return (
+    <View style={{ gap: 6 }}>
+      {ch.web ? <AcceptedMethods portal={portal} channel="web" variant="sheet" wallet /> : null}
+      {ch.reader ? <AcceptedMethods portal={portal} channel="reader" variant="sheet" /> : null}
+    </View>
+  );
 }
 
 /** Disponibilité temps réel des points de la station (cache 60 s partagé : la fiche et l'action collante ne refont pas la requête). */

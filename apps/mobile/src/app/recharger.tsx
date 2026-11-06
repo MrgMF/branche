@@ -24,7 +24,8 @@ import { store } from '../lib/store';
 import { describeTariff, stationTariff } from '../lib/tariff';
 import { compatible, loadVehicle, saveVehicle, type Vehicle } from '../lib/vehicle';
 import { loadWallet, type Wallet } from '../lib/accounts';
-import { appOnly, badgeMentioned, badgeNames, nearestPayable, surelyPayable } from '../lib/methods';
+import { appOnly, badgeMentioned, badgeNames, nearestPayable, showsAccepted, surelyPayable } from '../lib/methods';
+import { AcceptedMethods, acceptedA11y } from '../components/AcceptedMethods';
 import { loadPortals, portalPaid, preauthMaxOf, type Portals } from '../lib/portals';
 import { colors, fonts, mapColors, MIN_TOUCH, radius } from '../theme';
 import { Icon } from '../components/Icon';
@@ -454,6 +455,7 @@ export default function Recharger() {
                 {chosen.id === (fallback ?? options[0])?.id && !chosen.speculative ? <Tag>{t.common.recommended}</Tag> : null}
               </View>
               <Text style={styles.p}>{chosen.why}</Text>
+              {showsAccepted(chosen) ? <AcceptedMethods portal={portal} channel={showsAccepted(chosen)!} wallet /> : null}
               <Text style={styles.orderText}>{chosen.order === 'plug-first' ? R.plugFirst : R.payFirst}</Text>
               {chosen.steps.map((s, i) => (
                 <View key={s} style={styles.stepRow}>
@@ -480,7 +482,7 @@ export default function Recharger() {
                 key={o.id}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !o.available }}
-                accessibilityLabel={`${o.label}${o.available ? '' : R.unavailableSuffix}`}
+                accessibilityLabel={`${o.label}${o.available ? '' : R.unavailableSuffix}${acceptedA11y(t, portal, showsAccepted(o))}`}
                 disabled={!o.available}
                 onPress={() => setMethod(o.id)}
                 style={({ pressed }) => [styles.alt, large && { flexDirection: 'column', alignItems: 'stretch' }, !o.available && styles.altOff, pressed && { backgroundColor: colors.surfaceAlt }]}
@@ -488,6 +490,7 @@ export default function Recharger() {
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={styles.altTitle}>{o.label}</Text>
                   <Text style={styles.small}>{o.why}</Text>
+                  {showsAccepted(o) ? <AcceptedMethods portal={portal} channel={showsAccepted(o)!} /> : null}
                 </View>
                 {!o.available ? (
                   <Tag>{t.common.unavailable}</Tag>

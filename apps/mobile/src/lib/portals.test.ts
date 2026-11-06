@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 // Portails réels (pipeline/data/operator-portals.json, URL sourcées)
 import realPortals from '../../../../pipeline/data/operator-portals.json';
-import { copyIdFor, trackedPointEntry } from './methods';
-import { idEntryOf, portalPaid, type Portals } from './portals';
+import { confirmedChannels, copyIdFor, showsAccepted, trackedPointEntry } from './methods';
+import { acceptedOn, idEntryOf, portalPaid, walletOnPage, type Portals } from './portals';
+import { DICTS, LANGS } from '../i18n';
 
 const P = (realPortals as { operators: Portals }).operators;
 const ID = 'FR*VIR*E269470';
@@ -41,5 +42,64 @@ describe('réseau payant selon ses sources (portalPaid)', () => {
     expect(portalPaid({ name: 'X', cardReader: true, sources: [] })).toBe(false);
     expect(portalPaid({ name: 'X', cardReader: true, sources: ['test'] })).toBe(false);
     expect(portalPaid({ name: 'X', cardReader: null, adhocWeb: null, sources: ['https://x.fr/faq'] })).toBe(false);
+  });
+});
+
+describe('moyens acceptés (payMethods sourcés) : seulement les valeurs true, « probable » formulé comme tel', () => {
+  const ids = (k: string, ch: 'web' | 'reader') => acceptedOn(P[k], ch)?.items.map((i) => i.brand ?? i.id) ?? null;
+  it('Road (E-Flux) : CB, Apple Pay, Google Pay sur la page ; lecteur sans contact, portefeuilles probables', () => {
+    expect(ids('road', 'web')).toEqual(['card', 'Apple Pay', 'Google Pay']);
+    expect(acceptedOn(P.road, 'reader')).toEqual({ items: [{ id: 'contactless', brand: null }], nfcProbable: true });
+  });
+  it('IONITY : CB seule sur la page (portefeuilles au terminal NFC seulement), Apple Pay et Google Pay au lecteur', () => {
+    expect(ids('ionity', 'web')).toEqual(['card']);
+    expect(ids('ionity', 'reader')).toEqual(['contactless', 'Apple Pay', 'Google Pay']);
+    expect(acceptedOn(P.ionity, 'reader')?.nfcProbable).toBe(false);
+  });
+  it('TotalEnergies : CB sur la page, rien d’inconnu au lecteur ; Lidl (tout à false) : rien', () => {
+    expect(ids('totalenergies-marketing', 'web')).toEqual(['card']);
+    expect(acceptedOn(P['totalenergies-marketing'], 'reader')).toBeNull();
+    expect(acceptedOn(P.lidl, 'web')).toBeNull();
+    expect(acceptedOn(P.lidl, 'reader')).toBeNull();
+    expect(acceptedOn(undefined, 'web')).toBeNull();
+  });
+  it('aucune page ne montre PayPal ; Apple Pay sur une page seulement chez Road', () => {
+    for (const [k, p] of Object.entries(P)) {
+      const web = acceptedOn(p, 'web')?.items.map((i) => i.id) ?? [];
+      expect(web, k).not.toContain('paypal');
+      if (web.includes('applePay')) expect(k).toBe('road');
+    }
+  });
+  it('sans source https, une valeur true n’est jamais affichée ; « probable » exige un lecteur sans contact confirmé', () => {
+    expect(acceptedOn({ name: 'X', payMethods: { adhoc: { card: true, applePay: true }, sources: [] } }, 'web')).toBeNull();
+    expect(acceptedOn({ name: 'X', payMethods: { adhoc: { card: true }, sources: ['http://x.fr'] } }, 'web')).toBeNull();
+    expect(acceptedOn({ name: 'X', payMethods: { reader: { contactless: null, nfcWallets: 'probable' }, sources: ['https://x.fr'] } }, 'reader')).toBeNull();
+    expect(acceptedOn({ name: 'X', payMethods: { adhoc: { card: 'probable', applePay: 'probable' }, sources: ['https://x.fr'] } }, 'web')).toBeNull();
+  });
+  it('rappel du portefeuille de la page selon l’appareil : Apple Pay (iOS), Google Pay (Android), les deux (web)', () => {
+    expect(walletOnPage(P.road, 'ios')).toEqual(['Apple Pay']);
+    expect(walletOnPage(P.road, 'android')).toEqual(['Google Pay']);
+    expect(walletOnPage(P.road, 'web')).toEqual(['Apple Pay', 'Google Pay']);
+    // IONITY : portefeuilles au lecteur seulement, jamais rappelés pour la page
+    for (const os of ['ios', 'android', 'web']) expect(walletOnPage(P.ionity, os)).toEqual([]);
+  });
+  it('affichés seulement pour une méthode disponible et déclarée (jamais QR « éventuel » ni lecteur « certains sites »)', () => {
+    expect(showsAccepted({ id: 'scan', available: true })).toBe('web');
+    expect(showsAccepted({ id: 'operator-link', available: true })).toBe('web');
+    expect(showsAccepted({ id: 'reader', available: true })).toBe('reader');
+    expect(showsAccepted({ id: 'scan', available: true, speculative: true })).toBeNull();
+    expect(showsAccepted({ id: 'reader', available: false })).toBeNull();
+    expect(showsAccepted({ id: 'badge', available: true })).toBeNull();
+    expect(showsAccepted({ id: 'account', available: true })).toBeNull();
+    expect(confirmedChannels([{ id: 'reader', available: true, speculative: true } as never, { id: 'scan', available: true } as never])).toEqual({ web: true, reader: false });
+  });
+  it('textes traduits : noms de marque fournis par l’app, accord du pluriel', () => {
+    expect(DICTS.fr.accepted.walletOnPage(1, 'Apple Pay')).toBe('Apple Pay disponible sur la page de paiement');
+    expect(DICTS.fr.accepted.walletOnPage(2, 'Apple Pay et Google Pay')).toBe('Apple Pay et Google Pay disponibles sur la page de paiement');
+    expect(DICTS.fr.accepted.nfcProbable).toBe('Paiement mobile sans contact probablement accepté');
+    for (const l of LANGS) {
+      expect(DICTS[l].accepted.walletOnPage(1, 'Google Pay'), l).toContain('Google Pay');
+      expect(DICTS[l].accepted.nfcProbable, l).not.toMatch(/Apple|Google/);
+    }
   });
 });

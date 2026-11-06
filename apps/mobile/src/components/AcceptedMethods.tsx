@@ -3,10 +3,18 @@
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { acceptedOn, walletOnPage, type AcceptedId, type Portal } from '../lib/portals';
 import { colors, fonts } from '../theme';
-import { useT } from '../i18n';
+import { useT, type Dict } from '../i18n';
 import { Icon, type ShellIcon } from './Icon';
 
 const ICON: Record<AcceptedId, ShellIcon> = { card: 'card', contactless: 'contactless', applePay: 'phone', googlePay: 'phone', paypal: 'wallet', other: 'wallet' };
+
+/** Texte lu par le lecteur d'écran (bouton d'une méthode dont le libellé remplace le contenu). */
+export function acceptedA11y(t: Dict, portal: Portal | undefined, channel: 'web' | 'reader' | null): string {
+  const acc = channel ? acceptedOn(portal, channel) : null;
+  if (!acc) return '';
+  const names = acc.items.map((i) => i.brand ?? (i.id === 'card' ? t.accepted.card : t.accepted.contactless));
+  return [names.length ? `${t.accepted.title} ${names.join(', ')}` : '', acc.nfcProbable ? t.accepted.nfcProbable : ''].filter(Boolean).map((x) => `. ${x}`).join('');
+}
 
 /**
  * `card` : carte d'une méthode (« Accepté : … ») ; `sheet` : fiche station (canal précisé). `wallet` : rappel du
@@ -41,7 +49,7 @@ export function AcceptedMethods({ portal, channel, variant = 'card', wallet = fa
       {acc.nfcProbable ? (
         <View style={styles.row} testID="accepted-nfc-probable">
           <Icon name="contactless" size={iconSize} color={colors.inkMuted} />
-          <Text style={[styles.prefix, styles.flex]}>{variant === 'sheet' || !acc.items.length ? (variant === 'sheet' ? A.nfcProbableReader : A.nfcProbable) : A.nfcProbable}</Text>
+          <Text style={[styles.prefix, styles.flex]}>{variant === 'sheet' ? A.nfcProbableReader : A.nfcProbable}</Text>
         </View>
       ) : null}
       {wallets.length ? (
