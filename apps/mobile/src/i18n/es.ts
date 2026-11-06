@@ -243,6 +243,17 @@ export const es: Dict = {
     source: (date: string | null) => `Fuente: base nacional IRVE${date ? `, actualización del operador del ${date}` : ''}. Disponibilidad en tiempo real no garantizada.`,
     errStart: 'No se pudo iniciar el pago.',
   },
+  accepted: {
+    title: 'Aceptado:',
+    web: 'Aceptado en la página de pago:',
+    reader: 'Aceptado en el lector de tarjetas:',
+    card: 'Tarjeta',
+    contactless: 'Sin contacto',
+    nfcProbable: 'Pago móvil sin contacto probablemente aceptado',
+    nfcProbableReader: 'Lector de tarjetas: pago móvil sin contacto probablemente aceptado',
+    walletOnPage: (n: number, names: string) => `${names} disponible${n > 1 ? 's' : ''} en la página de pago`,
+    and: ' y ',
+  },
   pricing: {
     link: 'Tarifa publicada en el sitio web del operador.',
     unpublished: 'Tarifa no publicada en la base nacional: comprueba la pantalla del cargador antes de validar.',

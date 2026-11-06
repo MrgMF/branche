@@ -243,6 +243,17 @@ export const de: Dict = {
     source: (date: string | null) => `Quelle: nationale IRVE-Datenbank${date ? `, Aktualisierung des Betreibers vom ${date}` : ''}. Echtzeitverfügbarkeit nicht garantiert.`,
     errStart: 'Zahlung konnte nicht gestartet werden.',
   },
+  accepted: {
+    title: 'Akzeptiert:',
+    web: 'Akzeptiert auf der Zahlungsseite:',
+    reader: 'Akzeptiert am Kartenleser:',
+    card: 'Karte',
+    contactless: 'Kontaktlos',
+    nfcProbable: 'Kontaktloses mobiles Bezahlen wahrscheinlich akzeptiert',
+    nfcProbableReader: 'Kartenleser: kontaktloses mobiles Bezahlen wahrscheinlich akzeptiert',
+    walletOnPage: (_n: number, names: string) => `${names} auf der Zahlungsseite verfügbar`,
+    and: ' und ',
+  },
   pricing: {
     link: 'Tarif auf der Website des Betreibers veröffentlicht.',
     unpublished: 'Tarif nicht in der nationalen Datenbank: vor dem Bestätigen den Bildschirm der Säule prüfen.',

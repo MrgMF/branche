@@ -244,6 +244,17 @@ export const it: Dict = {
     source: (date: string | null) => `Fonte: banca dati nazionale IRVE${date ? `, aggiornamento dell’operatore del ${date}` : ''}. Disponibilità in tempo reale non garantita.`,
     errStart: 'Impossibile avviare il pagamento.',
   },
+  accepted: {
+    title: 'Accettato:',
+    web: 'Accettato sulla pagina di pagamento:',
+    reader: 'Accettato al lettore di carte:',
+    card: 'Carta',
+    contactless: 'Contactless',
+    nfcProbable: 'Pagamento mobile contactless probabilmente accettato',
+    nfcProbableReader: 'Lettore di carte: pagamento mobile contactless probabilmente accettato',
+    walletOnPage: (n: number, names: string) => `${names} disponibil${n > 1 ? 'i' : 'e'} sulla pagina di pagamento`,
+    and: ' e ',
+  },
   pricing: {
     link: 'Tariffa pubblicata sul sito dell’operatore.',
     unpublished: 'Tariffa non pubblicata nella banca dati nazionale: controlla lo schermo della colonnina prima di confermare.',

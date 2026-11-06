@@ -2,7 +2,7 @@
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { colors } from '../theme';
 
-export type ShellIcon = 'menu' | 'back' | 'chevron' | 'map' | 'bolt' | 'receipt' | 'car' | 'card' | 'gear' | 'info' | 'qr' | 'check';
+export type ShellIcon = 'menu' | 'back' | 'chevron' | 'map' | 'bolt' | 'receipt' | 'car' | 'card' | 'gear' | 'info' | 'qr' | 'check' | 'contactless' | 'phone' | 'wallet';
 
 export function Icon({ name, size = 24, color = colors.ink }: { name: ShellIcon; size?: number; color?: string }) {
   const p = { stroke: color, strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' };
@@ -41,6 +41,20 @@ export function Icon({ name, size = 24, color = colors.ink }: { name: ShellIcon;
       ) : null}
       {name === 'qr' ? <Path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2M14 18v2M18 18h2v2" {...p} /> : null}
       {name === 'check' ? <Path d="M5 12.5l4.5 4.5L19 7.5" {...p} strokeWidth={2.4} /> : null}
+      {/* Moyens de paiement : pictogrammes génériques (jamais de logo de marque) */}
+      {name === 'contactless' ? <Path d="M7 8.5a5 5 0 010 7M11 6a8.5 8.5 0 010 12M15 3.5a12 12 0 010 17" {...p} /> : null}
+      {name === 'phone' ? (
+        <>
+          <Rect x={6.5} y={2.5} width={11} height={19} rx={2.5} {...p} />
+          <Path d="M10.5 18.5h3" {...p} />
+        </>
+      ) : null}
+      {name === 'wallet' ? (
+        <>
+          <Path d="M4 7.5h14.5a1.5 1.5 0 011.5 1.5v9a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18V7.5zM4 7.5l11-3v3" {...p} />
+          <Circle cx={16} cy={13.5} r={1} fill={color} />
+        </>
+      ) : null}
     </Svg>
   );
 }

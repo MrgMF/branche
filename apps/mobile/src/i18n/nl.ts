@@ -237,6 +237,17 @@ export const nl: Dict = {
     source: (date: string | null) => `Bron: nationale IRVE-database${date ? `, update van de exploitant van ${date}` : ''}. Realtime beschikbaarheid niet gegarandeerd.`,
     errStart: 'Betaling kon niet worden gestart.',
   },
+  accepted: {
+    title: 'Geaccepteerd:',
+    web: 'Geaccepteerd op de betaalpagina:',
+    reader: 'Geaccepteerd bij de kaartlezer:',
+    card: 'Bankpas',
+    contactless: 'Contactloos',
+    nfcProbable: 'Contactloos mobiel betalen waarschijnlijk geaccepteerd',
+    nfcProbableReader: 'Kaartlezer: contactloos mobiel betalen waarschijnlijk geaccepteerd',
+    walletOnPage: (_n: number, names: string) => `${names} beschikbaar op de betaalpagina`,
+    and: ' en ',
+  },
   pricing: {
     link: 'Tarief gepubliceerd op de website van de exploitant.',
     unpublished: 'Tarief niet gepubliceerd in de nationale database: controleer het scherm van de paal voordat je bevestigt.',

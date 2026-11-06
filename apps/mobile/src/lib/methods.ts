@@ -198,6 +198,25 @@ export function trackedPointEntry(
   return idEntry.entry === 'printed' || idEntry.entry === 'select' ? { entry: idEntry.entry, digits: idEntry.digits } : {};
 }
 
+/** Canal de paiement d'une méthode (moyens acceptés, `acceptedOn`) : page de l'opérateur ou lecteur de la borne. */
+export function methodChannel(id: MethodId): 'web' | 'reader' | null {
+  return id === 'scan' || id === 'operator-link' ? 'web' : id === 'reader' ? 'reader' : null;
+}
+
+/**
+ * Moyens acceptés affichés seulement pour une méthode disponible ET déclarée pour cette borne (jamais pour un QR
+ * « éventuel » ni un lecteur « sur certains sites ») : sinon, « Accepté : … » laisserait croire à une voie certaine.
+ */
+export function showsAccepted(o: Pick<PayOption, 'id' | 'available' | 'speculative'>): 'web' | 'reader' | null {
+  return o.available && !o.speculative ? methodChannel(o.id) : null;
+}
+
+/** Canaux confirmés pour la borne (fiche station) : page de paiement, lecteur. */
+export function confirmedChannels(options: PayOption[]): { web: boolean; reader: boolean } {
+  const ch = options.map(showsAccepted);
+  return { web: ch.includes('web'), reader: ch.includes('reader') };
+}
+
 /** L'IRVE déclare un badge pour cette borne : seule condition pour en parler (textes, « Mes badges »). */
 export const badgeMentioned = (s: Pick<Station, 'pay'>) => s.pay.includes('badge');
 

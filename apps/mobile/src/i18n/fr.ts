@@ -241,6 +241,18 @@ export const fr = {
     source: (date: string | null) => `Source : base nationale IRVE${date ? `, mise à jour opérateur du ${date}` : ''}. Disponibilité en temps réel non garantie.`,
     errStart: 'Impossible de démarrer le paiement.',
   },
+  /** Moyens acceptés (operator-portals.json `payMethods`, valeurs sourcées) ; noms de marque fournis par lib/portals. */
+  accepted: {
+    title: 'Accepté :',
+    web: 'Accepté sur la page de paiement :',
+    reader: 'Accepté au lecteur de la borne :',
+    card: 'CB',
+    contactless: 'Sans contact',
+    nfcProbable: 'Paiement mobile sans contact probablement accepté',
+    nfcProbableReader: 'Lecteur de la borne : paiement mobile sans contact probablement accepté',
+    walletOnPage: (n: number, names: string) => `${names} disponible${s(n)} sur la page de paiement`,
+    and: ' et ',
+  },
   pricing: {
     link: 'Tarif publié sur le site de l’opérateur.',
     unpublished: 'Tarif non publié dans la base nationale : vérifiez l’écran de la borne avant de valider.',

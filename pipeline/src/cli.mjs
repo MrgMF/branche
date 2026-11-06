@@ -49,7 +49,7 @@ const meta = {
   evseBuckets: index.size,
 };
 await writeFile(join(outDir, 'meta.json'), JSON.stringify(meta));
-// Portails des opérateurs (site officiel, démarrage web, paiement ponctuel, badges, payDomains) : validés puis publiés ;
+// Portails des opérateurs (site officiel, démarrage web, paiement ponctuel, badges, payDomains, payMethods) : validés puis publiés ;
 // les payDomains sont recopiés dans operators.json (vérificateur de QR codes de l'app).
 let registry = agg.operators();
 try {

@@ -27,8 +27,78 @@ export interface Portal {
   /** Montant maximal pré-autorisé (€), seulement quand l'opérateur le publie. */
   preauthMax?: number | null;
   sources?: string[] | null;
+  /** Moyens de paiement sourcés (docs/research/payment-methods.md) : page ad hoc et lecteur de la borne. */
+  payMethods?: PayMethods | null;
 }
 export type Portals = Record<string, Portal>;
+
+/** true/false seulement si une source le dit, sinon null ; « probable » : lecteur sans contact confirmé, portefeuilles non cités. */
+export type PayValue = boolean | 'probable' | null;
+export interface PayMethods {
+  /** Page de paiement ponctuel de l'opérateur (ouverte dans le navigateur intégré). */
+  adhoc?: { card?: PayValue; applePay?: PayValue; googlePay?: PayValue; paypal?: PayValue; other?: string[] | null } | null;
+  /** Lecteur de carte de la borne. */
+  reader?: { contactless?: PayValue; nfcWallets?: PayValue } | null;
+  sources?: string[] | null;
+}
+
+/** Moyen affiché (icône générique dessinée + nom ; marques en texte seulement). */
+export type AcceptedId = 'card' | 'contactless' | 'applePay' | 'googlePay' | 'paypal' | 'other';
+export interface AcceptedItem {
+  id: AcceptedId;
+  /** Nom de marque (Apple Pay, Google Pay, PayPal, ou nom cité par la source) ; null : libellé traduit (CB, Sans contact). */
+  brand: string | null;
+}
+export interface Accepted {
+  /** Seulement les valeurs `true` sourcées, dans l'ordre d'affichage. */
+  items: AcceptedItem[];
+  /** Lecteur sans contact confirmé, Apple Pay / Google Pay non cités : « probablement accepté », jamais certain. */
+  nfcProbable: boolean;
+}
+/** Noms de marque : jamais traduits ni dessinés (texte seul, aucun logo). */
+export const BRANDS = { applePay: 'Apple Pay', googlePay: 'Google Pay', paypal: 'PayPal' } as const;
+
+const sourced = (pm: PayMethods | null | undefined): pm is PayMethods => !!pm?.sources?.some((u) => typeof u === 'string' && /^https:\/\//.test(u));
+
+/**
+ * Moyens acceptés sur un canal (`web` : page de paiement ponctuel ; `reader` : lecteur de la borne), d'après les seules
+ * valeurs `true` sourcées. Inconnu, faux, ou sans source https → null (rien affiché).
+ */
+export function acceptedOn(portal: Portal | undefined, channel: 'web' | 'reader'): Accepted | null {
+  const pm = portal?.payMethods;
+  if (!sourced(pm)) return null;
+  const items: AcceptedItem[] = [];
+  let nfcProbable = false;
+  if (channel === 'web') {
+    const a = pm.adhoc ?? {};
+    if (a.card === true) items.push({ id: 'card', brand: null });
+    if (a.applePay === true) items.push({ id: 'applePay', brand: BRANDS.applePay });
+    if (a.googlePay === true) items.push({ id: 'googlePay', brand: BRANDS.googlePay });
+    if (a.paypal === true) items.push({ id: 'paypal', brand: BRANDS.paypal });
+    for (const o of Array.isArray(a.other) ? a.other : []) if (typeof o === 'string' && o.trim()) items.push({ id: 'other', brand: o.trim() });
+  } else {
+    const r = pm.reader ?? {};
+    if (r.contactless === true) items.push({ id: 'contactless', brand: null });
+    if (r.nfcWallets === true) items.push({ id: 'applePay', brand: BRANDS.applePay }, { id: 'googlePay', brand: BRANDS.googlePay });
+    // « probable » n'a de sens qu'avec un lecteur sans contact confirmé
+    nfcProbable = r.nfcWallets === 'probable' && r.contactless === true;
+  }
+  return items.length || nfcProbable ? { items, nfcProbable } : null;
+}
+
+/**
+ * Portefeuille confirmé sur la page de paiement, à rappeler selon l'appareil : Apple Pay sur iOS, Google Pay sur
+ * Android, les deux sur le web (navigateur quelconque). Rien si la source ne le confirme pas.
+ */
+export function walletOnPage(portal: Portal | undefined, os: string): string[] {
+  const web = acceptedOn(portal, 'web');
+  if (!web) return [];
+  const has = (id: AcceptedId) => web.items.some((i) => i.id === id);
+  const out: string[] = [];
+  if (has('applePay') && os !== 'android') out.push(BRANDS.applePay);
+  if (has('googlePay') && os !== 'ios') out.push(BRANDS.googlePay);
+  return out;
+}
 
 let p: Promise<Portals> | null = null;
 export function loadPortals(): Promise<Portals> {

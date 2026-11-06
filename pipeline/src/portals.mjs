@@ -68,6 +68,43 @@ export function siteDomainsOf(entry) {
  */
 export const ID_ENTRIES = new Set(['emi3', 'printed', 'select']);
 
+/**
+ * Moyens de paiement (docs/research/payment-methods.md) : `true`/`false` seulement si une source le dit, sinon null ;
+ * `"probable"` = lecteur sans contact confirmé sans que Apple Pay ni Google Pay soient cités. L'app n'affiche que `true`
+ * (et `"probable"` du lecteur, formulé comme tel).
+ */
+export const PAY_ADHOC = ['card', 'applePay', 'googlePay', 'paypal'];
+export const PAY_READER = ['contactless', 'nfcWallets'];
+const PAY_VALUE = (v) => v === true || v === false || v === null || v === 'probable';
+
+/** Erreurs de forme de `payMethods` (valeurs, `other`, sources https obligatoires dès qu'une valeur est connue). */
+export function payMethodsErrors(key, pm) {
+  if (pm == null) return [];
+  if (typeof pm !== 'object' || Array.isArray(pm)) return [`${key}.payMethods : objet attendu`];
+  const errors = [];
+  const adhoc = pm.adhoc ?? {};
+  const reader = pm.reader ?? {};
+  let known = false;
+  for (const [part, obj, keys] of [['adhoc', adhoc, PAY_ADHOC], ['reader', reader, PAY_READER]]) {
+    if (typeof obj !== 'object' || Array.isArray(obj)) {
+      errors.push(`${key}.payMethods.${part} : objet attendu`);
+      continue;
+    }
+    for (const k of keys) {
+      const v = obj[k] ?? null;
+      if (!PAY_VALUE(v)) errors.push(`${key}.payMethods.${part}.${k} : true, false, null ou "probable" attendu`);
+      else if (v !== null) known = true;
+    }
+  }
+  if (adhoc.other != null && !(Array.isArray(adhoc.other) && adhoc.other.every((x) => typeof x === 'string' && x.trim()))) errors.push(`${key}.payMethods.adhoc.other : noms attendus`);
+  if (Array.isArray(adhoc.other) && adhoc.other.length) known = true;
+  if (reader.nfcWallets === 'probable' && reader.contactless !== true) errors.push(`${key}.payMethods.reader.nfcWallets : « probable » exige un lecteur sans contact confirmé`);
+  const sources = pm.sources ?? [];
+  if (!Array.isArray(sources) || !sources.every((u) => typeof u === 'string' && /^https:\/\/\S+$/.test(u))) errors.push(`${key}.payMethods.sources : URL https attendues`);
+  else if (known && !sources.length) errors.push(`${key}.payMethods : valeur connue sans source`);
+  return errors;
+}
+
 /** Erreurs de forme : payDomains hors des URL sourcées, preauthMax non numérique, clés de registre invalides. */
 export function validatePortals(portals) {
   const errors = [];
@@ -90,6 +127,7 @@ export function validatePortals(portals) {
       if (!ok) errors.push(`${key}.idDigits : [min, max] attendu`);
       else if (e.idEntry !== 'printed') errors.push(`${key}.idDigits : réservé à idEntry « printed »`);
     }
+    errors.push(...payMethodsErrors(key, e.payMethods));
     if (e.registryKeys != null && !(Array.isArray(e.registryKeys) && e.registryKeys.every((k) => typeof k === 'string' && k))) errors.push(`${key}.registryKeys : clés attendues`);
   }
   return errors;
@@ -144,7 +182,7 @@ export async function readPortals(path = PORTALS_SRC) {
   return portals;
 }
 
-/** Écrit operator-portals.json et ajoute les payDomains au registre déjà présent dans outDir. */
+/** Écrit operator-portals.json (payMethods compris, lus par l'app) et ajoute les payDomains au registre déjà présent dans outDir. */
 export async function publishPortals(outDir, registry, path = PORTALS_SRC) {
   const portals = await readPortals(path);
   await writeFile(join(outDir, 'operator-portals.json'), JSON.stringify(portals));

@@ -238,6 +238,17 @@ export const en: Dict = {
     source: (date: string | null) => `Source: national IRVE database${date ? `, operator update of ${date}` : ''}. Live availability not guaranteed.`,
     errStart: 'Could not start the payment.',
   },
+  accepted: {
+    title: 'Accepted:',
+    web: 'Accepted on the payment page:',
+    reader: 'Accepted at the card reader:',
+    card: 'Card',
+    contactless: 'Contactless',
+    nfcProbable: 'Contactless mobile payment probably accepted',
+    nfcProbableReader: 'Card reader: contactless mobile payment probably accepted',
+    walletOnPage: (_n: number, names: string) => `${names} available on the payment page`,
+    and: ' and ',
+  },
   pricing: {
     link: 'Price published on the operator’s website.',
     unpublished: 'Price not published in the national database: check the charger’s screen before confirming.',
