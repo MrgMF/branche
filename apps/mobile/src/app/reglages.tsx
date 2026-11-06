@@ -65,6 +65,10 @@ export default function Reglages() {
 
       <Section title={S.guidance}>
         <Toggle label={S.voice} sub={S.voiceHint} on={voice} onPress={() => setMuted(voice)} testID="set-voice" />
+        <Toggle label={S.showSpeed} sub={S.showSpeedHint} on={set.showSpeed} onPress={() => updateSettings({ showSpeed: !set.showSpeed })} sep testID="set-speed" />
+        {set.showSpeed ? (
+          <Toggle label={S.speedAlert} sub={S.speedAlertHint} on={set.speedAlert} onPress={() => updateSettings({ speedAlert: !set.speedAlert })} sep testID="set-speed-alert" />
+        ) : null}
         <Text style={[styles.sub, styles.rowNote]}>{S.routeDefaults}</Text>
         <Toggle label={S.avoidTolls} on={set.avoidTolls} onPress={() => updateSettings({ avoidTolls: !set.avoidTolls })} testID="set-tolls" />
         <Toggle label={S.avoidMotorways} on={set.avoidMotorways} onPress={() => updateSettings({ avoidMotorways: !set.avoidMotorways })} sep testID="set-motorways" />
