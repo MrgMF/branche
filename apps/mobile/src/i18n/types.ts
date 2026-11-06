@@ -15,6 +15,13 @@ export interface MethodCtx {
   contactless: boolean;
 }
 
+/** Lecteur de carte : déclaré pour la borne (IRVE), signalé par l'opérateur « sur certains sites » (recherche), ou aucun. */
+export interface ReaderInfo {
+  source: 'irve' | 'operator' | null;
+  /** Domaines des sources de la recherche (« tesla.com, tesla-mag.com »), cités dans le motif. */
+  refs: string | null;
+}
+
 export interface MethodTexts {
   label: string;
   why: string;

@@ -1,6 +1,6 @@
 // Italiano.
 import type { Dict } from './fr';
-import type { InstrParts, MethodCtx, MethodTexts } from './types';
+import type { InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
 
 const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const pl = (n: number, one: string, many: string) => (n === 1 ? one : many);
@@ -36,6 +36,7 @@ export const it: Dict = {
     recommended: 'Consigliato',
     powerUnknown: 'Potenza sconosciuta',
     unknownPrice: 'Prezzo sconosciuto',
+    saveFailed: 'Impossibile salvare su questo telefono (memoria piena o non disponibile): riprova.',
     notProvided: 'Non indicato',
     operatorFallback: 'l’operatore',
     stationFallback: 'Stazione di ricarica',
@@ -138,7 +139,7 @@ export const it: Dict = {
     fast: 'Veloce',
     fastA11y: 'Veloce, da 50 kW',
     open: 'Accesso libero',
-    resume: (op: string) => `Ricarica in corso con ${op} · Riprendi`,
+    resume: (op: string, started = true) => (started ? `Ricarica in corso con ${op} · Riprendi` : `Pagamento in attesa con ${op} · Riprendi`),
     locDenied: 'Posizione non consentita: sposta la mappa sulla tua zona o consenti la posizione nelle impostazioni.',
     dataError: 'Impossibile caricare le colonnine. Controlla la connessione e riprova.',
     locating: 'Ricerca della posizione…',
@@ -224,6 +225,7 @@ export const it: Dict = {
   },
   tariff: {
     free: 'Gratuito secondo l’operatore.',
+    freeDoubtful: 'Dichiarata gratuita nella banca dati nazionale, da verificare.',
     energyRange: (a: string, b: string) => `Energia: da ${a} a ${b} secondo l’orario`,
     energy: (a: string, guessed: boolean) => `Energia: ${a}${guessed ? ' (unità non indicata, presunta al kWh)' : ''}`,
     time: (x: string) => `Tempo di ricarica: ${x}`,
@@ -472,14 +474,15 @@ export const it: Dict = {
     changeVehicle: 'Cambia veicolo',
     setVehicle: 'Indica il mio veicolo',
     preauth: 'Preautorizzazione',
+    preauthGeneric: 'Preautorizzazione: un importo può essere bloccato e poi sbloccato (non pubblicato dall’operatore).',
     preauthBody: (op: string) =>
       `Con una carta bancaria, la colonnina o la pagina di pagamento può bloccare un importo durante la ricarica (spesso più del costo reale). Viene addebitato solo l’importo reale; il resto viene sbloccato dalla tua banca, di solito entro pochi giorni. ${op} non pubblica questo importo.`,
     idle: (after: number) => `Sosta fatturata dopo la fine della ricarica${after ? ` (oltre ${after} min)` : ''}: Branché ti avvisa prima.`,
     preparedNotice: 'Ricarica preparata: punto e metodo ripresi. Resta solo da pagare.',
     noLink: (fallback: boolean) => `Colonnina e punto identificati dal codice QR. Non contiene un link di pagamento: ${fallback ? 'usa il metodo qui sotto.' : 'cerca un altro codice QR o il lettore di carte sulla colonnina.'}`,
     blockedTitle: 'Nessun pagamento possibile qui da Branché',
-    blockedBody: (op: string, badges: string | null) =>
-      `Per questa colonnina, ${op} non dichiara né pagamento senza account, né lettore di carte, né sito di account utilizzabile${badges ? `; tessere accettate: ${badges}` : ''}. Se hai una tessera, aggiungila in «Le mie tessere».`,
+    blockedBody: (op: string, badges: string | null, badge = true) =>
+      `Per questa colonnina, ${op} non dichiara né pagamento senza account, né lettore di carte, né sito di account utilizzabile${badge && badges ? `; tessere accettate: ${badges}` : ''}.${badge ? ' Se hai una tessera, aggiungila in «Le mie tessere».' : ''}`,
     nearestPayable: (name: string, d: string) => `Colonnina pagabile più vicina: ${name} (${d})`,
     goThere: 'Vai',
     goThereHint: (name: string) => `Percorso verso ${name}`,
@@ -549,15 +552,17 @@ export const it: Dict = {
         cta: `Apri la pagina ${c.op}`,
       };
     },
-    reader: (c: MethodCtx, available: boolean): MethodTexts => {
-      const pt = ptOf(c);
+    reader: (c: MethodCtx, r: ReaderInfo): MethodTexts => {
+      const ptx = ptOf(c);
       const cable = cableOf(c);
+      const maybe = r?.source === 'operator';
+      const card = c.contactless ? 'Avvicina la carta al lettore (logo contactless)' : 'Inserisci la carta nel lettore';
+      // Écran ou étiquette selon la borne (beaucoup de bornes AC n'ont pas d'écran)
+      const pick = c.short ? `Individua ${ptx} sull’etichetta della presa; se la colonnina ha uno schermo, sceglilo lì poi «Pagamento con carta».` : 'Se la colonnina ha uno schermo, scegli la presa poi «Pagamento con carta»; altrimenti individuala dall’etichetta.';
       return {
-        label: c.contactless ? 'Carta contactless sulla colonnina' : 'Carta bancaria sulla colonnina',
-        why: available ? 'Lettore di carte dichiarato dall’operatore (banca dati nazionale IRVE). Né app né account, e Branché non vede la tua carta.' : 'Nessun lettore di carte dichiarato per questa colonnina.',
-        steps: c.dc
-          ? [`Collega ${cable} alla tua auto.`, `Sullo schermo della colonnina, scegli ${pt} poi «Pagamento con carta».`, `${c.contactless ? 'Avvicina la carta al lettore' : 'Inserisci la carta nel lettore'} e segui lo schermo: la ricarica parte dopo la convalida.`]
-          : [`${c.contactless ? 'Avvicina la carta al lettore (logo contactless)' : 'Inserisci la carta nel lettore'} e scegli ${pt} se la colonnina lo chiede.`, 'Attendi la convalida del pagamento sullo schermo.', `Collega ${cable}: la ricarica parte.`],
+        label: `${c.contactless ? 'Carta contactless sulla colonnina' : 'Carta bancaria sulla colonnina'}${maybe ? ' (possibile in alcuni siti)' : ''}`,
+        why: r?.source === 'irve' ? 'Lettore di carte dichiarato per questa colonnina nella banca dati nazionale IRVE. Né app né account, e Branché non vede la tua carta.' : maybe ? `Lettore di carte segnalato da ${c.op} solo in alcuni siti (ricerca Branché${r.refs ? `: ${r.refs}` : ''}), non dichiarato per questa colonnina nella banca dati IRVE: verifica sul posto.` : 'Nessun lettore di carte dichiarato per questa colonnina.',
+        steps: c.dc ? [`Collega ${cable} alla tua auto.`, pick, `${card} e segui le indicazioni della colonnina: la ricarica parte dopo la convalida.`] : [pick, `${card}; attendi la convalida (schermo o spia della colonnina).`, `Collega ${cable}: la ricarica parte.`],
         cta: 'Ho pagato con carta',
       };
     },
@@ -598,6 +603,7 @@ export const it: Dict = {
     imitates: (n: string, d: string) => `Questo dominio imita quello di ${n} (${d}).`,
     unknownDomain: 'Dominio assente dalla banca dati degli operatori.',
     officialPay: (n: string) => `Indirizzo di pagamento ufficiale pubblicato da ${n}.`,
+    officialSite: (n: string) => `Dominio del sito ufficiale di ${n} (fonti verificate da Branché).`,
     otherPay: (n: string, st: string) => `Pagina di pagamento ufficiale di ${n}, ma questa colonnina risulta di ${st}: controlla il nome indicato sulla colonnina.`,
     evseUnknown: 'Identificativo assente dalla banca dati nazionale delle colonnine (o connessione assente).',
   },
@@ -639,6 +645,7 @@ export const it: Dict = {
     reader2027: 'Lettore di carte: obbligatorio su tutte le colonnine veloci (≥ 50 kW) dal 2027.',
     readerNone: 'Nessun lettore di carte dichiarato per questa colonnina.',
     toneOfficialPay: 'Pagina di pagamento ufficiale dell’operatore',
+    toneOfficialSite: 'Sito ufficiale dell’operatore',
     toneKnownPay: 'Pagina ufficiale di un altro operatore',
     otherPoint: (scanned: string, chosen: string) => `Questo codice QR riguarda il punto …${scanned}, non il punto …${chosen} che hai scelto.`,
     otherStation: (name: string) => `Questo codice QR riguarda un’altra colonnina: ${name}.`,
@@ -681,9 +688,9 @@ export const it: Dict = {
     stateAccount: (op: string) => `Avvio con il tuo account ${op}`,
     stateReader: 'Paga sul lettore della colonnina',
     statePage: (op: string) => `Pagamento a ${op}`,
-    bodyBadge: 'Segui lo schermo della colonnina, poi collega. Branché segue la ricarica qui.',
+    bodyBadge: 'Passa la tessera sul lettore, segui lo schermo se presente, poi collega. Branché segue la ricarica qui.',
     bodyAccount: (op: string) => `Avvia la ricarica sulla pagina di ${op}, collega se non l’hai già fatto, poi torna qui.`,
-    bodyReader: (short: string | null) => `Segui lo schermo della colonnina: carta bancaria${short ? `, punto …${short}` : ''}, poi collegamento. Branché segue la ricarica qui.`,
+    bodyReader: (short: string | null) => `Paga con carta sul lettore${short ? ` (punto …${short}, sull’etichetta o sullo schermo)` : ''}, poi collega. Branché segue la ricarica qui.`,
     bodyPage: (op: string) => `Completa il pagamento sulla pagina di ${op}, collega se non l’hai già fatto, poi torna qui.`,
     started: 'La ricarica è partita',
     startedHint: 'Avvia il monitoraggio in diretta e i promemoria di fine ricarica',

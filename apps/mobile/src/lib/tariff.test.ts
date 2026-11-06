@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeTariff, parseTariff, ttcFactor } from './tariff';
+import { describeTariff, freeCredible, parseTariff, planTariff, stationTariff, ttcFactor } from './tariff';
 
 // Textes RÉELS du champ `tarification` de la base IRVE (site/data/tiles/*.json, novembre 2026), copiés tels quels.
 type Case = [string, Record<string, unknown>];
@@ -140,5 +140,37 @@ describe('describeTariff / ttcFactor', () => {
     expect(describeTariff(parseTariff('0,45'))[0]).toBe('Énergie : 0,45 €/kWh (unité non précisée, supposée au kWh)');
     expect(describeTariff(parseTariff('0,5€/kWh entre 6h et 21h, 0,35€/kWh entre 21h et 6h'))[0]).toBe('Énergie : 0,35 €/kWh à 0,50 €/kWh selon l’heure');
     expect(describeTariff(parseTariff('3.75€ par heure d\'occupation hors charge, 0.3€ par kwh')).join('|')).toContain('(3,75 €/h), dès la fin de charge');
+  });
+});
+
+describe('gratuité déclarée : crédible seulement < 50 kW et sans moyen de paiement', () => {
+  it.each([
+    ['300 kW, badge seul (TotalEnergies Massy, réelle)', { free: true, kw: 300, pay: ['badge'] }],
+    ['50 kW pile', { free: true, kw: 50, pay: [] }],
+    ['22 kW, CB déclarée', { free: true, kw: 22, pay: ['cb'] }],
+    ['22 kW, paiement à l’acte', { free: true, kw: 22, pay: ['acte', 'badge'] }],
+    ['22 kW, QR dynamique', { free: true, kw: 22, pay: ['qr_dynamique'] }],
+    ['texte « Gratuit » sur 150 kW', { kw: 150, pay: [] }],
+  ] as [string, { free?: boolean; kw: number; pay: string[] }][])('%s → « à vérifier », pas gratuit', (_l, ctx) => {
+    const t = parseTariff(ctx.free ? '' : 'Gratuit', ctx);
+    expect(t.kind).not.toBe('free');
+    expect(t.freeDoubtful).toBe(true);
+    expect(describeTariff(t)).toEqual(['Déclarée gratuite dans la base nationale, à vérifier.']);
+  });
+  it('22 kW, badge seul ou rien : gratuit crédible', () => {
+    expect(parseTariff('', { free: true, kw: 22, pay: ['badge'] }).kind).toBe('free');
+    expect(parseTariff('', { free: true, kw: 7.4, pay: [] }).kind).toBe('free');
+    expect(freeCredible({ kw: 49.9, pay: ['badge'] })).toBe(true);
+  });
+  it('un tarif publié l’emporte (ni gratuit, ni « à vérifier »)', () => {
+    const t = parseTariff('0,39 €/kWh', { free: true, kw: 150, pay: ['cb'] });
+    expect(t).toMatchObject({ kind: 'priced', perKwh: 0.39 });
+    expect(t.freeDoubtful).toBeUndefined();
+  });
+  it('stationTariff / planTariff appliquent la même règle', () => {
+    expect(stationTariff({ prix: '', free: true, kw: 300, pay: ['badge'] }).freeDoubtful).toBe(true);
+    expect(planTariff({ tariffRaw: '', free: true, stationKw: 300, pointKw: 22, pay: ['badge'] }).freeDoubtful).toBe(true);
+    // Ancien plan sans puissance de station : puissance du point
+    expect(planTariff({ tariffRaw: '', free: true, pointKw: 22 }).kind).toBe('free');
   });
 });

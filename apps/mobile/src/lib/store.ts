@@ -2,7 +2,7 @@
 // que la page de paiement est ouverte ou pendant la charge) et reprise à la réouverture.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { MethodId } from './history';
-import type { Plug, Station } from './stations';
+import type { PayMethod, Plug, Station } from './stations';
 
 /** Ce que l'utilisateur a choisi dans le parcours « Recharger » (point, méthode, véhicule, tarif). */
 export interface ChargePlan {
@@ -17,6 +17,9 @@ export interface ChargePlan {
   /** Texte IRVE `tarification` (analysé à l'affichage) et gratuité. */
   tariffRaw?: string;
   free?: boolean;
+  /** Puissance max. de la station et moyens de paiement IRVE : pour juger la gratuité déclarée (tariff.ts freeCredible). */
+  stationKw?: number;
+  pay?: PayMethod[];
 }
 
 export interface DirectCharge {
@@ -36,6 +39,8 @@ export interface DirectCharge {
   autoEnded?: boolean;
   /** Compte opérateur ouvert pour démarrer : à confirmer par l'utilisateur au retour (jamais supposé connecté). */
   accountAsk?: { key: string; name: string };
+  /** Le reçu (fin automatique) n'a pas pu être écrit dans l'historique : affiché, « Enregistrer » réessaie. */
+  saveFailed?: boolean;
 }
 
 const KEY = 'branche.direct.v1';
@@ -43,6 +48,8 @@ let stations: Station[] = [];
 let current: Station | null = null;
 let direct: DirectCharge | null = null;
 let plan: ChargePlan | null = null;
+let persistFailed = false;
+const persistListeners = new Set<() => void>();
 
 export const store = {
   setStations: (list: Station[]) => {
@@ -60,7 +67,18 @@ export const store = {
   plan: () => plan,
   setDirect: (d: DirectCharge | null) => {
     direct = d;
-    (d ? AsyncStorage.setItem(KEY, JSON.stringify(d)) : AsyncStorage.removeItem(KEY)).catch(() => undefined);
+    persistFailed = false;
+    (d ? AsyncStorage.setItem(KEY, JSON.stringify(d)) : AsyncStorage.removeItem(KEY)).catch(() => {
+      // Recharge non sauvegardée sur l'appareil (stockage plein) : signalée à l'écran de suivi
+      persistFailed = true;
+      persistListeners.forEach((l) => l());
+    });
+  },
+  /** La dernière sauvegarde de la recharge en cours a échoué (l'app fermée la perdrait). */
+  directPersistFailed: () => persistFailed,
+  onDirectPersistError(l: () => void) {
+    persistListeners.add(l);
+    return () => void persistListeners.delete(l);
   },
   direct: () => direct,
   async loadDirect(): Promise<DirectCharge | null> {

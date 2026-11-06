@@ -845,7 +845,7 @@
       },
       "adhocWeb": null,
       "cardReader": true,
-      "appOnly": false,
+      "appOnly": true,
       "roamingBadgesAccepted": [
         "Chargemap Pass",
         "cartes eMSP sur une sélection de Superchargeurs"
@@ -856,7 +856,7 @@
         "https://www.tesla-mag.com/?p=47457",
         "https://blog.chargemap.com/?p=12003"
       ],
-      "notes": "Non-Tesla : appli Tesla sur V2/V3 ; terminal CB sur V4 / sites sélectionnés. Sources divergentes sur les badges (Chargemap : compatible depuis 2023 ; Tesla Mag : non).",
+      "notes": "appOnly : page Tesla « Supercharging for other EVs » — démarrage et paiement des non-Tesla par l'appli Tesla ; le paiement « à l'acte » IRVE désigne cette appli, pas un QR web. cardReader : terminal CB sur V4 / sites sélectionnés seulement, non confirmé site par site. Sources divergentes sur les badges (Chargemap : compatible depuis 2023 ; Tesla Mag : non).",
       "inRegistry": true,
       "stations": 288
     },

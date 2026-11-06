@@ -35,8 +35,20 @@ export interface PayOption {
   url?: string;
   /** Identifiant du point à saisir sur la page de l'opérateur (aucun gabarit {evse} publié). */
   copyId?: string;
-  /** QR code « éventuel », non déclaré par l'opérateur : ne suffit pas à dire la borne payable. */
+  /**
+   * Non confirmé pour cette borne (QR code « éventuel », lecteur CB signalé par l'opérateur « sur certains sites ») :
+   * jamais « Recommandé », ne suffit pas à dire la borne payable.
+   */
   speculative?: true;
+}
+
+/** Origine d'un lecteur de carte : base IRVE (borne par borne) ou recherche au niveau de l'opérateur (portails). */
+export type ReaderSource = 'irve' | 'operator' | null;
+
+/** Domaines des sources d'un portail (« tesla.com, tesla-mag.com ») : le motif affiché cite la source exacte. */
+export function sourceHosts(sources: string[] | null | undefined): string | null {
+  const hosts = [...new Set((sources ?? []).map((u) => /^https?:\/\/([^/\s?#]+)/i.exec(u)?.[1]?.toLowerCase().replace(/^www\./, '')).filter((h): h is string => !!h))];
+  return hosts.length ? hosts.slice(0, 3).join(', ') : null;
 }
 
 export interface PayContext {
@@ -60,9 +72,13 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
   const dc = isDc(kw, plugs);
   const plugName = plugs.filter((p) => p !== 'ef').map((p) => plugLabel(p)).join(tr().guidance.or);
   const appOnlyPortal = portal?.appOnly === true;
-  // Opérateur « appli seule » (source officielle) : `paiement_cb` IRVE désigne alors la carte enregistrée dans son appli,
-  // pas un lecteur sur la borne. Un lecteur confirmé par le portail (cardReader) reste proposé.
-  const reader = portal?.cardReader === true || (!appOnlyPortal && (s.pay.includes('cb') || s.pay.includes('sans_contact')));
+  // Lecteur de carte : seule la base IRVE le déclare borne par borne. Opérateur « appli seule » (source officielle) :
+  // `paiement_cb` IRVE désigne alors la carte enregistrée dans son appli, pas un lecteur sur la borne.
+  const reader = !appOnlyPortal && (s.pay.includes('cb') || s.pay.includes('sans_contact'));
+  // `cardReader` du portail = recherche au niveau de l'opérateur (« sur certains sites »), jamais confirmé site par site :
+  // « possible sur certains sites », jamais recommandé ; non proposé chez un opérateur « appli seule » (Tesla).
+  const readerMaybe = !reader && portal?.cardReader === true;
+  const readerSource: ReaderSource = reader ? 'irve' : readerMaybe ? 'operator' : null;
   const contactless = s.pay.includes('sans_contact');
   const mc: MethodCtx = { op, short: point?.short ?? null, plugs: plugName, stationCable: dc || !!s.cab, dc, contactless };
   const M = tr().methods;
@@ -74,11 +90,14 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
   const declaredAdHoc = webAdHoc || acteOnly;
   // adhocWeb : URL seule (éventuellement avec {evse}) ; un texte descriptif signale seulement un paiement ponctuel
   const adhocRaw = typeof portal?.adhocWeb === 'string' && /^https:\/\/[^\s{}]+(\{evse\}[^\s{}]*)?$/.test(portal.adhocWeb) ? portal.adhocWeb : null;
-  const portalAdhocUrl = adhocRaw ? (adhocRaw.includes('{evse}') ? (point ? adhocRaw.replace('{evse}', encodeURIComponent(point.id)) : null) : adhocRaw) : null;
+  const startUrl = webStartUrl(portal, point?.id);
+  // adhocWeb descriptif (« https://chge.eu (saisie de l'ID…) », « QR code -> page CB ») : page de démarrage sourcée
+  // (webStart, https) en lien de secours sans QR, avec l'identifiant du point à copier (Virta, ENGIE, Qwello, Ionity).
+  const startFallback = portal?.adhocWeb && !appOnlyPortal && startUrl && /^https:\/\/[^\s{}]+$/.test(startUrl) ? startUrl : null;
+  const portalAdhocUrl = adhocRaw ? (adhocRaw.includes('{evse}') ? (point ? adhocRaw.replace('{evse}', encodeURIComponent(point.id)) : null) : adhocRaw) : startFallback;
   const pointId = point?.id;
   const link = directPayUrl(s, ops, point?.id) ?? portalAdhocUrl;
   const account = s.ok ? ctx.wallet?.accounts.find((a) => a.operatorKey === s.ok) : undefined;
-  const startUrl = webStartUrl(portal, point?.id);
   const myBadges = ctx.wallet?.badges ?? [];
   const accepted = acceptedBadges(myBadges, portal?.roamingBadgesAccepted);
   const badgeMaybe = !accepted.length && !portal?.roamingBadgesAccepted?.length && s.pay.includes('badge') && myBadges.length > 0;
@@ -123,27 +142,34 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
     },
   });
   ranked.push({
-    rank: 2,
+    rank: reader ? 2 : 4.8,
     o: {
       id: 'reader',
-      ...M.reader(mc, reader),
-      available: reader,
+      ...M.reader(mc, { source: readerSource, refs: readerSource === 'operator' ? sourceHosts(portal?.sources) : null }),
+      available: reader || (readerMaybe && !appOnlyPortal),
       order,
+      ...(readerMaybe ? { speculative: true as const } : {}),
     },
   });
   const badgeName = accepted[0] ?? myBadges[0] ?? null;
-  ranked.push({
-    rank: accepted.length ? 3 : 4.5,
-    o: {
-      id: 'badge',
-      ...M.badge(mc, { accepted, maybe: badgeMaybe, name: badgeName }),
-      available: accepted.length > 0 || badgeMaybe,
-      order,
-    },
-  });
+  // Badge mentionné seulement si l'IRVE le déclare pour la borne, ou si l'un de vos badges figure dans la liste sourcée
+  if (badgeMentioned(s) || accepted.length) {
+    ranked.push({
+      rank: accepted.length ? 3 : 4.5,
+      o: {
+        id: 'badge',
+        ...M.badge(mc, { accepted, maybe: badgeMaybe, name: badgeName }),
+        available: accepted.length > 0 || badgeMaybe,
+        order,
+      },
+    });
+  }
   ranked.sort((a, b) => a.rank - b.rank);
   return [...ranked.filter((r) => r.o.available), ...ranked.filter((r) => !r.o.available)].map((r) => r.o);
 }
+
+/** L'IRVE déclare un badge pour cette borne : seule condition pour en parler (textes, « Mes badges »). */
+export const badgeMentioned = (s: Pick<Station, 'pay'>) => s.pay.includes('badge');
 
 /** Aucun moyen de payer depuis Branché ici (seulement l'appli de l'opérateur ou un badge qu'on n'a pas). */
 export function appOnly(options: PayOption[]): boolean {

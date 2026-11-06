@@ -20,10 +20,10 @@ import type { MethodId } from '../lib/history';
 import type { Operator } from '../lib/qr';
 import { displayName, loadAround, loadOperators, nearest, type Station } from '../lib/stations';
 import { store } from '../lib/store';
-import { parseTariff } from '../lib/tariff';
+import { stationTariff } from '../lib/tariff';
 import { compatible, loadVehicle, saveVehicle, type Vehicle } from '../lib/vehicle';
 import { loadWallet, type Wallet } from '../lib/accounts';
-import { appOnly, badgeNames, nearestPayable } from '../lib/methods';
+import { appOnly, badgeMentioned, badgeNames, nearestPayable } from '../lib/methods';
 import { loadPortals, preauthMaxOf, type Portals } from '../lib/portals';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { Icon } from '../components/Icon';
@@ -125,7 +125,7 @@ export default function Recharger() {
   const point: ChargePoint | null = (pointId && station ? pointById(station, pointId) : null) ?? (choosing ? null : autoPoint);
   const step: 'point' | 'pay' = !point || choosing ? 'point' : 'pay';
 
-  const tariff = useMemo(() => parseTariff(station?.prix, { free: station?.free }), [station]);
+  const tariff = useMemo(() => stationTariff(station ?? {}), [station]);
   const est = useMemo(
     () => (point ? estimateCharge({ vehicle: vehicle ?? null, socPercent: soc, pointKw: point.kw, plugs: point.plugs, tariff }) : null),
     [point, vehicle, soc, tariff],
@@ -196,6 +196,8 @@ export default function Recharger() {
       vehicle: vehicle ? { name: vehicle.name, batteryKWh: vehicle.batteryKWh, maxDcKW: vehicle.maxDcKW, maxAcKW: vehicle.maxAcKW } : null,
       tariffRaw: station.prix,
       free: station.free,
+      stationKw: station.kw,
+      pay: station.pay,
     });
     const plan = store.plan()!;
     if (preparing) {
@@ -393,7 +395,7 @@ export default function Recharger() {
             <View style={[styles.card, { borderColor: colors.busy }]}>
               <Text style={styles.cardTitle} accessibilityRole="header">{R.blockedTitle}</Text>
               <Text style={styles.p}>
-                {R.blockedBody(opName, badgeNames(portal?.roamingBadgesAccepted).join(', ') || null)}
+                {R.blockedBody(opName, badgeNames(portal?.roamingBadgesAccepted).join(', ') || null, badgeMentioned(station))}
               </Text>
               {alternative ? (
                 <>
@@ -412,7 +414,7 @@ export default function Recharger() {
               ) : (
                 <Text style={styles.small}>{R.noPayableNear}</Text>
               )}
-              <Button label={R.myBadges} variant="ghost" onPress={() => router.push('/comptes')} />
+              {badgeMentioned(station) ? <Button label={R.myBadges} variant="ghost" onPress={() => router.push('/comptes')} /> : null}
             </View>
           ) : null}
           {/* Méthode recommandée + mode d'emploi */}
@@ -422,7 +424,7 @@ export default function Recharger() {
                 <Text style={[styles.cardTitle, { flexShrink: 1 }]} accessibilityRole="header">
                   {chosen.label}
                 </Text>
-                {chosen.id === (fallback ?? options[0])?.id ? <Tag>{t.common.recommended}</Tag> : null}
+                {chosen.id === (fallback ?? options[0])?.id && !chosen.speculative ? <Tag>{t.common.recommended}</Tag> : null}
               </View>
               <Text style={styles.p}>{chosen.why}</Text>
               <Text style={styles.orderText}>{chosen.order === 'plug-first' ? R.plugFirst : R.payFirst}</Text>

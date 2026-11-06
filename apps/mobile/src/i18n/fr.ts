@@ -1,5 +1,5 @@
 // Dictionnaire source (français). Toute clé ajoutée ici doit l'être dans chaque langue (erreur TypeScript sinon).
-import type { InstrParts, MethodCtx, MethodTexts } from './types';
+import type { InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
 
 const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const s = (n: number) => (n > 1 ? 's' : '');
@@ -36,6 +36,7 @@ export const fr = {
     recommended: 'Recommandé',
     powerUnknown: 'Puissance inconnue',
     unknownPrice: 'Prix inconnu',
+    saveFailed: 'Enregistrement impossible sur ce téléphone (stockage plein ou indisponible) : réessayez.',
     notProvided: 'Non renseigné',
     operatorFallback: 'l’opérateur',
     stationFallback: 'Borne de recharge',
@@ -138,7 +139,7 @@ export const fr = {
     fast: 'Rapide',
     fastA11y: 'Rapide, 50 kW et plus',
     open: 'Accès libre',
-    resume: (op: string) => `Recharge en cours chez ${op} · Reprendre`,
+    resume: (op: string, started = true) => (started ? `Recharge en cours chez ${op} · Reprendre` : `Paiement en attente chez ${op} · Reprendre`),
     locDenied: 'Position non autorisée : déplacez la carte vers votre zone ou autorisez la localisation dans les réglages.',
     dataError: 'Impossible de charger les bornes. Vérifiez votre connexion, puis réessayez.',
     locating: 'Localisation en cours…',
@@ -224,6 +225,7 @@ export const fr = {
   },
   tariff: {
     free: 'Gratuit selon l’opérateur.',
+    freeDoubtful: 'Déclarée gratuite dans la base nationale, à vérifier.',
     energyRange: (a: string, b: string) => `Énergie : ${a} à ${b} selon l’heure`,
     energy: (a: string, guessed: boolean) => `Énergie : ${a}${guessed ? ' (unité non précisée, supposée au kWh)' : ''}`,
     time: (x: string) => `Temps de charge : ${x}`,
@@ -475,6 +477,7 @@ export const fr = {
     changeVehicle: 'Changer de véhicule',
     setVehicle: 'Préciser mon véhicule',
     preauth: 'Pré-autorisation',
+    preauthGeneric: 'Pré-autorisation : un montant peut être bloqué puis libéré (non publié par l’opérateur).',
     preauthBody: (op: string) =>
       `Avec une carte bancaire, la borne ou la page de paiement peut bloquer un montant le temps de la recharge (souvent plus que le coût réel). Seul le montant réel est débité ; le reste est libéré par votre banque, en général sous quelques jours. ${op} ne publie pas ce montant.`,
     idle: (after: number) => `Occupation facturée après la fin de charge${after ? ` (au-delà de ${after} min)` : ''} : Branché vous prévient avant.`,
@@ -482,8 +485,8 @@ export const fr = {
     noLink: (fallback: boolean) =>
       `Borne et point identifiés par le QR code. Il ne contient pas de lien de paiement : ${fallback ? 'utilisez la méthode ci-dessous.' : 'cherchez un autre QR code ou le lecteur de carte sur la borne.'}`,
     blockedTitle: 'Pas de paiement possible dans Branché ici',
-    blockedBody: (op: string, badges: string | null) =>
-      `Pour cette borne, ${op} ne déclare ni paiement sans compte, ni lecteur de carte, ni site de compte utilisable${badges ? ` ; badges acceptés : ${badges}` : ''}. Si vous avez un badge, ajoutez-le dans « Mes badges ».`,
+    blockedBody: (op: string, badges: string | null, badge = true) =>
+      `Pour cette borne, ${op} ne déclare ni paiement sans compte, ni lecteur de carte, ni site de compte utilisable${badge && badges ? ` ; badges acceptés : ${badges}` : ''}.${badge ? ' Si vous avez un badge, ajoutez-le dans « Mes badges ».' : ''}`,
     nearestPayable: (name: string, d: string) => `Borne payable la plus proche : ${name} (${d})`,
     goThere: 'Y aller',
     goThereHint: (name: string) => `Itinéraire vers ${name}`,
@@ -557,25 +560,17 @@ export const fr = {
         cta: `Ouvrir la page ${c.op}`,
       };
     },
-    reader: (c: MethodCtx, available: boolean): MethodTexts => {
-      const pt = ptOf(c);
+    reader: (c: MethodCtx, r: ReaderInfo): MethodTexts => {
+      const ptx = ptOf(c);
       const cable = cableOf(c);
+      const maybe = r?.source === 'operator';
+      const card = c.contactless ? 'Approchez votre carte du lecteur (logo sans contact)' : 'Insérez votre carte dans le lecteur';
+      // Écran ou étiquette selon la borne (beaucoup de bornes AC n'ont pas d'écran)
+      const pick = c.short ? `Repérez ${ptx} sur l’étiquette de la prise ; si la borne a un écran, choisissez-le puis « Paiement par carte ».` : 'Si la borne a un écran, choisissez la prise puis « Paiement par carte » ; sinon, repérez la prise à son étiquette.';
       return {
-        label: c.contactless ? 'Carte bancaire sans contact sur la borne' : 'Carte bancaire sur la borne',
-        why: available
-          ? 'Lecteur de carte déclaré par l’opérateur (base nationale IRVE). Ni appli ni compte, et Branché ne voit pas votre carte.'
-          : 'Aucun lecteur de carte déclaré pour cette borne.',
-        steps: c.dc
-          ? [
-              `Branchez ${cable} sur votre voiture.`,
-              `Sur l’écran de la borne, choisissez ${pt} puis « Paiement par carte ».`,
-              `${c.contactless ? 'Approchez votre carte du lecteur' : 'Insérez votre carte dans le lecteur'} et suivez l’écran : la charge démarre après validation.`,
-            ]
-          : [
-              `${c.contactless ? 'Approchez votre carte du lecteur (logo sans contact)' : 'Insérez votre carte dans le lecteur'} et choisissez ${pt} si la borne le demande.`,
-              'Attendez la validation du paiement à l’écran.',
-              `Branchez ${cable} : la charge démarre.`,
-            ],
+        label: `${c.contactless ? 'Carte bancaire sans contact sur la borne' : 'Carte bancaire sur la borne'}${maybe ? ' (possible sur certains sites)' : ''}`,
+        why: r?.source === 'irve' ? 'Lecteur de carte déclaré pour cette borne dans la base nationale IRVE. Ni appli ni compte, et Branché ne voit pas votre carte.' : maybe ? `Lecteur de carte signalé par ${c.op} sur certains sites seulement (recherche Branché${r.refs ? ` : ${r.refs}` : ''}), non déclaré pour cette borne dans la base IRVE : vérifiez sur place.` : 'Aucun lecteur de carte déclaré pour cette borne.',
+        steps: c.dc ? [`Branchez ${cable} sur votre voiture.`, pick, `${card} et suivez les indications de la borne : la charge démarre après validation.`] : [pick, `${card} ; attendez la validation (écran ou voyant de la borne).`, `Branchez ${cable} : la charge démarre.`],
         cta: 'J’ai payé par carte',
       };
     },
@@ -616,6 +611,7 @@ export const fr = {
     imitates: (n: string, d: string) => `Ce domaine imite celui de ${n} (${d}).`,
     unknownDomain: 'Domaine absent de la base des opérateurs.',
     officialPay: (n: string) => `Adresse de paiement officielle publiée par ${n}.`,
+    officialSite: (n: string) => `Domaine du site officiel de ${n} (sources vérifiées par Branché).`,
     otherPay: (n: string, st: string) => `Page de paiement officielle de ${n}, alors que cette borne est indiquée chez ${st} : vérifiez le nom affiché sur la borne.`,
     evseUnknown: 'Identifiant absent de la base nationale des bornes (ou connexion coupée).',
   },
@@ -659,6 +655,7 @@ export const fr = {
     reader2027: 'Lecteur de carte : obligatoire sur toutes les bornes rapides (≥ 50 kW) à partir de 2027.',
     readerNone: 'Aucun lecteur de carte déclaré pour cette borne.',
     toneOfficialPay: 'Page de paiement officielle de l’opérateur',
+    toneOfficialSite: 'Site officiel de l’opérateur',
     toneKnownPay: 'Page officielle d’un autre opérateur',
     otherPoint: (scanned: string, chosen: string) => `Ce QR code concerne le point …${scanned}, pas le point …${chosen} que vous avez choisi.`,
     otherStation: (name: string) => `Ce QR code concerne une autre borne : ${name}.`,
@@ -701,9 +698,9 @@ export const fr = {
     stateAccount: (op: string) => `Démarrage avec votre compte ${op}`,
     stateReader: 'Payez sur le lecteur de la borne',
     statePage: (op: string) => `Paiement chez ${op}`,
-    bodyBadge: 'Suivez l’écran de la borne, puis branchez. Branché suit la recharge ici.',
+    bodyBadge: 'Passez votre badge sur le lecteur, suivez l’écran s’il y en a un, puis branchez. Branché suit la recharge ici.',
     bodyAccount: (op: string) => `Lancez la charge sur la page de ${op}, branchez si ce n’est pas déjà fait, puis revenez ici.`,
-    bodyReader: (short: string | null) => `Suivez l’écran de la borne : carte bancaire${short ? `, point …${short}` : ''}, puis branchement. Branché suit la recharge ici.`,
+    bodyReader: (short: string | null) => `Payez par carte sur le lecteur${short ? ` (point …${short}, sur l’étiquette ou à l’écran)` : ''}, puis branchez. Branché suit la recharge ici.`,
     bodyPage: (op: string) => `Finalisez le paiement sur la page de ${op}, branchez si ce n’est pas déjà fait, puis revenez ici.`,
     started: 'La charge a démarré',
     startedHint: 'Lance le suivi en direct et les rappels de fin de charge',

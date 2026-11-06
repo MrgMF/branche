@@ -68,9 +68,12 @@ export function useSettings(): Settings {
 }
 
 /** Efface les données locales : historique, véhicule, comptes et badges, destinations récentes, recharge préparée ou suivie. */
+/** Lève HistorySaveError si l'historique n'a pas pu être effacé (le reste est effacé quand même) : à afficher. */
 export async function resetLocalData(): Promise<void> {
-  await Promise.all([clearHistory(), saveVehicle(null), clearWallet(), clearRecents(), clearPrepared()]);
+  const res = await Promise.allSettled([clearHistory(), saveVehicle(null), clearWallet(), clearRecents(), clearPrepared()]);
   store.setDirect(null);
   store.setPlan(null);
   await AsyncStorage.removeItem('branche.vehicle.skipped.v1').catch(() => undefined);
+  const failed = res.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+  if (failed) throw failed.reason;
 }

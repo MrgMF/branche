@@ -9,6 +9,11 @@ export interface Operator {
   stations?: number;
   /** Hôtes des pages de paiement/démarrage officielles (operator-portals.json, URL sourcées), publiés par le pipeline. */
   payDomains?: string[];
+  /**
+   * Domaines enregistrables des sites de l'opérateur présents dans ses URL sourcées (alizecharge.com, reveocharge.com…),
+   * hors sites tiers (presse, forums) : domaines connus de l'opérateur, jamais traités comme des sosies.
+   */
+  siteDomains?: string[];
 }
 
 export type Verdict = 'official' | 'known-operator' | 'other-operator' | 'payment-platform' | 'unknown' | 'dangerous';
@@ -21,8 +26,11 @@ export interface QrResult {
   domain?: string;
   host?: string;
   operatorKey?: string;
-  /** D'où vient la confiance : domaine déclaré dans l'IRVE, ou page de paiement officielle sourcée (payDomains). */
-  source?: 'irve' | 'portal';
+  /**
+   * D'où vient la confiance : domaine déclaré dans l'IRVE, page de paiement officielle sourcée (payDomains),
+   * ou site officiel de l'opérateur présent dans ses sources (siteDomains).
+   */
+  source?: 'irve' | 'portal' | 'site';
   reasons: string[];
 }
 
@@ -147,18 +155,21 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
     };
   }
 
-  // 2. Domaine déclaré dans la base IRVE (celui de l'opérateur de la borne d'abord : réseaux partageant un domaine)
-  const owns = (o: Operator) => (isDevHost ? o.domains.includes(u.host.toLowerCase()) : o.domains.includes(domain));
+  // 2. Domaine déclaré dans la base IRVE, ou site officiel sourcé (celui de l'opérateur de la borne d'abord : réseaux
+  // partageant un domaine)
+  const irveOwns = (o: Operator) => (isDevHost ? o.domains.includes(u.host.toLowerCase()) : o.domains.includes(domain));
+  const owns = (o: Operator) => irveOwns(o) || (!isDevHost && (o.siteDomains ?? []).includes(domain));
   const owner = stationOp && owns(stationOp) ? stationOp : operators.find(owns);
 
   if (owner) {
     if (!stationOperatorKey || owner.key === stationOperatorKey) {
+      const irve = irveOwns(owner);
       return {
         ...base,
         verdict: stationOperatorKey ? 'official' : 'known-operator',
         operatorKey: owner.key,
-        source: 'irve',
-        reasons: [tr().qr.official(owner.names[0])],
+        source: irve ? 'irve' : 'site',
+        reasons: [irve ? tr().qr.official(owner.names[0]) : tr().qr.officialSite(owner.names[0])],
       };
     }
     return {
@@ -172,7 +183,7 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
   // Domaines enregistrables des pages officielles (wa.qwello.eu → qwello.eu) : jamais traités comme des sosies
   // (autre page du même site : « non vérifié », pas « bloqué »). Ils servent aussi de référence anti-sosie (qwe11o.eu, xfm.fr.evil.site…).
   const trusted = operators.some((o) => (o.payDomains ?? []).some((d) => registrableDomain(d) === domain));
-  const known = (o: Operator) => [...o.domains, ...(o.payDomains ?? []).map(registrableDomain)];
+  const known = (o: Operator) => [...o.domains, ...(o.siteDomains ?? []), ...(o.payDomains ?? []).map(registrableDomain)];
 
   // Domaine connu caché dans le sous-domaine (izivia.com.evil.site) ou dans le chemin (evil.com/izivia.com)
   const sub = host.length > domain.length ? host.slice(0, host.length - domain.length - 1) : '';

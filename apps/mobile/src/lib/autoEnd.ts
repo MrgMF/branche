@@ -5,7 +5,7 @@ import { addRecord, type ChargeRecord } from './history';
 import { scheduleAlerts, cancelAlerts } from './notify';
 import { distanceKm } from './stations';
 import type { DirectCharge } from './store';
-import { parseTariff } from './tariff';
+import { planTariff } from './tariff';
 import { tr } from '../i18n';
 
 export const AUTO_END_M = 150;
@@ -45,7 +45,7 @@ export function recordOf(d: DirectCharge, endedAt: number, extra: Partial<Charge
     socPercent: d.plan?.socPercent ?? null,
     pointKw: d.plan?.pointKw ?? 0,
     plugs: d.plan?.plugs ?? (['t2'] as const).slice(),
-    tariff: parseTariff(d.plan?.tariffRaw, { free: d.plan?.free }),
+    tariff: planTariff(d.plan),
   };
   const p = progressAt(input, (endedAt - started) / 60_000);
   return {
@@ -73,7 +73,11 @@ export function recordOf(d: DirectCharge, endedAt: number, extra: Partial<Charge
 export async function autoFinish(d: DirectCharge, now = Date.now()): Promise<DirectCharge> {
   const endedAt = Math.min(now, d.lastNearAt ?? now);
   await cancelAlerts(d.alertIds);
-  await addRecord(recordOf(d, endedAt));
+  // Échec d'écriture de l'historique : la recharge le garde (saveFailed) et l'écran l'affiche ; « Enregistrer » réessaie.
+  const saved = await addRecord(recordOf(d, endedAt)).then(
+    () => true,
+    () => false,
+  );
   await scheduleAlerts([{ at: now + 1500, title: tr().recharge.autoEndTitle, body: tr().recharge.autoEndBody(d.station.name) }]);
-  return { ...d, endedAt, autoEnded: true, alertIds: [] };
+  return { ...d, endedAt, autoEnded: true, alertIds: [], ...(saved ? {} : { saveFailed: true }) };
 }

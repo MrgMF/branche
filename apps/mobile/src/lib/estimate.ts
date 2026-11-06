@@ -39,6 +39,8 @@ export interface Estimate {
   partial: boolean;
   unknownPrice: boolean;
   free: boolean;
+  /** Gratuité déclarée mais non crédible (≥ 50 kW ou moyen de paiement) : coût inconnu, « à vérifier ». */
+  freeDoubtful: boolean;
 }
 
 export const DEFAULT_SOC = 20;
@@ -110,6 +112,7 @@ export function estimateCharge(i: EstimateInput): Estimate {
     partial: t.kind === 'priced' && t.perKwh === undefined && !t.perMin && !t.perMinLater && !t.session,
     unknownPrice: !c,
     free: t.kind === 'free',
+    freeDoubtful: !!t.freeDoubtful,
   };
 }
 

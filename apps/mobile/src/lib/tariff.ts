@@ -28,6 +28,29 @@ export interface Tariff {
   /** Informations utiles quand aucun montant n'est publié. */
   notes: string[];
   raw: string;
+  /** Gratuité déclarée (champ IRVE `gratuit` ou texte) mais contredite par la borne : ≥ 50 kW ou moyen de paiement déclaré. */
+  freeDoubtful?: true;
+}
+
+/** Données de la borne qui permettent de juger une gratuité déclarée. */
+export interface FreeContext {
+  /** Gratuité déclarée dans la base IRVE (champ `gratuit`). */
+  free?: boolean;
+  /** Puissance maximale de la station (kW). */
+  kw?: number;
+  /** Moyens de paiement déclarés dans l'IRVE. */
+  pay?: readonly string[];
+}
+
+// Un moyen de paiement déclaré contredit une recharge gratuite (le badge sert souvent d'accès, pas de paiement : exclu).
+const PAYING = new Set(['cb', 'sans_contact', 'acte', 'qr_dynamique', 'site_web', 'liquide']);
+
+/**
+ * Gratuité crédible : ni charge rapide (≥ 50 kW, jamais gratuite en pratique), ni moyen de paiement déclaré.
+ * Sinon la mention IRVE est affichée « à vérifier » et le coût reste inconnu.
+ */
+export function freeCredible(c: Pick<FreeContext, 'kw' | 'pay'>): boolean {
+  return !((c.kw ?? 0) >= 50 || (c.pay ?? []).some((p) => PAYING.has(p)));
 }
 
 type Kind = 'kwh' | 'min' | 'hour' | 'session' | 'none';
@@ -60,7 +83,7 @@ const CLAUSE = /[,;|+(]|\. | puis | lorsque | quand | co[uû]t de /;
 
 const toMin = (n: number, unit: string) => (/^h/.test(unit) ? n * 60 : n);
 
-export function parseTariff(raw: string | null | undefined, opts: { free?: boolean } = {}): Tariff {
+export function parseTariff(raw: string | null | undefined, opts: FreeContext = {}): Tariff {
   const src = (raw ?? '').trim();
   const out: Tariff = { kind: 'unknown', ht: false, varies: false, guessedUnit: false, notes: [], raw: src };
   const url = src.match(/https?:\/\/[^\s,;)]+/i)?.[0];
@@ -190,10 +213,13 @@ export function parseTariff(raw: string | null | undefined, opts: { free?: boole
     return out;
   }
   if (opts.free || /^(gratuit|gratuite|free|0 ?€|recharge gratuite)\.?$/.test(t)) {
-    out.kind = 'free';
-    return out;
+    if (freeCredible(opts)) {
+      out.kind = 'free';
+      return out;
+    }
+    out.freeDoubtful = true;
   }
-  if (/gratuit/.test(t)) out.notes.push(tr().tariff.notePartialFree);
+  if (/gratuit/.test(t) && !out.freeDoubtful) out.notes.push(tr().tariff.notePartialFree);
   if (out.url) out.kind = 'link';
   if (/kwh/.test(t)) out.notes.push(tr().tariff.noteKwh);
   if (/minute|\bmin\b|dur[ée]e|temps/.test(t)) out.notes.push(tr().tariff.noteTime);
@@ -209,6 +235,7 @@ const perMinText = perMinFmt;
 export function describeTariff(t: Tariff): string[] {
   const T = tr().tariff;
   if (t.kind === 'free') return [T.free];
+  if (t.freeDoubtful) return [T.freeDoubtful];
   if (t.kind !== 'priced') return [];
   const lines: string[] = [];
   if (t.perKwh !== undefined) {
@@ -224,6 +251,14 @@ export function describeTariff(t: Tariff): string[] {
   if (t.varies) lines.push(T.varies);
   return lines;
 }
+
+/** Tarif d'une station (texte IRVE + gratuité jugée avec sa puissance et ses moyens de paiement). */
+export const stationTariff = (s: { prix?: string | null; free?: boolean; kw?: number; pay?: readonly string[] }) =>
+  parseTariff(s.prix, { free: s.free, kw: s.kw, pay: s.pay });
+
+/** Tarif repris dans le suivi d'une recharge (plan enregistré au paiement). */
+export const planTariff = (p: { tariffRaw?: string; free?: boolean; stationKw?: number; pointKw?: number; pay?: readonly string[] } | null | undefined) =>
+  parseTariff(p?.tariffRaw, { free: p?.free, kw: p?.stationKw ?? p?.pointKw, pay: p?.pay });
 
 /** Multiplicateur TTC (les prix HT sont majorés de la TVA à 20 %). */
 export const ttcFactor = (t: Pick<Tariff, 'ht'>) => (t.ht ? 1.2 : 1);

@@ -115,3 +115,19 @@ describe('utilitaires', () => {
     }
   });
 });
+
+describe('gratuité non crédible : coût inconnu', () => {
+  it('borne 300 kW déclarée gratuite → coût null (« Inconnu »), signalée', () => {
+    const t = parseTariff('', { free: true, kw: 300, pay: ['badge'] });
+    const e = estimateCharge({ vehicle: null, socPercent: 20, pointKw: 300, plugs: ['ccs'], tariff: t });
+    expect(e.cost).toBeNull();
+    expect(e.unknownPrice).toBe(true);
+    expect(e.free).toBe(false);
+    expect(e.freeDoubtful).toBe(true);
+  });
+  it('borne 22 kW gratuite crédible → 0 €', () => {
+    const e = estimateCharge({ vehicle: null, socPercent: 20, pointKw: 22, plugs: ['t2'], tariff: parseTariff('', { free: true, kw: 22, pay: [] }) });
+    expect(e.cost).toBe(0);
+    expect(e.free).toBe(true);
+  });
+});

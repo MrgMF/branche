@@ -1,4 +1,5 @@
 // Historique des recharges et dépenses — stocké uniquement sur l'appareil (AsyncStorage), jamais envoyé.
+// Toute écriture qui échoue lève HistorySaveError : l'écran l'affiche (Notice), rien n'est perdu en silence.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { removeTicket } from './ticket';
 import { tr } from '../i18n';
@@ -46,13 +47,23 @@ export async function loadHistory(): Promise<ChargeRecord[]> {
   return cache;
 }
 
+/** Enregistrement de l'historique impossible (stockage plein ou indisponible) : à afficher à l'utilisateur. */
+export class HistorySaveError extends Error {
+  constructor(cause?: unknown) {
+    super('Historique non enregistré sur l’appareil');
+    this.name = 'HistorySaveError';
+    this.cause = cause;
+  }
+}
+
+/** Persiste la liste ; en cas d'échec, rien n'est changé (ni en mémoire ni sur l'appareil) et l'erreur remonte. */
 async function save(list: ChargeRecord[]) {
-  cache = list;
   try {
     await AsyncStorage.setItem(KEY, JSON.stringify(list));
-  } catch {
-    /* stockage plein ou indisponible : gardé en mémoire */
+  } catch (e) {
+    throw new HistorySaveError(e);
   }
+  cache = list;
 }
 
 export async function addRecord(r: ChargeRecord): Promise<ChargeRecord[]> {
@@ -79,12 +90,12 @@ export async function updateRecord(id: string, patch: Partial<ChargeRecord>): Pr
 export async function clearHistory(): Promise<void> {
   const list = cache ?? (await loadHistory());
   await Promise.all(list.filter((r) => r.ticket).map((r) => removeTicket(r.id)));
-  cache = [];
   try {
     await AsyncStorage.removeItem(KEY);
-  } catch {
-    /* rien */
+  } catch (e) {
+    throw new HistorySaveError(e);
   }
+  cache = [];
 }
 
 /** Dépenses du mois de `now` : total déclaré, nombre de recharges, prix moyen au kWh (si montant ET kWh connus). */

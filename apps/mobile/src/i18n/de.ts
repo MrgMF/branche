@@ -1,6 +1,6 @@
 // Deutsch.
 import type { Dict } from './fr';
-import type { InstrParts, MethodCtx, MethodTexts } from './types';
+import type { InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
 
 const pl = (n: number, one: string, many: string) => (n === 1 ? one : many);
 const ptOf = (c: MethodCtx) => (c.short ? `Ladepunkt …⁠${c.short}` : 'den gewählten Ladepunkt');
@@ -35,6 +35,7 @@ export const de: Dict = {
     recommended: 'Empfohlen',
     powerUnknown: 'Leistung unbekannt',
     unknownPrice: 'Preis unbekannt',
+    saveFailed: 'Speichern auf diesem Telefon nicht möglich (Speicher voll oder nicht verfügbar): bitte erneut versuchen.',
     notProvided: 'Nicht angegeben',
     operatorFallback: 'der Betreiber',
     stationFallback: 'Ladestation',
@@ -137,7 +138,7 @@ export const de: Dict = {
     fast: 'Schnell',
     fastA11y: 'Schnell, ab 50 kW',
     open: 'Frei zugänglich',
-    resume: (op: string) => `Laufender Ladevorgang bei ${op} · Fortsetzen`,
+    resume: (op: string, started = true) => (started ? `Laufender Ladevorgang bei ${op} · Fortsetzen` : `Zahlung ausstehend bei ${op} · Fortsetzen`),
     locDenied: 'Standort nicht erlaubt: Karte in Ihre Gegend verschieben oder Standort in den Einstellungen erlauben.',
     dataError: 'Ladesäulen konnten nicht geladen werden. Verbindung prüfen und erneut versuchen.',
     locating: 'Standort wird ermittelt…',
@@ -223,6 +224,7 @@ export const de: Dict = {
   },
   tariff: {
     free: 'Laut Betreiber kostenlos.',
+    freeDoubtful: 'In der nationalen Datenbank als kostenlos angegeben, bitte prüfen.',
     energyRange: (a: string, b: string) => `Energie: ${a} bis ${b} je nach Uhrzeit`,
     energy: (a: string, guessed: boolean) => `Energie: ${a}${guessed ? ' (Einheit nicht angegeben, pro kWh angenommen)' : ''}`,
     time: (x: string) => `Ladezeit: ${x}`,
@@ -471,14 +473,15 @@ export const de: Dict = {
     changeVehicle: 'Fahrzeug wechseln',
     setVehicle: 'Mein Fahrzeug angeben',
     preauth: 'Vorautorisierung',
+    preauthGeneric: 'Vorautorisierung: Ein Betrag kann reserviert und dann freigegeben werden (vom Betreiber nicht veröffentlicht).',
     preauthBody: (op: string) =>
       `Mit einer Bankkarte kann die Säule oder Zahlungsseite während des Ladens einen Betrag reservieren (oft mehr als die tatsächlichen Kosten). Abgebucht wird nur der tatsächliche Betrag; den Rest gibt Ihre Bank meist innerhalb weniger Tage frei. ${op} veröffentlicht diesen Betrag nicht.`,
     idle: (after: number) => `Standgebühr nach Ladeende${after ? ` (nach ${after} Min.)` : ''}: Branché warnt Sie vorher.`,
     preparedNotice: 'Vorbereiteter Ladevorgang: Ladepunkt und Methode übernommen. Jetzt nur noch bezahlen.',
     noLink: (fallback: boolean) => `Säule und Ladepunkt per QR-Code erkannt. Er enthält keinen Zahlungslink: ${fallback ? 'Nutzen Sie die Methode unten.' : 'Suchen Sie einen anderen QR-Code oder das Kartenlesegerät an der Säule.'}`,
     blockedTitle: 'Hier ist keine Zahlung über Branché möglich',
-    blockedBody: (op: string, badges: string | null) =>
-      `Für diese Säule meldet ${op} weder Zahlung ohne Konto noch Kartenlesegerät noch nutzbare Konto-Website${badges ? `; akzeptierte Karten: ${badges}` : ''}. Wenn Sie eine Ladekarte haben, fügen Sie sie unter „Meine Karten“ hinzu.`,
+    blockedBody: (op: string, badges: string | null, badge = true) =>
+      `Für diese Säule meldet ${op} weder Zahlung ohne Konto noch Kartenlesegerät noch nutzbare Konto-Website${badge && badges ? `; akzeptierte Karten: ${badges}` : ''}.${badge ? ' Wenn Sie eine Ladekarte haben, fügen Sie sie unter „Meine Karten“ hinzu.' : ''}`,
     nearestPayable: (name: string, d: string) => `Nächste bezahlbare Säule: ${name} (${d})`,
     goThere: 'Hinfahren',
     goThereHint: (name: string) => `Route zu ${name}`,
@@ -548,15 +551,17 @@ export const de: Dict = {
         cta: `Seite von ${c.op} öffnen`,
       };
     },
-    reader: (c: MethodCtx, available: boolean): MethodTexts => {
-      const pt = ptOf(c);
+    reader: (c: MethodCtx, r: ReaderInfo): MethodTexts => {
+      const ptx = ptOf(c);
       const cable = cableOf(c);
+      const maybe = r?.source === 'operator';
+      const card = c.contactless ? 'Halten Sie Ihre Karte an das Lesegerät (Kontaktlos-Logo)' : 'Stecken Sie Ihre Karte ins Lesegerät';
+      // Écran ou étiquette selon la borne (beaucoup de bornes AC n'ont pas d'écran)
+      const pick = c.short ? `Suchen Sie ${ptx} auf dem Etikett der Steckdose; hat die Säule einen Bildschirm, wählen Sie ihn dort und dann „Kartenzahlung“.` : 'Hat die Säule einen Bildschirm, wählen Sie die Steckdose und dann „Kartenzahlung“; sonst erkennen Sie sie am Etikett.';
       return {
-        label: c.contactless ? 'Kontaktlose Bankkarte an der Säule' : 'Bankkarte an der Säule',
-        why: available ? 'Vom Betreiber gemeldetes Kartenlesegerät (nationale IRVE-Datenbank). Keine App, kein Konto, und Branché sieht Ihre Karte nicht.' : 'Für diese Säule ist kein Kartenlesegerät gemeldet.',
-        steps: c.dc
-          ? [`Stecken Sie ${cable} in Ihr Auto.`, `Wählen Sie auf dem Bildschirm der Säule ${pt} und dann „Kartenzahlung“.`, `${c.contactless ? 'Halten Sie Ihre Karte an das Lesegerät' : 'Stecken Sie Ihre Karte ins Lesegerät'} und folgen Sie dem Bildschirm: Das Laden startet nach der Freigabe.`]
-          : [`${c.contactless ? 'Halten Sie Ihre Karte an das Lesegerät (Kontaktlos-Logo)' : 'Stecken Sie Ihre Karte ins Lesegerät'} und wählen Sie ${pt}, falls verlangt.`, 'Warten Sie auf die Zahlungsfreigabe am Bildschirm.', `Stecken Sie ${cable} ein: Das Laden startet.`],
+        label: `${c.contactless ? 'Kontaktlose Bankkarte an der Säule' : 'Bankkarte an der Säule'}${maybe ? ' (an manchen Standorten möglich)' : ''}`,
+        why: r?.source === 'irve' ? 'Für diese Säule in der nationalen IRVE-Datenbank gemeldetes Kartenlesegerät. Keine App, kein Konto, und Branché sieht Ihre Karte nicht.' : maybe ? `Kartenlesegerät laut ${c.op} nur an manchen Standorten (Recherche von Branché${r.refs ? `: ${r.refs}` : ''}), für diese Säule nicht in der IRVE-Datenbank gemeldet: vor Ort prüfen.` : 'Für diese Säule ist kein Kartenlesegerät gemeldet.',
+        steps: c.dc ? [`Stecken Sie ${cable} in Ihr Auto.`, pick, `${card} und folgen Sie den Hinweisen der Säule: Das Laden startet nach der Freigabe.`] : [pick, `${card}; warten Sie auf die Freigabe (Bildschirm oder Leuchtanzeige).`, `Stecken Sie ${cable} ein: Das Laden startet.`],
         cta: 'Ich habe mit Karte bezahlt',
       };
     },
@@ -597,6 +602,7 @@ export const de: Dict = {
     imitates: (n: string, d: string) => `Diese Domain imitiert die von ${n} (${d}).`,
     unknownDomain: 'Domain nicht in der Betreiberdatenbank.',
     officialPay: (n: string) => `Offizielle Zahlungsadresse, veröffentlicht von ${n}.`,
+    officialSite: (n: string) => `Domain der offiziellen Website von ${n} (von Branché geprüfte Quellen).`,
     otherPay: (n: string, st: string) => `Offizielle Zahlungsseite von ${n}, diese Säule ist aber bei ${st} geführt: Prüfen Sie den Namen auf der Säule.`,
     evseUnknown: 'Kennung nicht in der nationalen Datenbank (oder Verbindung unterbrochen).',
   },
@@ -638,6 +644,7 @@ export const de: Dict = {
     reader2027: 'Kartenlesegerät: ab 2027 Pflicht an allen Schnellladesäulen (≥ 50 kW).',
     readerNone: 'Für diese Säule ist kein Kartenlesegerät gemeldet.',
     toneOfficialPay: 'Offizielle Zahlungsseite des Betreibers',
+    toneOfficialSite: 'Offizielle Website des Betreibers',
     toneKnownPay: 'Offizielle Seite eines anderen Betreibers',
     otherPoint: (scanned: string, chosen: string) => `Dieser QR-Code gehört zu Ladepunkt …${scanned}, nicht zum gewählten Ladepunkt …${chosen}.`,
     otherStation: (name: string) => `Dieser QR-Code gehört zu einer anderen Säule: ${name}.`,
@@ -680,9 +687,9 @@ export const de: Dict = {
     stateAccount: (op: string) => `Start mit Ihrem ${op}-Konto`,
     stateReader: 'Zahlen Sie am Lesegerät der Säule',
     statePage: (op: string) => `Zahlung bei ${op}`,
-    bodyBadge: 'Folgen Sie dem Bildschirm der Säule und stecken Sie dann ein. Branché verfolgt den Ladevorgang hier.',
+    bodyBadge: 'Halten Sie Ihre Karte an das Lesegerät, folgen Sie dem Bildschirm, falls vorhanden, und stecken Sie dann ein. Branché verfolgt den Ladevorgang hier.',
     bodyAccount: (op: string) => `Starten Sie das Laden auf der Seite von ${op}, stecken Sie ein, falls noch nicht geschehen, und kehren Sie hierher zurück.`,
-    bodyReader: (short: string | null) => `Folgen Sie dem Bildschirm der Säule: Bankkarte${short ? `, Ladepunkt …${short}` : ''}, dann einstecken. Branché verfolgt den Ladevorgang hier.`,
+    bodyReader: (short: string | null) => `Zahlen Sie mit Karte am Lesegerät${short ? ` (Ladepunkt …${short}, auf dem Etikett oder Bildschirm)` : ''}, dann einstecken. Branché verfolgt den Ladevorgang hier.`,
     bodyPage: (op: string) => `Schließen Sie die Zahlung auf der Seite von ${op} ab, stecken Sie ein, falls noch nicht geschehen, und kehren Sie hierher zurück.`,
     started: 'Das Laden hat begonnen',
     startedHint: 'Startet die Live-Verfolgung und die Erinnerungen zum Ladeende',

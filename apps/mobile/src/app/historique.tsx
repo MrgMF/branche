@@ -26,6 +26,7 @@ export default function Historique() {
   const [confirmAll, setConfirmAll] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [saveErr, setSaveErr] = useState(false);
 
   useEffect(() => {
     loadHistory().then(setList);
@@ -104,10 +105,18 @@ export default function Historique() {
             {r.operatorName} · {methodLabel(r.method)} · {r.kWh != null ? `${kwhText(r.kWh)}${r.kWhEstimated ? H.kwhEst : ''}` : H.kwhUnknown}
             {r.ok === false ? H.failed : ''}
           </Text>
-          {r.ticket ? <TicketPhoto record={r} onRemoved={setList} /> : null}
+          {r.ticket ? <TicketPhoto record={r} onRemoved={setList} onError={() => setSaveErr(true)} /> : null}
           {confirmId === r.id ? (
             <View style={styles.row}>
-              <Button label={t.common.delete} variant="secondary" onPress={async () => setList(await removeRecord(r.id))} style={styles.small2} />
+              <Button
+                label={t.common.delete}
+                variant="secondary"
+                onPress={async () => {
+                  setSaveErr(false);
+                  await removeRecord(r.id).then(setList, () => setSaveErr(true));
+                }}
+                style={styles.small2}
+              />
               <Button label={t.common.cancel} variant="ghost" onPress={() => setConfirmId(null)} style={styles.small2} />
             </View>
           ) : (
@@ -127,8 +136,10 @@ export default function Historique() {
                 label={H.delAll}
                 variant="secondary"
                 onPress={async () => {
-                  await clearHistory();
-                  setList([]);
+                  setSaveErr(false);
+                  const ok = await clearHistory().then(() => true, () => false);
+                  if (ok) setList([]);
+                  else setSaveErr(true);
                   setConfirmAll(false);
                 }}
                 style={styles.small2}
@@ -142,13 +153,14 @@ export default function Historique() {
           </Pressable>
         )
       ) : null}
+      {saveErr ? <Notice tone="error">{t.common.saveFailed}</Notice> : null}
       <Text style={styles.small}>{H.footer}</Text>
     </ScrollView>
   );
 }
 
 /** Photo du ticket gardée sur ce téléphone : affichée à la demande, supprimable. */
-function TicketPhoto({ record, onRemoved }: { record: ChargeRecord; onRemoved: (l: ChargeRecord[]) => void }) {
+function TicketPhoto({ record, onRemoved, onError }: { record: ChargeRecord; onRemoved: (l: ChargeRecord[]) => void; onError: () => void }) {
   const H = useT().history;
   const [open, setOpen] = useState(false);
   const [uri, setUri] = useState<string | null>(null);
@@ -170,7 +182,7 @@ function TicketPhoto({ record, onRemoved }: { record: ChargeRecord; onRemoved: (
             accessibilityLabel={H.ticketDelA11y(date)}
             onPress={async () => {
               await removeTicket(record.id);
-              onRemoved(await updateRecord(record.id, { ticket: false }));
+              await updateRecord(record.id, { ticket: false }).then(onRemoved, onError);
             }}
             style={styles.link}
           >

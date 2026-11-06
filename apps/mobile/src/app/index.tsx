@@ -57,7 +57,8 @@ export default function MapScreen() {
   const [apiLoading, setApiLoading] = useState(apiEnabled());
   const loadedFor = useRef<string>('');
   const [ops, setOps] = useState<Operator[]>([]);
-  const [resume, setResume] = useState<string | null>(null);
+  // Recharge suivie : « Paiement en attente » tant que le démarrage n'est pas confirmé, « Recharge en cours » ensuite
+  const [resume, setResume] = useState<{ op: string; started: boolean } | null>(null);
   // Mise en page mesurée : bas du bloc recherche + filtres, hauteur réelle de la fiche.
   const [topH, setTopH] = useState(insets.top + 130);
   const [sheetH, setSheetH] = useState(0);
@@ -67,7 +68,7 @@ export default function MapScreen() {
   // Au retour sur la carte : recharge en cours / préparée (badge du menu, bandeau « Reprendre »)
   useFocusEffect(
     useCallback(() => {
-      store.loadDirect().then((d) => setResume(d && !d.endedAt ? d.operatorName : null));
+      store.loadDirect().then((d) => setResume(d && !d.endedAt ? { op: d.operatorName, started: !!d.chargeStartedAt } : null));
       chargeState().then(setBadge);
     }, []),
   );
@@ -318,7 +319,7 @@ export default function MapScreen() {
               <ChargeShortcuts />
               {resume ? (
                 <Pressable accessibilityRole="button" onPress={() => router.push('/recharge')} style={styles.resume}>
-                  <Text style={styles.resumeText}>{t.map.resume(resume)}</Text>
+                  <Text style={styles.resumeText}>{t.map.resume(resume.op, resume.started)}</Text>
                 </Pressable>
               ) : (
                 <HereBanner user={user} onPick={select} filters={filters} onAdvised={setAdvisedId} />

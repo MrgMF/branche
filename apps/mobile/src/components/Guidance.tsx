@@ -155,7 +155,7 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
           <View style={[styles.offer, styles.lowSoc]} accessibilityLiveRegion="polite" testID="low-soc">
             <Text style={styles.offerTitle}>{t.navx.lowSocTitle(Math.max(0, trip.lowSoc))}</Text>
             <Text style={styles.offerMeta} numberOfLines={2}>
-              {lowCharger ? t.navx.lowSocCharger(displayName(lowCharger.station), kw(lowCharger.station.kw), distText(lowCharger.alongM - trip.along)) : t.navx.lowSocSearching}
+              {lowCharger ? t.navx.lowSocCharger(displayName(lowCharger.station), kw(lowCharger.station.kw), distText(lowCharger.alongM - trip.along)) : trip.chargerSearching ? t.navx.lowSocSearching : t.trip.noChargers}
             </Text>
             {lowCharger ? <Button label={t.trip.addVia} style={{ minHeight: 52 }} onPress={() => nav.addVia(lowCharger.station)} /> : null}
           </View>

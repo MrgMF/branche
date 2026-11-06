@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Wallet } from './accounts';
 import { pointsOf } from './evse';
-import { appOnly, badgeNames, nearestPayable, payOptions, surelyPayable } from './methods';
+import { appOnly, badgeMentioned, badgeNames, nearestPayable, payOptions, sourceHosts, surelyPayable } from './methods';
 // Données réelles du dépôt : mêmes portails que ceux publiés par le pipeline
 import realPortals from '../../../../pipeline/data/operator-portals.json';
 import type { Portals } from './portals';
@@ -160,5 +160,111 @@ describe('pré-autorisation publiée (preauthMax)', () => {
     expect(preauthMaxOf(P['reveo-syaden'])).toBe(75);
     expect(preauthMaxOf(P.izivia)).toBeNull();
     expect(preauthMaxOf(undefined)).toBeNull();
+  });
+});
+
+describe('lecteur CB : IRVE (borne) ou recherche opérateur (« certains sites »), motif sourcé exact', () => {
+  const P = (realPortals as { operators: Portals }).operators;
+  const regOps: Operator[] = [
+    { key: 'tesla', names: ['Tesla'], domains: ['tesla.com'], payUrl: null },
+    { key: 'totalenergies-marketing', names: ['TotalEnergies'], domains: ['totalenergies.com'], payUrl: null },
+  ];
+  const empty: Wallet = { accounts: [], badges: [] };
+  const tesla: Station = { ...base, id: 'FRTSLP5147', ok: 'tesla', kw: 250, c: ['ccs'], pay: ['acte', 'badge'], pdc: [['FRTSLE0004FJ', 250, ['ccs']]] };
+  const total: Station = { ...base, id: 'FRHPCPNF080017', ok: 'totalenergies-marketing', kw: 300, c: ['ccs', 't2', 'chademo'], pay: ['badge'], free: true, pdc: [['FRHPCENF080017001', 300, ['ccs', 't2', 'chademo']]] };
+
+  it('lecteur déclaré dans l’IRVE pour la borne : motif « base nationale IRVE », confirmé', () => {
+    const s = { ...base, pay: ['cb'] as Station['pay'] };
+    const r = payOptions(s, pt(s), ops).find((o) => o.id === 'reader')!;
+    expect(r).toMatchObject({ available: true, label: 'Carte bancaire sur la borne' });
+    expect(r.speculative).toBeUndefined();
+    expect(r.why).toContain('déclaré pour cette borne dans la base nationale IRVE');
+  });
+  it('TotalEnergies 300 kW (cardReader opérateur) : « possible sur certains sites », sources citées, jamais en tête', () => {
+    const o = payOptions(total, pt(total), regOps, { portals: P, wallet: empty });
+    const r = o.find((x) => x.id === 'reader')!;
+    expect(r.label).toBe('Carte bancaire sur la borne (possible sur certains sites)');
+    expect(r.speculative).toBe(true);
+    expect(r.why).toContain('sur certains sites seulement (recherche Branché : services.totalenergies.fr, largus.fr)');
+    expect(r.why).toContain('non déclaré pour cette borne dans la base IRVE');
+    expect(o[0].id).toBe('scan'); // QR → page CB sourcée, recommandé
+    expect(o[0].speculative).toBeUndefined();
+    expect(o.findIndex((x) => x.id === 'reader')).toBeGreaterThan(0);
+  });
+  it('un lecteur « certains sites » seul ne rend pas la borne payable (nearestPayable)', () => {
+    const only: Portals = { test: { name: 'Opérateur Test', cardReader: true } };
+    const s = { ...base, pay: [] as Station['pay'] };
+    const o = payOptions(s, pt(s), ops, { portals: only });
+    expect(o.find((x) => x.id === 'reader')).toMatchObject({ available: true, speculative: true });
+    expect(surelyPayable(o)).toBe(false);
+  });
+  it('Tesla (appli seule, source Tesla) : ni QR sur la foi de `acte`, ni lecteur « certains sites » proposé → rien de payable', () => {
+    const o = payOptions(tesla, pt(tesla), regOps, { portals: P, wallet: empty });
+    expect(appOnly(o)).toBe(true);
+    const scan = o.find((x) => x.id === 'scan')!;
+    expect(scan.available).toBe(false);
+    expect(scan.why).not.toContain('déclaré par l’opérateur');
+    const r = o.find((x) => x.id === 'reader')!;
+    expect(r).toMatchObject({ available: false, label: 'Carte bancaire sur la borne (possible sur certains sites)' });
+    expect(r.why).toContain('recherche Branché : tesla.com, tesla-mag.com, blog.chargemap.com');
+    expect(o.find((x) => x.id === 'account')).toBeUndefined();
+    // Borne payable la plus proche : saute le Superchargeur
+    const reader: Station = { ...base, id: 'R', pay: ['cb'] };
+    expect(nearestPayable([tesla, reader].map((s, i) => ({ s, d: i })), [...ops, ...regOps], { portals: P, wallet: empty })?.s.id).toBe('R');
+  });
+  it('Tesla avec un Chargemap Pass (badge accepté selon les sources) : badge proposé', () => {
+    const o = payOptions(tesla, pt(tesla), regOps, { portals: P, wallet: { accounts: [], badges: ['Chargemap Pass'] } });
+    expect(o[0]).toMatchObject({ id: 'badge', available: true });
+  });
+  it('étapes du lecteur : écran ou étiquette selon la borne (point connu / inconnu)', () => {
+    const s = { ...base, pay: ['cb'] as Station['pay'] };
+    const ac = payOptions(s, pt(s), ops).find((o) => o.id === 'reader')!;
+    expect(ac.steps[0]).toBe('Repérez le point …⁠0001 sur l’étiquette de la prise ; si la borne a un écran, choisissez-le puis « Paiement par carte ».');
+    const none = payOptions(s, null, ops).find((o) => o.id === 'reader')!;
+    expect(none.steps[0]).toContain('Si la borne a un écran');
+    expect(none.steps[0]).toContain('étiquette');
+  });
+});
+
+describe('badge mentionné seulement si l’IRVE le déclare (ou badge de l’utilisateur accepté selon les sources)', () => {
+  it('pay sans badge : aucune option badge', () => {
+    const s = { ...base, pay: ['cb'] as Station['pay'] };
+    expect(payOptions(s, pt(s), ops).map((o) => o.id)).not.toContain('badge');
+    expect(badgeMentioned(s)).toBe(false);
+  });
+  it('pay avec badge : option badge (indisponible sans badge enregistré)', () => {
+    const s = { ...base, pay: ['cb', 'badge'] as Station['pay'] };
+    expect(payOptions(s, pt(s), ops).find((o) => o.id === 'badge')).toMatchObject({ available: false });
+    expect(badgeMentioned(s)).toBe(true);
+  });
+  it('texte « Pas de paiement possible » : badges cités seulement si la borne en déclare', async () => {
+    const { tr } = await import('../i18n');
+    expect(tr().recharger.blockedBody('Lidl', 'Chargemap Pass', false)).not.toMatch(/badge/i);
+    expect(tr().recharger.blockedBody('Lidl', 'Chargemap Pass', true)).toContain('badges acceptés : Chargemap Pass');
+    expect(tr().recharger.blockedBody('Lidl', null, true)).toContain('« Mes badges »');
+  });
+});
+
+describe('lien de secours sans QR : page de démarrage sourcée (webStart https) + identifiant à copier', () => {
+  const P = (realPortals as { operators: Portals }).operators;
+  it.each([
+    ['virta', 'https://chge.eu', 'FRVIRE269470'],
+    ['engie-vianeo', 'https://charge.engie-vianeo.com/', 'FRVIAE12345955331'],
+    ['qwello', 'https://wa.qwello.eu/', 'FRQWEE0001'],
+    ['ionity', 'https://payment.ionity.eu', 'FRIONE0001'],
+  ])('%s → %s, identifiant %s à copier', (ok, url, id) => {
+    const s: Station = { ...base, ok, kw: 150, c: ['ccs'], pay: [], pdc: [[id, 150, ['ccs']]] };
+    const link = payOptions(s, pt(s), ops, { portals: P }).find((o) => o.id === 'operator-link')!;
+    expect(link).toMatchObject({ available: true, url, copyId: id });
+  });
+  it('jamais en http (Electric 55 : map.e55c.com publié en http) ni chez un opérateur « appli seule »', () => {
+    const e55: Station = { ...base, ok: 'electric-55-charging', pay: [] };
+    expect(payOptions(e55, pt(e55), ops, { portals: P }).find((o) => o.id === 'operator-link')!.available).toBe(false);
+    const appOnlyStart: Portals = { test: { name: 'Opérateur Test', appOnly: true, adhocWeb: 'x', webStart: { status: 'yes', url: 'https://start.test/' } } };
+    expect(payOptions(base, pt(base), ops, { portals: appOnlyStart }).find((o) => o.id === 'operator-link')!.available).toBe(false);
+  });
+  it('sourceHosts : domaines exacts des sources, sans www', () => {
+    expect(sourceHosts(['https://www.tesla.com/a', 'https://www.tesla.com/b', 'https://blog.chargemap.com/?p=1'])).toBe('tesla.com, blog.chargemap.com');
+    expect(sourceHosts([])).toBeNull();
   });
 });

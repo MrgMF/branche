@@ -36,6 +36,7 @@ import {
   bboxOf,
   bearing,
   circle,
+  clientRouting,
   cumulative,
   distText,
   getIncidents,
@@ -133,6 +134,8 @@ export interface Trip {
   bgAsk: boolean;
   /** Suivi en arrière-plan actif (natif). */
   background: boolean;
+  /** Recherche de bornes en cours (alerte batterie en guidage). */
+  chargerSearching: boolean;
 }
 
 const NO_OPTIONS: RouteOptions = { avoidTolls: false, avoidMotorways: false };
@@ -180,6 +183,7 @@ const blank = (dest: Destination, over: Partial<Trip> = {}): Trip => ({
   lowSoc: null,
   bgAsk: false,
   background: false,
+  chargerSearching: false,
   ...over,
 });
 
@@ -229,6 +233,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     offCount.current = 0;
     wrongWay.current = 0;
     lastDrawAlong.current = -1e9;
+    chargerLoad.current = false;
   }, []);
 
   // ---------------------------------------------------------------- carte
@@ -331,6 +336,11 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
       setTrip({ ...base, loading: true, error: null, rerouting: mode === 'reroute' });
       try {
         vehicle.current = await loadVehicle().catch(() => null);
+        // Serveur public (site statique) : anti-rebond, seule la dernière demande d'aperçu part.
+        if (clientRouting() && mode === 'preview') {
+          await new Promise((r) => setTimeout(r, 700));
+          if (id !== reqId.current) return;
+        }
         const res = await getRoute(from, base.dest, { via: base.via, options: base.options });
         if (id !== reqId.current) return;
         let routes = routeOptions(res);
@@ -587,12 +597,13 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     const v = vehicle.current;
     if (!t?.route || !v || chargerLoad.current) return;
     chargerLoad.current = true;
+    setTrip((x) => (x ? { ...x, chargerSearching: true } : x));
     const vNow = { ...v, socPercent: socNowEstimate(v, socAfter, driven.current, 90) };
     const line = t.route.geometry;
     const lists = await Promise.all(tileProbes(line).map((p) => loadAround(p, 0).catch(() => [] as Station[])));
     const from = t.along;
     const list = chargersOnRoute(lists.flat(), line, vNow, socAfter, t.route.distanceM, 6).filter((c) => c.alongM > from + 300);
-    setTrip((x) => (x && x.route === t.route ? { ...x, chargers: list } : x));
+    setTrip((x) => (x ? { ...x, chargerSearching: false, ...(x.route === t.route ? { chargers: list } : {}) } : x));
   }, []);
 
   // ---------------------------------------------------------------- guidage
@@ -601,6 +612,8 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     const t = tripRef.current;
     if (!p || !t?.guiding || !t.route || t.arrived || t.arrivedAtVia) return;
     lastFixAt.current = Date.now();
+    // Position reçue : le bandeau « GPS perdu » disparaît même si ce passage se termine par un recalcul.
+    if (t.gps !== 'ok') setTrip((x) => (x ? { ...x, gps: 'ok' } : x));
     const route = t.route;
     const line = route.geometry;
     if (cum.current.length !== line.length) resetProgress(route, false);
@@ -698,12 +711,13 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
         viaSoc = liveArrivalSoc(v, socAfter, socNow, toVia, remainingS * (toVia / Math.max(1, remainingM)), t.viaSoc ?? null);
       } else if (live < LOW_SOC) {
         lowSoc = live;
+        const c = t.chargers.find((x) => x.alongM > prog.along + 300);
         if (!announced.current.has('lowsoc')) {
           announced.current.add('lowsoc');
-          const c = t.chargers.find((x) => x.alongM > prog.along + 300);
           parts.push({ text: tr().navx.lowSocVoice(Math.max(0, live), c ? displayName(c.station) : null), priority: 'danger' });
-          if (!c) void loadChargers();
         }
+        // Borne proposée dépassée ou aucune : nouvelle recherche sur le reste du trajet (une fois par tracé).
+        if (!c && !chargerLoad.current) void loadChargers();
       }
     }
 

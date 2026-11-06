@@ -156,7 +156,7 @@ describe('verifyQr — pages de paiement officielles sourcées (payDomains)', ()
     expect(r.reasons[0]).toContain('Virta');
     expect(r.reasons[0]).toContain('IZIVIA');
   });
-  it('autre page du même site (non sourcée) : non vérifiée, pas bloquée', () => {
+  it('autre page du même site, sans siteDomains publiés : non vérifiée, pas bloquée', () => {
     expect(verifyQr('https://www.qwello.eu/', 'qwello', REG).verdict).toBe('unknown');
   });
   it.each([
@@ -175,4 +175,48 @@ describe('verifyQr — pages de paiement officielles sourcées (payDomains)', ()
   ])('sosie toujours bloqué : %s', (raw) => {
     expect(verifyQr(raw, 'virta', REG).verdict).toBe('dangerous');
   });
+});
+
+describe('verifyQr — domaines des sites sourcés (siteDomains, publiés par pipeline/src/portals.mjs)', () => {
+  // Tels que publiés dans operators.json : domaines IRVE + siteDomains tirés des URL sourcées (hors sites tiers)
+  const REG: Operator[] = [
+    { key: 'bouygues-energies-services', names: ['Bouygues Energies & Services'], domains: ['alizecharge.fr', 'bouygues-es.com'], payUrl: null, siteDomains: ['alizecharge.com', 'reveocharge.com'] },
+    { key: 'reveo-syaden', names: ['Révéo'], domains: ['reveocharge.com'], payUrl: null },
+    { key: 'engie-vianeo', names: ['ENGIE Vianeo'], domains: ['engie.com', 'greenflux.com'], payUrl: null, payDomains: ['charge.engie-vianeo.com'], siteDomains: ['engie-vianeo.com'] },
+    { key: 'qwello', names: ['Qwello France SAS'], domains: ['qwello.fr'], payUrl: null, payDomains: ['wa.qwello.eu'], siteDomains: ['qwello.eu'] },
+    { key: 'izivia', names: ['IZIVIA'], domains: ['izivia.com'], payUrl: null },
+  ];
+  it('pay.alizecharge.com sur une borne Bouygues → officiel (site sourcé, pas un sosie d’alizecharge.fr)', () => {
+    const r = verifyQr('https://pay.alizecharge.com/FRS77E770340011', 'bouygues-energies-services', REG);
+    expect(r.verdict).toBe('official');
+    expect(r.source).toBe('site');
+    expect(r.operatorKey).toBe('bouygues-energies-services');
+    expect(r.reasons[0]).toBe('Domaine du site officiel de Bouygues Energies & Services (sources vérifiées par Branché).');
+  });
+  it('sans siteDomains, la même page était bloquée (« porte le nom de… ») : régression corrigée', () => {
+    const bare = REG.map(({ siteDomains: _s, ...o }) => o);
+    expect(verifyQr('https://pay.alizecharge.com/', 'bouygues-energies-services', bare).verdict).toBe('dangerous');
+  });
+  it.each([
+    ['https://support.reveocharge.com/x', 'bouygues-energies-services'],
+    ['https://www.engie-vianeo.com/', 'engie-vianeo'],
+    ['https://www.qwello.eu/', 'qwello'],
+  ])('%s sur une borne %s → officiel', (raw, op) => {
+    expect(verifyQr(raw, op, REG).verdict).toBe('official');
+  });
+  it('domaine IRVE prioritaire sur le site sourcé (Révéo déclare reveocharge.com dans l’IRVE)', () => {
+    const r = verifyQr('https://my.reveocharge.com/', 'reveo-syaden', REG);
+    expect(r).toMatchObject({ verdict: 'official', source: 'irve' });
+  });
+  it('site sourcé d’un autre opérateur → « autre opérateur », nommé', () => {
+    const r = verifyQr('https://pay.alizecharge.com/', 'izivia', REG);
+    expect(r.verdict).toBe('other-operator');
+    expect(r.operatorKey).toBe('bouygues-energies-services');
+  });
+  it.each(['https://pay-alizecharge.com/', 'https://alizecharge.com.evil.site/', 'https://a1izecharge.com/', 'https://alizecharge.site/', 'https://evil.com/?u=alizecharge.com'])(
+    'sosie toujours bloqué : %s',
+    (raw) => {
+      expect(verifyQr(raw, 'bouygues-energies-services', REG).verdict).toBe('dangerous');
+    },
+  );
 });

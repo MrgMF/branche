@@ -14,6 +14,7 @@ import { loadWallet, markConnected } from '../lib/accounts';
 import { apiEnabled } from '../lib/api';
 import { sendCheckin } from '../lib/community';
 import { durationLabel, estimateCharge, progressAt, type EstimateInput } from '../lib/estimate';
+import { parseEuros, invalidAmount } from '../lib/amount';
 import { euros } from '../lib/format';
 import { autoFinish, departed, distanceToStation, recordOf, AUTO_END_M } from '../lib/autoEnd';
 import { addRecord, methodLabel, updateRecord, type ChargeRecord } from '../lib/history';
@@ -22,7 +23,7 @@ import { takeTicketPhoto } from '../lib/ticketPhoto';
 import { postReport } from '../lib/navigation';
 import { cancelAlerts, scheduleAlerts, type Alert } from '../lib/notify';
 import { store, type DirectCharge } from '../lib/store';
-import { parseTariff } from '../lib/tariff';
+import { planTariff } from '../lib/tariff';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { ScreenHeader } from '../components/Screen';
 import { tr, useT } from '../i18n';
@@ -35,12 +36,8 @@ const fmt = (ms: number) => {
   const m = Math.floor((s % 3600) / 60);
   return h ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min ${String(s % 60).padStart(2, '0')} s`;
 };
-const parseEuros = (x: string) => {
-  const n = Number(x.replace(/\s|€/g, '').replace(',', '.'));
-  return x.trim() && Number.isFinite(n) && n >= 0 && n < 1000 ? Math.round(n * 100) / 100 : null;
-};
-/** Saisie facultative : vide = OK ; texte non numérique ou hors bornes = erreur affichée, rien n'est enregistré. */
-const invalid = (x: string) => x.trim() !== '' && parseEuros(x) == null;
+/** Saisie facultative : vide = OK ; hors de la forme `^\d{1,4}([.,]\d{1,2})?$` = erreur affichée, rien n'est enregistré. */
+const invalid = invalidAmount;
 
 function inputOf(d: DirectCharge): EstimateInput {
   const p = d.plan;
@@ -49,7 +46,7 @@ function inputOf(d: DirectCharge): EstimateInput {
     socPercent: p?.socPercent ?? null,
     pointKw: p?.pointKw ?? 0,
     plugs: p?.plugs ?? ['t2'],
-    tariff: parseTariff(p?.tariffRaw, { free: p?.free }),
+    tariff: planTariff(p),
   };
 }
 
@@ -71,6 +68,10 @@ export default function Recharge() {
   const [ticketMsg, setTicketMsg] = useState<string | null>(null);
   const [tried, setTried] = useState(false);
   const [queued, setQueued] = useState(false);
+  // Échec d'écriture (historique, ticket, recharge en cours) : toujours dit à l'utilisateur
+  const [saveErr, setSaveErr] = useState(false);
+  const [persistErr, setPersistErr] = useState(store.directPersistFailed());
+  useEffect(() => store.onDirectPersistError(() => setPersistErr(true)), []);
 
   useEffect(() => {
     if (d === undefined) store.loadDirect().then(setD);
@@ -229,12 +230,18 @@ export default function Recharge() {
     const preauth = parseEuros(preauthIn);
     const base = recordOf(d, ended);
     let r: ChargeRecord = { ...base, kWh: kWh ?? base.kWh, kWhEstimated: kWh == null, pricePaid, ok };
-    await addRecord(r);
+    setSaveErr(false);
+    try {
+      await addRecord(r);
+    } catch {
+      setSaveErr(true); // reçu non enregistré : on reste sur l'écran de fin, « Enregistrer » réessaie
+      return;
+    }
     if (ticket) {
-      if (await saveTicket(r.id, ticket)) {
-        r = { ...r, ticket: true };
-        await updateRecord(r.id, { ticket: true });
-      } else setTicketMsg(C.ticketFull);
+      const stored = await saveTicket(r.id, ticket);
+      const linked = stored && (await updateRecord(r.id, { ticket: true }).then(() => true, () => false));
+      if (linked) r = { ...r, ticket: true };
+      else setTicketMsg(C.ticketFull);
     }
     if (ok != null && d.station.id !== 'inconnue') {
       sendCheckin({ stationId: d.station.id, ok, ...(pricePaid != null ? { pricePaid } : {}), ...(kWh != null ? { kWh } : {}), ...(preauth != null ? { preauth } : {}) }).then(
@@ -261,7 +268,7 @@ export default function Recharge() {
           {saved.ticket && ticket ? <Image source={{ uri: ticket }} style={styles.ticket} resizeMode="contain" accessibilityLabel={C.ticketA11y} /> : null}
           <Text style={styles.mutedLeft}>{C.keptHere(saved.operatorName)}</Text>
         </View>
-        {ticketMsg ? <Notice dark>{ticketMsg}</Notice> : null}
+        {ticketMsg ? <Notice dark tone="error">{ticketMsg}</Notice> : null}
         {queued ? <Notice dark>{C.queued}</Notice> : null}
         <Button label={C.seeHistory} onPress={() => router.replace('/historique')} />
         <Button label={t.common.backToMap} variant="light" onPress={() => router.replace('/')} />
@@ -299,6 +306,11 @@ export default function Recharge() {
   return (
     <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
       <ScreenHeader dark title={t.titles.maRecharge} sub={`${d.station.name}${pointText}`} />
+      {persistErr || d.saveFailed ? (
+        <Notice dark tone="error">
+          {t.common.saveFailed}
+        </Notice>
+      ) : null}
 
       {d.accountAsk ? (
         <View style={[styles.card, styles.ask]} accessibilityLiveRegion="polite">
@@ -464,6 +476,11 @@ export default function Recharge() {
             <Text style={styles.small}>{C.ticketHint}</Text>
             {ticketMsg ? <Text style={styles.error} role="alert">{ticketMsg}</Text> : null}
           </View>
+          {saveErr ? (
+            <Notice dark tone="error">
+              {t.common.saveFailed}
+            </Notice>
+          ) : null}
           <Button label={C.save} onPress={save} hint={C.saveHint} />
           <Button label={C.resume} variant="ghost" onPress={() => update({ endedAt: null, autoEnded: false })} />
         </>

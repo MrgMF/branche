@@ -1,5 +1,6 @@
 import { DATA_URL } from './config';
 import { tr } from '../i18n';
+import { freeCredible } from './tariff';
 
 export type Plug = 'ccs' | 't2' | 'chademo' | 'ef';
 export type PayMethod = 'cb' | 'sans_contact' | 'acte' | 'qr_dynamique' | 'site_web' | 'liquide' | 'badge';
@@ -126,8 +127,8 @@ export function displayName(s: Pick<Station, 'n' | 'o' | 'a'>): string {
 }
 
 /** Le champ tarification contient parfois une URL plutôt qu'un prix. */
-export function priceInfo(s: Pick<Station, 'prix' | 'free'>): { text: string; url?: string } {
-  if (s.free) return { text: tr().station.free };
+export function priceInfo(s: Pick<Station, 'prix' | 'free' | 'kw' | 'pay'>): { text: string; url?: string } {
+  if (s.free) return { text: freeCredible(s) ? tr().station.free : tr().tariff.freeDoubtful };
   const p = (s.prix ?? '').trim();
   if (!p || p === '0') return { text: tr().pricing.unpublished };
   const url = p.match(/https?:\/\/\S+/)?.[0];

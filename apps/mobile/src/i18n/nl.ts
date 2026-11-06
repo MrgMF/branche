@@ -1,6 +1,6 @@
 // Nederlands.
 import type { Dict } from './fr';
-import type { InstrParts, MethodCtx, MethodTexts } from './types';
+import type { InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
 
 const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const pl = (n: number, one: string, many: string) => (n === 1 ? one : many);
@@ -36,6 +36,7 @@ export const nl: Dict = {
     recommended: 'Aanbevolen',
     powerUnknown: 'Vermogen onbekend',
     unknownPrice: 'Prijs onbekend',
+    saveFailed: 'Opslaan op deze telefoon mislukt (opslag vol of niet beschikbaar): probeer het opnieuw.',
     notProvided: 'Niet ingevuld',
     operatorFallback: 'de exploitant',
     stationFallback: 'Laadstation',
@@ -138,7 +139,7 @@ export const nl: Dict = {
     fast: 'Snel',
     fastA11y: 'Snel, vanaf 50 kW',
     open: 'Vrij toegankelijk',
-    resume: (op: string) => `Bezig met laden bij ${op} · Hervatten`,
+    resume: (op: string, started = true) => (started ? `Bezig met laden bij ${op} · Hervatten` : `Betaling in afwachting bij ${op} · Hervatten`),
     locDenied: 'Locatie niet toegestaan: verschuif de kaart naar je omgeving of sta locatie toe in de instellingen.',
     dataError: 'Laadpalen konden niet worden geladen. Controleer je verbinding en probeer het opnieuw.',
     locating: 'Locatie bepalen…',
@@ -224,6 +225,7 @@ export const nl: Dict = {
   },
   tariff: {
     free: 'Gratis volgens de exploitant.',
+    freeDoubtful: 'Als gratis opgegeven in de nationale database, te controleren.',
     energyRange: (a: string, b: string) => `Energie: ${a} tot ${b} afhankelijk van het tijdstip`,
     energy: (a: string, guessed: boolean) => `Energie: ${a}${guessed ? ' (eenheid niet vermeld, per kWh aangenomen)' : ''}`,
     time: (x: string) => `Laadtijd: ${x}`,
@@ -472,14 +474,15 @@ export const nl: Dict = {
     changeVehicle: 'Andere auto kiezen',
     setVehicle: 'Mijn auto opgeven',
     preauth: 'Pre-autorisatie',
+    preauthGeneric: 'Pre-autorisatie: een bedrag kan worden geblokkeerd en daarna vrijgegeven (niet gepubliceerd door de exploitant).',
     preauthBody: (op: string) =>
       `Met een bankpas kan de paal of betaalpagina tijdens het laden een bedrag reserveren (vaak meer dan de werkelijke kosten). Alleen het werkelijke bedrag wordt afgeschreven; de rest geeft je bank meestal binnen enkele dagen vrij. ${op} publiceert dit bedrag niet.`,
     idle: (after: number) => `Blokkeertarief na het laden${after ? ` (na ${after} min)` : ''}: Branché waarschuwt je vooraf.`,
     preparedNotice: 'Voorbereide laadsessie: laadpunt en methode overgenomen. Alleen nog betalen.',
     noLink: (fallback: boolean) => `Paal en laadpunt herkend via de QR-code. Die bevat geen betaallink: ${fallback ? 'gebruik de methode hieronder.' : 'zoek een andere QR-code of de paslezer op de paal.'}`,
     blockedTitle: 'Hier is betalen via Branché niet mogelijk',
-    blockedBody: (op: string, badges: string | null) =>
-      `Voor deze paal meldt ${op} geen betaling zonder account, geen paslezer en geen bruikbare accountwebsite${badges ? `; geaccepteerde passen: ${badges}` : ''}. Heb je een laadpas, voeg hem dan toe onder „Mijn passen”.`,
+    blockedBody: (op: string, badges: string | null, badge = true) =>
+      `Voor deze paal meldt ${op} geen betaling zonder account, geen paslezer en geen bruikbare accountwebsite${badge && badges ? `; geaccepteerde passen: ${badges}` : ''}.${badge ? ' Heb je een laadpas, voeg hem dan toe onder „Mijn passen”.' : ''}`,
     nearestPayable: (name: string, d: string) => `Dichtstbijzijnde betaalbare paal: ${name} (${d})`,
     goThere: 'Erheen',
     goThereHint: (name: string) => `Route naar ${name}`,
@@ -549,15 +552,17 @@ export const nl: Dict = {
         cta: `Pagina van ${c.op} openen`,
       };
     },
-    reader: (c: MethodCtx, available: boolean): MethodTexts => {
+    reader: (c: MethodCtx, r: ReaderInfo): MethodTexts => {
       const ptx = ptOf(c);
       const cable = cableOf(c);
+      const maybe = r?.source === 'operator';
+      const card = c.contactless ? 'Houd je pas tegen de lezer (contactloos-logo)' : 'Steek je pas in de lezer';
+      // Écran ou étiquette selon la borne (beaucoup de bornes AC n'ont pas d'écran)
+      const pick = c.short ? `Zoek ${ptx} op het label van de aansluiting; heeft de paal een scherm, kies het daar en dan „Betalen met pas”.` : 'Heeft de paal een scherm, kies de aansluiting en dan „Betalen met pas”; anders herken je ze aan het label.';
       return {
-        label: c.contactless ? 'Contactloze bankpas bij de paal' : 'Bankpas bij de paal',
-        why: available ? 'Paslezer gemeld door de exploitant (nationale IRVE-database). Geen app, geen account, en Branché ziet je pas niet.' : 'Voor deze paal is geen paslezer gemeld.',
-        steps: c.dc
-          ? [`Sluit ${cable} aan op je auto.`, `Kies op het scherm van de paal ${ptx} en daarna „Betalen met pas”.`, `${c.contactless ? 'Houd je pas tegen de lezer' : 'Steek je pas in de lezer'} en volg het scherm: het laden start na goedkeuring.`]
-          : [`${c.contactless ? 'Houd je pas tegen de lezer (contactloos-logo)' : 'Steek je pas in de lezer'} en kies ${ptx} als de paal erom vraagt.`, 'Wacht tot de betaling op het scherm is goedgekeurd.', `Sluit ${cable} aan: het laden start.`],
+        label: `${c.contactless ? 'Contactloze bankpas bij de paal' : 'Bankpas bij de paal'}${maybe ? ' (op sommige locaties mogelijk)' : ''}`,
+        why: r?.source === 'irve' ? 'Paslezer voor deze paal gemeld in de nationale IRVE-database. Geen app, geen account, en Branché ziet je pas niet.' : maybe ? `Paslezer volgens ${c.op} alleen op sommige locaties (onderzoek van Branché${r.refs ? `: ${r.refs}` : ''}), voor deze paal niet gemeld in de IRVE-database: controleer ter plaatse.` : 'Voor deze paal is geen paslezer gemeld.',
+        steps: c.dc ? [`Sluit ${cable} aan op je auto.`, pick, `${card} en volg de aanwijzingen van de paal: het laden start na goedkeuring.`] : [pick, `${card}; wacht op goedkeuring (scherm of lampje van de paal).`, `Sluit ${cable} aan: het laden start.`],
         cta: 'Ik heb met mijn pas betaald',
       };
     },
@@ -598,6 +603,7 @@ export const nl: Dict = {
     imitates: (n: string, d: string) => `Dit domein imiteert dat van ${n} (${d}).`,
     unknownDomain: 'Domein niet in de database van exploitanten.',
     officialPay: (n: string) => `Officieel betaaladres, gepubliceerd door ${n}.`,
+    officialSite: (n: string) => `Domein van de officiële website van ${n} (bronnen gecontroleerd door Branché).`,
     otherPay: (n: string, st: string) => `Officiële betaalpagina van ${n}, maar deze paal staat bij ${st}: controleer de naam op de paal.`,
     evseUnknown: 'Code niet in de nationale database (of geen verbinding).',
   },
@@ -639,6 +645,7 @@ export const nl: Dict = {
     reader2027: 'Paslezer: vanaf 2027 verplicht op alle snelladers (≥ 50 kW).',
     readerNone: 'Geen paslezer gemeld voor deze paal.',
     toneOfficialPay: 'Officiële betaalpagina van de exploitant',
+    toneOfficialSite: 'Officiële website van de exploitant',
     toneKnownPay: 'Officiële pagina van een andere exploitant',
     otherPoint: (scanned: string, chosen: string) => `Deze QR-code hoort bij laadpunt …${scanned}, niet bij het gekozen laadpunt …${chosen}.`,
     otherStation: (name: string) => `Deze QR-code hoort bij een andere paal: ${name}.`,
@@ -681,9 +688,9 @@ export const nl: Dict = {
     stateAccount: (op: string) => `Starten met je ${op}-account`,
     stateReader: 'Betaal bij de lezer van de paal',
     statePage: (op: string) => `Betalen bij ${op}`,
-    bodyBadge: 'Volg het scherm van de paal en sluit daarna aan. Branché volgt de laadsessie hier.',
+    bodyBadge: 'Houd je pas tegen de lezer, volg het scherm als er een is en sluit daarna aan. Branché volgt de laadsessie hier.',
     bodyAccount: (op: string) => `Start het laden op de pagina van ${op}, sluit aan als dat nog niet is gebeurd en kom dan terug.`,
-    bodyReader: (short: string | null) => `Volg het scherm van de paal: bankpas${short ? `, laadpunt …${short}` : ''}, daarna aansluiten. Branché volgt de laadsessie hier.`,
+    bodyReader: (short: string | null) => `Betaal met je pas bij de lezer${short ? ` (laadpunt …${short}, op het label of het scherm)` : ''} en sluit daarna aan. Branché volgt de laadsessie hier.`,
     bodyPage: (op: string) => `Rond de betaling af op de pagina van ${op}, sluit aan als dat nog niet is gebeurd en kom dan terug.`,
     started: 'Het laden is gestart',
     startedHint: 'Start het live volgen en de herinneringen bij het einde',

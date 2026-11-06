@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { attachPayDomains, publishPortals, readPortals, sourcedHosts, validatePortals } from '../src/portals.mjs';
+import { attachPayDomains, publishPortals, readPortals, siteDomainsOf, sourcedHosts, THIRD_PARTY, validatePortals } from '../src/portals.mjs';
 
 test('operator-portals.json réel : valide, payDomains tous tirés des URL sourcées de leur entrée', async () => {
   const p = await readPortals();
@@ -50,4 +50,50 @@ test('publication autonome dans un dossier de données existant', async () => {
   assert.deepEqual(reg.operators[0].payDomains, ['wa.qwello.eu']);
   const pub = JSON.parse(await readFile(join(dir, 'operator-portals.json'), 'utf8'));
   assert.equal(pub.operators['reveo-syaden'].preauthMax, 75);
+});
+
+test('siteDomains : tous les domaines des URL sourcées (alizecharge.com, reveocharge.com, engie-vianeo.com…), hors sites tiers', async () => {
+  const p = await readPortals();
+  assert.deepEqual([...siteDomainsOf(p.operators['bouygues-energies-services'])].sort(), ['alizecharge.com', 'reveocharge.com']);
+  assert.deepEqual([...siteDomainsOf(p.operators['engie-vianeo'])], ['engie-vianeo.com']);
+  assert.deepEqual([...siteDomainsOf(p.operators.virta)].sort(), ['chge.eu', 'virta.global']);
+  // Presse, forums, université, plateformes partagées : jamais domaines d'un opérateur
+  assert.deepEqual([...siteDomainsOf(p.operators.tesla)], ['tesla.com']);
+  assert.deepEqual([...siteDomainsOf(p.operators.freshmile)].sort(), ['freshmile.com', 'xfm.fr']);
+  for (const [k, e] of Object.entries(p.operators)) for (const d of siteDomainsOf(e)) assert.ok(!THIRD_PARTY.has(d), `${k} : ${d}`);
+  // Chaque source tierce connue est bien exclue (une nouvelle source tierce doit être ajoutée à THIRD_PARTY)
+  const all = new Set(Object.values(p.operators).flatMap((e) => [...siteDomainsOf(e)]));
+  for (const d of ['univ-amu.fr', 'largus.fr', 'tesla-mag.com', 'chargemap.com', 'mac4ever.com', 'automobile-propre.com', 'evc-net.com']) assert.ok(!all.has(d), d);
+});
+
+test('registre : siteDomains recopiés (hors domaines IRVE déjà connus), aussi via registryKeys', () => {
+  const reg = {
+    v: 1,
+    operators: [
+      { key: 'bouygues-energies-services', names: ['Bouygues'], domains: ['alizecharge.fr'], payUrl: null },
+      { key: 'reveo-syaden', names: ['Révéo'], domains: ['reveocharge.com'], payUrl: null },
+      { key: 'allego', names: ['Allego'], domains: ['allego.eu'], payUrl: null },
+    ],
+  };
+  const portals = {
+    v: 1,
+    operators: {
+      'bouygues-energies-services': { sources: ['https://alizecharge.com/', 'https://support.reveocharge.com/x', 'https://www.largus.fr/a'] },
+      'reveo-syaden': { webPortal: 'https://my.reveocharge.com/fr/login' },
+      'carrefour-energies': { webStart: { url: 'https://recharge.carrefour.fr/' }, payDomains: ['recharge.carrefour.fr'], registryKeys: ['allego'], sources: ['https://www.mac4ever.com/x'] },
+    },
+  };
+  const out = attachPayDomains(reg, portals);
+  assert.deepEqual(out.operators[0].siteDomains, ['alizecharge.com', 'reveocharge.com']);
+  assert.equal(out.operators[1].siteDomains, undefined); // reveocharge.com déjà domaine IRVE
+  assert.deepEqual(out.operators[2].siteDomains, ['carrefour.fr']);
+  assert.deepEqual(out.operators[2].payDomains, ['recharge.carrefour.fr']);
+});
+
+test('Tesla : appli seule (source Tesla), lecteur CB seulement « sur certains sites »', async () => {
+  const p = await readPortals();
+  assert.equal(p.operators.tesla.appOnly, true);
+  assert.equal(p.operators.tesla.adhocWeb, null);
+  assert.ok(p.operators.tesla.sources.some((u) => u.startsWith('https://www.tesla.com/support/charging/supercharging-other-evs')));
+  assert.match(p.operators.tesla.notes, /sites sélectionnés/);
 });

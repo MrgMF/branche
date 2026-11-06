@@ -1,6 +1,22 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { addRecord, clearHistory, csvCell, loadHistory, monthStats, removeRecord, toCsv, totals, updateRecord, type ChargeRecord } from './history';
-import { loadTicket, saveTicket } from './ticket';
+import AsyncStorage, { failWrites } from '../../test/async-storage';
+import { addRecord, clearHistory, csvCell, HistorySaveError, loadHistory, monthStats, removeRecord, toCsv, totals, updateRecord, type ChargeRecord } from './history';
+import { loadTicket, saveTicket, setTicketBlobs, ticketKey } from './ticket';
+import type { TicketBlobStore } from './ticketBlob';
+
+// Magasin d'images en mémoire (fichiers en natif, IndexedDB sur le web) ; `failPut` simule un disque plein.
+const files = new Map<string, string>();
+let failPut = false;
+const memBlobs: TicketBlobStore = {
+  put: async (id, data) => {
+    if (failPut) throw new Error('ENOSPC');
+    files.set(`mem:${id}`, data);
+    return `mem:${id}`;
+  },
+  get: async (ref) => files.get(ref) ?? null,
+  del: async (ref) => void files.delete(ref),
+};
+setTicketBlobs(memBlobs);
 
 const rec = (o: Partial<ChargeRecord>): ChargeRecord => ({
   id: 'r1',
@@ -19,7 +35,11 @@ const rec = (o: Partial<ChargeRecord>): ChargeRecord => ({
   ...o,
 });
 
-beforeEach(() => clearHistory());
+beforeEach(async () => {
+  failWrites(false);
+  failPut = false;
+  await clearHistory();
+});
 
 describe('historique local', () => {
   it('ajout (tri du plus récent), persistance, suppression', async () => {
@@ -97,5 +117,50 @@ describe('photo du ticket (locale)', () => {
     await updateRecord('t2', { ticket: true });
     await clearHistory();
     expect(await loadTicket('t2')).toBeNull();
+  });
+});
+
+describe('photo du ticket : fichier / IndexedDB, AsyncStorage ne garde qu’une référence', () => {
+  it('l’image va dans le magasin de fichiers ; AsyncStorage ne contient que {"ref"}', async () => {
+    const img = `data:image/jpeg;base64,${'Q'.repeat(5000)}`;
+    expect(await saveTicket('ref1', img)).toBe(true);
+    const raw = await AsyncStorage.getItem(ticketKey('ref1'));
+    expect(JSON.parse(raw!)).toEqual({ ref: 'mem:ref1' });
+    expect(raw!.length).toBeLessThan(40);
+    expect(files.get('mem:ref1')).toBe(img);
+    expect(await loadTicket('ref1')).toBe(img);
+  });
+  it('ancien format (data URI dans AsyncStorage) toujours lu, puis supprimé', async () => {
+    await AsyncStorage.setItem(ticketKey('old'), 'data:image/jpeg;base64,OLD');
+    expect(await loadTicket('old')).toBe('data:image/jpeg;base64,OLD');
+    await addRecord(rec({ id: 'old', ticket: true }));
+    await removeRecord('old');
+    expect(await AsyncStorage.getItem(ticketKey('old'))).toBeNull();
+  });
+  it('fichier impossible à écrire → false (message affiché), rien d’enregistré', async () => {
+    failPut = true;
+    expect(await saveTicket('full', 'data:image/jpeg;base64,AAAA')).toBe(false);
+    expect(await AsyncStorage.getItem(ticketKey('full'))).toBeNull();
+  });
+  it('référence impossible à écrire → false, et pas d’image orpheline', async () => {
+    failWrites(true);
+    expect(await saveTicket('orph', 'data:image/jpeg;base64,AAAA')).toBe(false);
+    failWrites(false);
+    expect(files.has('mem:orph')).toBe(false);
+  });
+});
+
+describe('historique : toute erreur d’écriture remonte (affichée par l’écran)', () => {
+  it('addRecord / updateRecord / removeRecord / clearHistory lèvent HistorySaveError, liste inchangée', async () => {
+    await addRecord(rec({ id: 'keep' }));
+    failWrites(true);
+    await expect(addRecord(rec({ id: 'lost' }))).rejects.toBeInstanceOf(HistorySaveError);
+    await expect(updateRecord('keep', { pricePaid: 1 })).rejects.toBeInstanceOf(HistorySaveError);
+    await expect(removeRecord('keep')).rejects.toBeInstanceOf(HistorySaveError);
+    await expect(clearHistory()).rejects.toBeInstanceOf(HistorySaveError);
+    failWrites(false);
+    const list = await loadHistory();
+    expect(list.map((r) => r.id)).toEqual(['keep']);
+    expect(list[0].pricePaid).toBe(9.8);
   });
 });

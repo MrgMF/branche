@@ -4,16 +4,16 @@ import type { ChargePoint } from '../lib/evse';
 import { durationLabel, estimateCharge } from '../lib/estimate';
 import { euros } from '../lib/format';
 import type { Station } from '../lib/stations';
-import { describeTariff, parseTariff } from '../lib/tariff';
+import { describeTariff, stationTariff } from '../lib/tariff';
 import type { Vehicle } from '../lib/vehicle';
-import { kwhText } from '../i18n/format';
+import { eur, kwhText } from '../i18n/format';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { useT } from '../i18n';
 
 /** Tarif publié (analysé) + fiabilité et prix constatés par la communauté. */
 export function TariffLines({ station, community, compact }: { station: Station; community: Community | null; compact?: boolean }) {
   const T = useT();
-  const t = parseTariff(station.prix, { free: station.free });
+  const t = stationTariff(station);
   const lines = describeTariff(t);
   const rel = reliabilityText(community);
   const last = lastPriceText(community);
@@ -49,10 +49,23 @@ export function TariffLines({ station, community, compact }: { station: Station;
 }
 
 /** Résumé « prix avant de payer » : tarif publié + estimation pour le point (scan depuis l'accueil, avant « Payer »). */
-export function PriceSummary({ station, point, vehicle, community }: { station: Station; point: ChargePoint; vehicle: Vehicle | null; community: Community | null }) {
+export function PriceSummary({
+  station,
+  point,
+  vehicle,
+  community,
+  preauthMax,
+}: {
+  station: Station;
+  point: ChargePoint;
+  vehicle: Vehicle | null;
+  community: Community | null;
+  /** Montant pré-autorisé publié par l'opérateur (preauthMaxOf), sinon texte générique court. */
+  preauthMax: number | null;
+}) {
   const T = useT();
   const R = T.recharger;
-  const tariff = parseTariff(station.prix, { free: station.free });
+  const tariff = stationTariff(station);
   const fresh = vehicle && Date.now() - vehicle.socUpdatedAt < 3 * 3600_000 ? vehicle.socPercent : null;
   const est = estimateCharge({ vehicle, socPercent: fresh, pointKw: point.kw, plugs: point.plugs, tariff });
   const cost = est.cost != null ? `≈ ${euros(Math.round(est.cost * 100))}` : R.unknown;
@@ -67,6 +80,7 @@ export function PriceSummary({ station, point, vehicle, community }: { station: 
         {`${R.energy} ${kwhText(est.kWhBilled)} · ${R.duration} ≈ ${durationLabel(est.minutes)} · ${R.cost} ${cost}`}
       </Text>
       {est.unknownPrice ? <Text style={styles.src}>{R.unknownPriceNote.trim()}</Text> : null}
+      <Text style={styles.line}>{preauthMax != null ? `${R.preauth} · ${eur(preauthMax, 0)}` : R.preauthGeneric}</Text>
     </View>
   );
 }

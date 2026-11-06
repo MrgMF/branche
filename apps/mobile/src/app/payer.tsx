@@ -13,7 +13,8 @@ import { directPayUrl, openOperatorPayment, operatorLabel, operatorOf } from '..
 import { payLabel } from '../lib/format';
 import { verifyQr, type Operator, type QrResult } from '../lib/qr';
 import { findStation, pointById, pointsOf, type ChargePoint } from '../lib/evse';
-import { reader2027Applies } from '../lib/methods';
+import { payOptions, reader2027Applies } from '../lib/methods';
+import { loadPortals, preauthMaxOf, type Portals } from '../lib/portals';
 import { evseInText, qrTarget, type QrTarget } from '../lib/qrTarget';
 import { displayName, loadOperators, type Station } from '../lib/stations';
 import { loadVehicle, type Vehicle } from '../lib/vehicle';
@@ -53,6 +54,7 @@ export default function Payer() {
   const [scannedPdc, setScannedPdc] = useState<string | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [community, setCommunity] = useState<Community | null>(null);
+  const [portals, setPortals] = useState<Portals>({});
   const params = useLocalSearchParams<{ from?: string }>();
   const [plan, setPlanState] = useState(store.plan());
   const planPoint = station && plan?.stationId === station.id ? pointById(station, plan.pdcId) : undefined;
@@ -82,6 +84,7 @@ export default function Payer() {
 
   useEffect(() => {
     loadOperators().then(setOps);
+    loadPortals().then(setPortals);
     loadVehicle().then(setVehicle).catch(() => undefined);
   }, []);
   useEffect(() => {
@@ -175,6 +178,8 @@ export default function Payer() {
         vehicle: vehicle ? { name: vehicle.name, batteryKWh: vehicle.batteryKWh, maxDcKW: vehicle.maxDcKW, maxAcKW: vehicle.maxAcKW } : null,
         tariffRaw: station.prix,
         free: station.free,
+        stationKw: station.kw,
+        pay: station.pay,
       });
     }
     openOperatorPayment(url, station, name);
@@ -198,10 +203,18 @@ export default function Payer() {
 
   const payName = result?.operatorKey ? (ops.find((o) => o.key === result.operatorKey)?.names[0] ?? opName) : opName;
   const tone = result ? (mismatch ? WARN : TONE[result.verdict]) : null;
-  const atStation = station?.pay.filter((p) => p === 'cb' || p === 'sans_contact').map((p) => payLabel(p)) ?? [];
+  // Lecteur de carte : une seule source de vérité, l'option « reader » de payOptions (IRVE, ou « certains sites »)
+  const reader = station ? payOptions(station, planPoint ?? summaryPoint ?? null, ops, { portals }).find((o) => o.id === 'reader') : undefined;
+  const readerConfirmed = !!reader?.available && !reader.speculative;
+  const atStation = readerConfirmed ? (station?.pay.filter((p) => p === 'cb' || p === 'sans_contact').map((p) => payLabel(p)) ?? []) : [];
   // Obligation AFIR (lecteur de carte) : seulement pour les bornes ≥ 50 kW
   const refKw = summaryPoint?.kw ?? planPoint?.kw ?? station?.kw ?? 0;
-  const readerLine = atStation.length ? P.reader(atStation) : station ? (reader2027Applies(refKw) ? P.reader2027 : P.readerNone) : null;
+  const readerLines: string[] = !station || !reader
+    ? []
+    : readerConfirmed
+      ? [atStation.length ? P.reader(atStation) : reader.why]
+      : [...(reader.speculative ? [reader.why] : []), ...(reader2027Applies(refKw) ? [P.reader2027] : reader.speculative ? [] : [P.readerNone])];
+  const portal = station?.ok ? portals[station.ok] : undefined;
   const title = !result
     ? ''
     : result.kind === 'evse'
@@ -210,12 +223,14 @@ export default function Payer() {
         : P.evseOk
       : result.source === 'portal' && result.verdict === 'official'
         ? P.toneOfficialPay
+        : result.source === 'site' && result.verdict === 'official'
+          ? P.toneOfficialSite
         : result.source === 'portal' && result.verdict === 'known-operator'
           ? P.toneKnownPay
           : P.tone[result.verdict];
   const canPay = !!result && !mismatch && result.kind === 'url' && PAYABLE.has(result.verdict) && !!result.url;
   const canConfirm = !!result && !mismatch && result.kind === 'url' && (result.verdict === 'unknown' || result.verdict === 'other-operator' || result.verdict === 'payment-platform') && !!result.url;
-  const summary = fromHome && station && summaryPoint && (canPay || canConfirm) ? <PriceSummary station={station} point={summaryPoint} vehicle={vehicle} community={community} /> : null;
+  const summary = fromHome && station && summaryPoint && (canPay || canConfirm) ? <PriceSummary station={station} point={summaryPoint} vehicle={vehicle} community={community} preauthMax={preauthMaxOf(portal)} /> : null;
 
   return (
     <ScrollView style={{ backgroundColor: colors.surface }} contentContainerStyle={[styles.body, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 }]}>
@@ -337,7 +352,11 @@ export default function Payer() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{P.others}</Text>
-        {readerLine ? <Text style={styles.p}>{readerLine}</Text> : null}
+        {readerLines.map((l) => (
+          <Text key={l} style={styles.p}>
+            {l}
+          </Text>
+        ))}
         {station?.tel ? (
           <Pressable accessibilityRole="link" style={styles.link} onPress={() => Linking.openURL(`tel:${station.tel!.replace(/[^+\d]/g, '')}`)}>
             <Text style={styles.linkText}>{P.call(opName)}</Text>

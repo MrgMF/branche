@@ -4,6 +4,10 @@ dégradation propre) ; parcours « échec de démarrage » ouvert par lien profo
 Critique paiement : QR d'un autre point / d'une autre borne (confirmation explicite), pages officielles sourcées
 (payDomains : ENGIE Vianeo, Virta), lecteur CB 2027 seulement ≥ 50 kW, Lidl « appli seule » → borne payable la plus
 proche + « Y aller », scan depuis l'accueil → résumé prix + estimation avant « Payer ».
+Critique paiement passe 2 : Tesla (appli seule) → « Pas de paiement possible dans Branché ici » + borne payable la plus
+proche ; TotalEnergies 300 kW « gratuite » IRVE → « à vérifier », coût inconnu, lecteur CB « certains sites » ; QR
+pay.alizecharge.com sur une borne Bouygues → site officiel (pas un sosie), pré-autorisation 75 € avant « Payer » ;
+bannière d'accueil « Paiement en attente » tant que le démarrage n'est pas confirmé.
 
 Prérequis : un site assemblé (scripts/assemble-site.mjs + scripts/e2e-setup.mjs) avec une app exportée par
   EXPO_OFFLINE=1 BASE_URL=/branche/app DATA_URL=http://127.0.0.1:8080/branche/data SITE_URL=http://127.0.0.1:8080/branche \
@@ -34,7 +38,7 @@ STUB_STYLE = {"version": 8, "glyphs": "https://example.invalid/{fontstack}/{rang
 TEST_POS = {'latitude': 48.75856, 'longitude': 2.30352}       # à ~6 m de la borne de test FRTSTP0001
 EXPRESS_POS = {'latitude': 48.76304, 'longitude': 2.30668}    # Metropolis Express Antony (réelle, CB, 150 kW)
 log = []
-PENDING = {}  # requêtes en cours (diagnostic d'un « networkidle » jamais atteint)
+PENDING = {}  # requêtes en cours (diagnostic d'un chargement bloqué)
 
 
 def ok(msg):
@@ -154,7 +158,7 @@ try:
         page = ctx.new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
-        page.goto(f'{BASE}/app/?bienvenue=1', wait_until='networkidle')
+        page.goto(f'{BASE}/app/?bienvenue=1', wait_until='load')
         page.wait_for_selector('text=Toutes les bornes, une seule appli', timeout=20000)
         shot(page, 'a0-bienvenue-1')
         page.get_by_role('button', name='Suivant').click()
@@ -239,8 +243,8 @@ try:
         no_overflow(page, 'suivi')
         shot(page, 'a7-suivi')
         ok('démarrage confirmé en un geste, suivi en direct (%, kWh, coût, heure de fin, alerte d’occupation)')
-        page.reload(wait_until='networkidle')
-        page.goto(f'{BASE}/app/', wait_until='networkidle')
+        page.reload(wait_until='load')
+        page.goto(f'{BASE}/app/', wait_until='load')
         page.wait_for_selector('text=Recharge en cours chez Opérateur Test', timeout=15000)
         page.get_by_role('button', name='Recharge en cours chez Opérateur Test · Reprendre').click()
         page.wait_for_selector('text=Coût estimé')
@@ -268,7 +272,7 @@ try:
         com = json.load(urllib.request.urlopen(f'{API}/v1/stations/FRTSTP0001/community'))
         assert com['checkins'] == 1 and com['okCount'] == 1 and com['recentPrices'][0]['pricePaid'] == 9.8, com
         ok('retour anonyme reçu par l’API (fiabilité 1/1, prix constaté 9,80 €)')
-        page.goto(f'{BASE}/app/recharger?station=FRTSTP0001', wait_until='networkidle')
+        page.goto(f'{BASE}/app/recharger?station=FRTSTP0001', wait_until='load')
         page.wait_for_selector('text=1 recharge réussie sur 1', timeout=15000)
         shot(page, 'a11-fiabilite-hub')
         ok('fiabilité communautaire affichée dans le parcours')
@@ -281,7 +285,7 @@ try:
         page = ctx.new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
-        page.goto(f'{BASE}/app/', wait_until='networkidle')
+        page.goto(f'{BASE}/app/', wait_until='load')
         page.wait_for_selector('text=Vous êtes à', timeout=20000)
         page.wait_for_selector('text=Metropolis - Express - Antony')
         shot(page, 'b1-detection')
@@ -329,7 +333,7 @@ try:
         page = ctx.new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
-        page.goto(f'{BASE}/app/recharger?evse=FR*TST*E0002', wait_until='networkidle')
+        page.goto(f'{BASE}/app/recharger?evse=FR*TST*E0002', wait_until='load')
         page.wait_for_selector('text=Prix avant de payer', timeout=20000)
         page.wait_for_selector('text=…0002')
         shot(page, 'c1-lien-profond')
@@ -374,7 +378,7 @@ try:
         page = ctx.new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
-        page.goto(f'{BASE}/app/', wait_until='networkidle')
+        page.goto(f'{BASE}/app/', wait_until='load')
         page.get_by_text('Borne conseillée', exact=False).first.wait_for(timeout=20000)
         shot(page, 'd1-conseillee')
         ok('ouverture : borne conseillée affichée sans aucun geste')
@@ -394,7 +398,7 @@ try:
         shot(page, 'd3-pret')
         ok('recharge préparée à l’avance (point …0002 libre, méthode, prix), rien débité')
         ctx.set_geolocation(TEST_POS)
-        page.goto(f'{BASE}/app/', wait_until='networkidle')
+        page.goto(f'{BASE}/app/', wait_until='load')
         page.wait_for_selector('text=Tout est prêt', timeout=20000)
         shot(page, 'd4-arrivee')
         page.get_by_role('button', name='Payer maintenant').click()
@@ -412,13 +416,13 @@ try:
             page.wait_for_selector('text=Départ de la borne détecté', timeout=25000)
             how = 'pendant le suivi'
         except Exception:
-            page.goto(f'{BASE}/app/', wait_until='networkidle')
+            page.goto(f'{BASE}/app/', wait_until='load')
             page.wait_for_selector('text=Noter le prix (2 secondes)', timeout=20000)
             page.get_by_role('button', name='Noter le prix (2 secondes)').click()
             page.wait_for_selector('text=Départ de la borne détecté', timeout=10000)
             how = 'à la réouverture'
         shot(page, 'd5-fin-auto')
-        page.goto(f'{BASE}/app/historique', wait_until='networkidle')
+        page.goto(f'{BASE}/app/historique', wait_until='load')
         page.get_by_text('Borne de test (CPO local)').first.wait_for()
         ok(f'fin automatique au départ ({how}) : reçu déjà dans l’historique sans aucun geste')
         assert not errors, errors
@@ -429,7 +433,7 @@ try:
         page = ctx.new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
-        page.goto(f'{BASE}/app/recharger?evse=FRVIAE12345955331', wait_until='networkidle')  # ENGIE Vianeo, Chevilly (réelle, 22 kW, CB)
+        page.goto(f'{BASE}/app/recharger?evse=FRVIAE12345955331', wait_until='load')  # ENGIE Vianeo, Chevilly (réelle, 22 kW, CB)
         page.wait_for_selector('text=Prix avant de payer', timeout=20000)
         page.get_by_role('button', name='Scanner le QR code').click()
         box = page.get_by_placeholder('ex. FR*ABC*E1234 ou https://…')
@@ -444,7 +448,7 @@ try:
         page.get_by_role('button', name='Vérifier').click()
         page.wait_for_selector('text=paiement bloqué')
         ok('ENGIE Vianeo : charge.engie-vianeo.com officiel (page sourcée), sosie charge-engie-vianeo.com bloqué')
-        page.goto(f'{BASE}/app/recharger?evse=FRVIRE269470', wait_until='networkidle')  # Virta, Massy (réelle)
+        page.goto(f'{BASE}/app/recharger?evse=FRVIRE269470', wait_until='load')  # Virta, Massy (réelle)
         page.wait_for_selector('text=Prix avant de payer', timeout=20000)
         page.get_by_role('button', name='Scanner le QR code').click()
         page.get_by_placeholder('ex. FR*ABC*E1234 ou https://…').fill('https://chge.eu/')
@@ -453,11 +457,11 @@ try:
         page.get_by_role('button', name='Payer sur la page Virta').wait_for()
         shot(page, 'e2-virta-chge')
         ok('Virta : chge.eu officiel (page sourcée)')
-        page.goto(f'{BASE}/app/recharger?evse=FRHPCENF080017001', wait_until='networkidle')  # TotalEnergies Massy, 300 kW, sans CB IRVE
+        page.goto(f'{BASE}/app/recharger?evse=FRHPCENF080017001', wait_until='load')  # TotalEnergies Massy, 300 kW, sans CB IRVE
         page.wait_for_selector('text=Prix avant de payer', timeout=20000)
         page.get_by_role('button', name='Scanner le QR code').click()
         page.wait_for_selector('text=obligatoire sur toutes les bornes rapides (≥ 50 kW) à partir de 2027')
-        page.goto(f'{BASE}/app/recharger?evse=FRVIRE269470', wait_until='networkidle')
+        page.goto(f'{BASE}/app/recharger?evse=FRVIRE269470', wait_until='load')
         page.wait_for_selector('text=Prix avant de payer', timeout=20000)
         ok('mention « lecteur CB obligatoire ≥ 50 kW en 2027 » sur une borne de 300 kW, absente sur une borne de 22 kW')
         assert not errors, errors
@@ -468,7 +472,7 @@ try:
         page = ctx.new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
-        page.goto(f'{BASE}/app/recharger?evse=FRLDLE00004111', wait_until='networkidle')  # Lidl Châtenay-Malabry (acte + badge IRVE)
+        page.goto(f'{BASE}/app/recharger?evse=FRLDLE00004111', wait_until='load')  # Lidl Châtenay-Malabry (acte + badge IRVE)
         page.wait_for_selector('text=Pas de paiement possible dans Branché ici', timeout=20000)
         body = page.inner_text('body')
         assert 'Ajouter mon compte' not in body and 'Lidl Plus' not in body, 'ni compte, ni appli tierce'
@@ -495,7 +499,7 @@ try:
         page = ctx.new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
-        page.goto(f'{BASE}/app/', wait_until='networkidle')
+        page.goto(f'{BASE}/app/', wait_until='load')
         page.wait_for_selector('text=Vous êtes à', timeout=20000)
         page.get_by_role('button', name='Scanner le QR code d’une borne').click()
         page.wait_for_selector('text=Payer la borne')
@@ -519,6 +523,72 @@ try:
         pop.value.close()
         page.wait_for_selector('text=Paiement chez Opérateur Test')
         ok('scan depuis l’accueil : borne et point du QR retenus, résumé prix + estimation avant « Payer », suivi du bon point')
+        page.goto(f'{BASE}/app/', wait_until='load')
+        page.get_by_role('button', name='Paiement en attente chez Opérateur Test · Reprendre').wait_for(timeout=15000)
+        assert 'Recharge en cours chez' not in page.inner_text('body'), 'pas « Recharge en cours » avant confirmation du démarrage'
+        shot(page, 'g2-paiement-en-attente')
+        page.get_by_role('button', name='Paiement en attente chez Opérateur Test · Reprendre').click()
+        page.get_by_role('button', name='La charge a démarré').click()
+        page.wait_for_selector('text=Coût estimé')
+        page.goto(f'{BASE}/app/', wait_until='load')
+        page.get_by_role('button', name='Recharge en cours chez Opérateur Test · Reprendre').wait_for(timeout=15000)
+        ok('bannière d’accueil : « Paiement en attente chez X » avant confirmation, « Recharge en cours chez X » ensuite')
+        assert not errors, errors
+        ctx.close()
+
+        # ---------- H. Critique paiement passe 2 : Tesla, TotalEnergies 300 kW « gratuite », Bouygues alizé ----------
+        ctx = new_ctx(b, {'latitude': 48.85, 'longitude': 2.35})
+        page = ctx.new_page()
+        errors = []
+        page.on('pageerror', lambda e: errors.append(str(e)))
+        page.goto(f'{BASE}/app/recharger?evse=FRTSLE0004FJ', wait_until='load')  # Superchargeur Thiais (réel, acte + badge IRVE)
+        page.wait_for_selector('text=Pas de paiement possible dans Branché ici', timeout=20000)
+        page.wait_for_selector('text=Borne payable la plus proche', timeout=20000)
+        body = page.inner_text('body')
+        assert 'Recommandé' not in body, 'rien de recommandé chez Tesla'
+        assert 'Paiement ponctuel sans compte déclaré' not in body, 'pas de QR « déclaré » sur la foi de acte'
+        assert 'possible sur certains sites' in body and 'recherche Branché : tesla.com' in body, 'lecteur CB : « certains sites », source citée'
+        page.get_by_text('Pas de paiement possible dans Branché ici').scroll_into_view_if_needed()
+        no_overflow(page, 'tesla')
+        shot(page, 'h1-tesla-bloque')
+        page.get_by_text('possible sur certains sites').first.scroll_into_view_if_needed()
+        shot(page, 'h1b-tesla-lecteur-certains-sites')
+        ok('Tesla (appli seule, source Tesla) : « Pas de paiement possible dans Branché ici », borne payable la plus proche, lecteur CB « certains sites » jamais recommandé')
+
+        page.goto(f'{BASE}/app/recharger?evse=FRHPCENF080017001', wait_until='load')  # TotalEnergies Massy 300 kW, gratuit:true IRVE
+        page.wait_for_selector('text=Prix avant de payer', timeout=20000)
+        page.wait_for_selector('text=Déclarée gratuite dans la base nationale, à vérifier')
+        assert 'Gratuit selon l’opérateur' not in page.inner_text('body')
+        page.get_by_text('Inconnu', exact=True).wait_for()
+        shot(page, 'h2-total-300kw-gratuit-a-verifier')
+        page.get_by_text('Carte bancaire sur la borne (possible sur certains sites)').first.scroll_into_view_if_needed()
+        shot(page, 'h2b-total-methodes')
+        assert 'sur certains sites seulement (recherche Branché : services.totalenergies.fr, largus.fr)' in page.inner_text('body')
+        page.get_by_role('button', name='Scanner le QR code').click()
+        page.wait_for_selector('text=obligatoire sur toutes les bornes rapides (≥ 50 kW) à partir de 2027')
+        page.locator('text=Lecteur de carte signalé par >> visible=true').first.wait_for()  # « Autres moyens » du paiement
+        shot(page, 'h3-total-payer-lecteur')
+        ok('TotalEnergies 300 kW gratuite IRVE : « Déclarée gratuite dans la base nationale, à vérifier », coût « Inconnu », lecteur CB « certains sites » sourcé')
+
+        page.goto(f'{BASE}/app/payer', wait_until='load')  # scan sans borne choisie (accueil)
+        page.wait_for_selector('text=Payer la borne', timeout=20000)
+        box = page.get_by_placeholder('ex. FR*ABC*E1234 ou https://…')
+        box.fill('https://pay.alizecharge.com/?evse=FR*S77*E770340011')  # borne Bouygues réelle (Blandy)
+        page.get_by_role('button', name='Vérifier').click()
+        page.wait_for_selector('text=Site officiel de l’opérateur', timeout=15000)
+        page.wait_for_selector('text=Domaine du site officiel de Bouygues Energies & Services')
+        page.wait_for_selector('text=Pré-autorisation · 75 €')
+        pay_btn = page.get_by_role('button', name='Payer sur la page Bouygues Energies & Services')
+        pay_btn.wait_for()
+        assert page.get_by_text('Pré-autorisation · 75 €').bounding_box()['y'] < pay_btn.bounding_box()['y'], 'pré-autorisation avant « Payer »'
+        assert 'paiement bloqué' not in page.inner_text('body')
+        pay_btn.scroll_into_view_if_needed()
+        no_overflow(page, 'bouygues')
+        shot(page, 'h4-bouygues-alize-officiel')
+        box.fill('https://pay-alizecharge.com/')
+        page.get_by_role('button', name='Vérifier').click()
+        page.wait_for_selector('text=paiement bloqué')
+        ok('Bouygues : pay.alizecharge.com officiel (site sourcé), « Pré-autorisation · 75 € » avant « Payer » ; sosie pay-alizecharge.com bloqué')
         assert not errors, errors
         ctx.close()
         b.close()

@@ -1,6 +1,6 @@
 // English.
 import type { Dict } from './fr';
-import type { InstrParts, MethodCtx, MethodTexts } from './types';
+import type { InstrParts, MethodCtx, MethodTexts, ReaderInfo } from './types';
 
 const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const pl = (n: number, one: string, many: string) => (n === 1 ? one : many);
@@ -37,6 +37,7 @@ export const en: Dict = {
     recommended: 'Recommended',
     powerUnknown: 'Power unknown',
     unknownPrice: 'Price unknown',
+    saveFailed: 'Could not save on this phone (storage full or unavailable): please try again.',
     notProvided: 'Not entered',
     operatorFallback: 'the operator',
     stationFallback: 'Charging station',
@@ -139,7 +140,7 @@ export const en: Dict = {
     fast: 'Fast',
     fastA11y: 'Fast, 50 kW and above',
     open: 'Open access',
-    resume: (op: string) => `Charging with ${op} · Resume`,
+    resume: (op: string, started = true) => (started ? `Charging with ${op} · Resume` : `Payment pending with ${op} · Resume`),
     locDenied: 'Location not allowed: move the map to your area or allow location in settings.',
     dataError: 'Could not load chargers. Check your connection, then try again.',
     locating: 'Finding your location…',
@@ -225,6 +226,7 @@ export const en: Dict = {
   },
   tariff: {
     free: 'Free according to the operator.',
+    freeDoubtful: 'Declared free in the national database, to be checked.',
     energyRange: (a: string, b: string) => `Energy: ${a} to ${b} depending on the time`,
     energy: (a: string, guessed: boolean) => `Energy: ${a}${guessed ? ' (unit not stated, assumed per kWh)' : ''}`,
     time: (x: string) => `Charging time: ${x}`,
@@ -474,14 +476,15 @@ export const en: Dict = {
     changeVehicle: 'Change vehicle',
     setVehicle: 'Set my vehicle',
     preauth: 'Pre-authorisation',
+    preauthGeneric: 'Pre-authorisation: an amount may be held, then released (not published by the operator).',
     preauthBody: (op: string) =>
       `With a bank card, the charger or payment page may hold an amount while you charge (often more than the real cost). Only the real amount is charged; your bank releases the rest, usually within a few days. ${op} does not publish this amount.`,
     idle: (after: number) => `Idle fee after charging${after ? ` (after ${after} min)` : ''}: Branché warns you beforehand.`,
     preparedNotice: 'Prepared charge: point and method restored. Just pay.',
     noLink: (fallback: boolean) => `Charger and point identified from the QR code. It has no payment link: ${fallback ? 'use the method below.' : 'look for another QR code or the card reader on the charger.'}`,
     blockedTitle: 'No payment possible here from Branché',
-    blockedBody: (op: string, badges: string | null) =>
-      `For this charger, ${op} declares no account-free payment, card reader or usable account website${badges ? `; accepted cards: ${badges}` : ''}. If you have a charging card, add it in “My cards”.`,
+    blockedBody: (op: string, badges: string | null, badge = true) =>
+      `For this charger, ${op} declares no account-free payment, card reader or usable account website${badge && badges ? `; accepted cards: ${badges}` : ''}.${badge ? ' If you have a charging card, add it in “My cards”.' : ''}`,
     nearestPayable: (name: string, d: string) => `Nearest payable charger: ${name} (${d})`,
     goThere: 'Go there',
     goThereHint: (name: string) => `Route to ${name}`,
@@ -551,15 +554,17 @@ export const en: Dict = {
         cta: `Open ${c.op} page`,
       };
     },
-    reader: (c: MethodCtx, available: boolean): MethodTexts => {
-      const pt = ptOf(c);
+    reader: (c: MethodCtx, r: ReaderInfo): MethodTexts => {
+      const ptx = ptOf(c);
       const cable = cableOf(c);
+      const maybe = r?.source === 'operator';
+      const card = c.contactless ? 'Tap your card on the reader (contactless logo)' : 'Insert your card in the reader';
+      // Écran ou étiquette selon la borne (beaucoup de bornes AC n'ont pas d'écran)
+      const pick = c.short ? `Find ${ptx} on the socket label; if the charger has a screen, select it there, then “Pay by card”.` : 'If the charger has a screen, select the socket then “Pay by card”; otherwise find the socket by its label.';
       return {
-        label: c.contactless ? 'Contactless bank card on the charger' : 'Bank card on the charger',
-        why: available ? 'Card reader declared by the operator (national IRVE database). No app, no account, and Branché never sees your card.' : 'No card reader declared for this charger.',
-        steps: c.dc
-          ? [`Plug ${cable} into your car.`, `On the charger’s screen, choose ${pt} then “Pay by card”.`, `${c.contactless ? 'Tap your card on the reader' : 'Insert your card in the reader'} and follow the screen: charging starts once approved.`]
-          : [`${c.contactless ? 'Tap your card on the reader (contactless logo)' : 'Insert your card in the reader'} and choose ${pt} if asked.`, 'Wait for the payment to be approved on screen.', `Plug in ${cable}: charging starts.`],
+        label: `${c.contactless ? 'Contactless bank card on the charger' : 'Bank card on the charger'}${maybe ? ' (possible at some sites)' : ''}`,
+        why: r?.source === 'irve' ? 'Card reader declared for this charger in the national IRVE database. No app, no account, and Branché never sees your card.' : maybe ? `Card reader reported by ${c.op} at some sites only (Branché research${r.refs ? `: ${r.refs}` : ''}), not declared for this charger in the IRVE database: check on site.` : 'No card reader declared for this charger.',
+        steps: c.dc ? [`Plug ${cable} into your car.`, pick, `${card} and follow the charger’s instructions: charging starts once approved.`] : [pick, `${card}; wait for approval (screen or indicator light).`, `Plug in ${cable}: charging starts.`],
         cta: 'I paid by card',
       };
     },
@@ -600,6 +605,7 @@ export const en: Dict = {
     imitates: (n: string, d: string) => `This domain imitates ${n}’s (${d}).`,
     unknownDomain: 'Domain not in the operator database.',
     officialPay: (n: string) => `Official payment address published by ${n}.`,
+    officialSite: (n: string) => `Domain of ${n}’s official website (sources checked by Branché).`,
     otherPay: (n: string, st: string) => `Official payment page of ${n}, but this charger is listed under ${st}: check the name shown on the charger.`,
     evseUnknown: 'ID not in the national charger database (or connection down).',
   },
@@ -641,6 +647,7 @@ export const en: Dict = {
     reader2027: 'Card reader: mandatory on all fast chargers (≥ 50 kW) from 2027.',
     readerNone: 'No card reader declared for this charger.',
     toneOfficialPay: 'Operator’s official payment page',
+    toneOfficialSite: 'Operator’s official website',
     toneKnownPay: 'Another operator’s official page',
     otherPoint: (scanned: string, chosen: string) => `This QR code is for point …${scanned}, not point …${chosen} that you chose.`,
     otherStation: (name: string) => `This QR code is for another charger: ${name}.`,
@@ -683,9 +690,9 @@ export const en: Dict = {
     stateAccount: (op: string) => `Starting with your ${op} account`,
     stateReader: 'Pay on the charger’s reader',
     statePage: (op: string) => `Paying ${op}`,
-    bodyBadge: 'Follow the charger’s screen, then plug in. Branché tracks the charge here.',
+    bodyBadge: 'Tap your card on the reader, follow the screen if there is one, then plug in. Branché tracks the charge here.',
     bodyAccount: (op: string) => `Start charging on ${op}’s page, plug in if not done yet, then come back here.`,
-    bodyReader: (short: string | null) => `Follow the charger’s screen: bank card${short ? `, point …${short}` : ''}, then plug in. Branché tracks the charge here.`,
+    bodyReader: (short: string | null) => `Pay by card on the reader${short ? ` (point …${short}, shown on the label or screen)` : ''}, then plug in. Branché tracks the charge here.`,
     bodyPage: (op: string) => `Complete payment on ${op}’s page, plug in if not done yet, then come back here.`,
     started: 'Charging has started',
     startedHint: 'Starts live tracking and end-of-charge reminders',
