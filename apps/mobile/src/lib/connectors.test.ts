@@ -6,7 +6,7 @@ vi.mock('expo-web-browser', () => ({ openBrowserAsync: vi.fn(async () => ({ type
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 
 import { clearWallet, loadWallet } from './accounts';
-import { runPlan } from './connectors';
+import { openOperatorPayment, runPlan, setNetworkProbe } from './connectors';
 import { store, type ChargePlan } from './store';
 import type { Station } from './stations';
 
@@ -15,6 +15,7 @@ const plan = (method: ChargePlan['method']): ChargePlan => ({ stationId: 'S1', p
 
 beforeEach(async () => {
   push.mockClear();
+  setNetworkProbe(async () => true);
   store.setDirect(null);
   await clearWallet();
 });
@@ -31,5 +32,26 @@ describe('runPlan — compte opérateur', () => {
     runPlan(st, plan('operator-link'), 'Opérateur Test', 'https://pay.test/');
     await new Promise((r) => setTimeout(r, 0));
     expect(store.direct()?.accountAsk).toBeUndefined();
+  });
+});
+
+describe('hors ligne : réseau vérifié avant d’ouvrir la page de l’opérateur', () => {
+  it('sans réseau : rien n’est ouvert ni suivi, « offline » rendu à l’écran', async () => {
+    setNetworkProbe(async () => false);
+    expect(await openOperatorPayment('https://pay.test/', st, 'Opérateur Test')).toBe('offline');
+    expect(store.direct()).toBeNull();
+    expect(push).not.toHaveBeenCalled();
+    expect(await runPlan(st, plan('operator-link'), 'Opérateur Test', 'https://pay.test/')).toBe('offline');
+    expect(store.direct()).toBeNull();
+  });
+  it('avec réseau : page ouverte puis suivi', async () => {
+    expect(await openOperatorPayment('https://pay.test/', st, 'Opérateur Test')).toBe('opened');
+    expect(store.direct()?.url).toBe('https://pay.test/');
+    expect(push).toHaveBeenCalledWith('/recharge');
+  });
+  it('message affiché (toutes langues)', async () => {
+    const { DICTS } = await import('../i18n');
+    expect(DICTS.fr.common.noNetwork).toBe('Pas de réseau : payez au lecteur CB ou réessayez');
+    for (const d of Object.values(DICTS)) expect(d.common.noNetwork.length).toBeGreaterThan(10);
   });
 });

@@ -23,7 +23,7 @@ import { store } from '../lib/store';
 import { stationTariff } from '../lib/tariff';
 import { compatible, loadVehicle, saveVehicle, type Vehicle } from '../lib/vehicle';
 import { loadWallet, type Wallet } from '../lib/accounts';
-import { appOnly, badgeMentioned, badgeNames, nearestPayable } from '../lib/methods';
+import { appOnly, badgeMentioned, badgeNames, nearestPayable, surelyPayable } from '../lib/methods';
 import { loadPortals, preauthMaxOf, type Portals } from '../lib/portals';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { Icon } from '../components/Icon';
@@ -58,6 +58,7 @@ export default function Recharger() {
   // Stations voisines chargées ici quand l'écran est ouvert par lien profond (carte jamais chargée)
   const [around, setAround] = useState<Station[] | null>(null);
   const [preauthOpen, setPreauthOpen] = useState(false);
+  const [offline, setOffline] = useState(false);
   const preparing = params.prepare === '1';
 
   // Station et point depuis le lien, la sélection courante ou l'index EVSE
@@ -133,8 +134,11 @@ export default function Recharger() {
   const options = useMemo(() => (station ? payOptions(station, point, ops, { portals, wallet }) : []), [station, point, ops, portals, wallet, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const portal = station?.ok ? portals[station.ok] : undefined;
   const accountConnected = !!station?.ok && wallet.accounts.some((a) => a.operatorKey === station.ok);
-  // Rien de payable ici depuis Branché : alternative la plus proche qui l'est (méthode déclarée, pas un QR « éventuel »)
-  const blocked = appOnly(options);
+  // Rien de payable ici depuis Branché : alternative la plus proche qui l'est (méthode déclarée, pas un QR « éventuel »).
+  // `blocked` ne compte que les options disponibles ET non spéculatives ; `unconfirmed` : seulement du spéculatif
+  // (QR « éventuel », lecteur « sur certains sites ») → « Non confirmé ici », à essayer sur place ou borne payable proposée.
+  const blocked = !surelyPayable(options);
+  const unconfirmed = blocked && !appOnly(options);
   useEffect(() => {
     if (!blocked || !station || store.stations().length || around) return;
     loadAround(station, 1)
@@ -206,7 +210,8 @@ export default function Recharger() {
       return;
     }
     if (prepared) clearPrepared();
-    runPlan(station, plan, opName, o.url);
+    setOffline(false);
+    runPlan(station, plan, opName, o.url).then((r) => setOffline(r === 'offline'));
   }
 
   if (station === undefined) {
@@ -393,9 +398,9 @@ export default function Recharger() {
           {params.noLink ? <Notice>{R.noLink(!!fallback)}</Notice> : null}
           {blocked ? (
             <View style={[styles.card, { borderColor: colors.busy }]}>
-              <Text style={styles.cardTitle} accessibilityRole="header">{R.blockedTitle}</Text>
+              <Text style={styles.cardTitle} accessibilityRole="header">{unconfirmed ? R.unconfirmedTitle : R.blockedTitle}</Text>
               <Text style={styles.p}>
-                {R.blockedBody(opName, badgeNames(portal?.roamingBadgesAccepted).join(', ') || null, badgeMentioned(station))}
+                {unconfirmed ? R.unconfirmedBody(opName) : R.blockedBody(opName, badgeNames(portal?.roamingBadgesAccepted).join(', ') || null, badgeMentioned(station))}
               </Text>
               {alternative ? (
                 <>
@@ -417,8 +422,8 @@ export default function Recharger() {
               {badgeMentioned(station) ? <Button label={R.myBadges} variant="ghost" onPress={() => router.push('/comptes')} /> : null}
             </View>
           ) : null}
-          {/* Méthode recommandée + mode d'emploi */}
-          {chosen && !blocked ? (
+          {/* Méthode recommandée + mode d'emploi (non confirmé : la méthode éventuelle reste lisible, à essayer sur place) */}
+          {chosen && (!blocked || (unconfirmed && chosen.available)) ? (
             <View style={[styles.card, styles.methodCard]}>
               <View style={styles.rowWrap}>
                 <Text style={[styles.cardTitle, { flexShrink: 1 }]} accessibilityRole="header">
@@ -439,6 +444,9 @@ export default function Recharger() {
               {chosen.copyId ? <CopyId id={chosen.copyId} /> : null}
               <Text style={styles.small}>{R.followStation}</Text>
               {preparing ? <Text style={styles.small}>{R.prepNote}</Text> : null}
+              {/* Non confirmé : action secondaire dans la carte (l'action principale reste « Y aller ») */}
+              {blocked && unconfirmed && !preparing ? <Button label={chosen.cta} variant="secondary" onPress={() => go(chosen)} disabled={!chosen.available} /> : null}
+              {blocked && offline ? <Notice tone="error">{t.common.noNetwork}</Notice> : null}
             </View>
           ) : null}
 
@@ -476,6 +484,11 @@ export default function Recharger() {
       {sticky && chosen ? (
         <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
           <View style={styles.footerIn}>
+            {offline ? (
+              <View accessibilityLiveRegion="assertive" role="alert" style={{ marginBottom: 8 }}>
+                <Notice tone="error">{t.common.noNetwork}</Notice>
+              </View>
+            ) : null}
             <Button label={preparing ? R.saveForArrival : chosen.cta} onPress={() => go(chosen)} disabled={!chosen.available} hint={chosen.id === 'reader' ? R.hintReader : R.hintQr} />
           </View>
         </View>

@@ -17,7 +17,7 @@ export interface Portal {
    */
   idEntry?: 'emi3' | 'printed' | 'select' | null;
   /** Nombre de chiffres du numéro inscrit ([min, max]), seulement pour `printed` et s'il est publié. */
-  idDigits?: [number, number] | null;
+  idDigits?: number[] | null;
   cardReader?: boolean | null;
   /** N'accepte que son appli (ou un badge). */
   appOnly?: boolean | null;

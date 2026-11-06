@@ -116,7 +116,11 @@ describe('POST /v1/route v2 — TomTom (sections, instructions balisées)', () =
 
   it('tomtomManeuver : table complète des codes de la documentation', () => {
     expect(tomtomManeuver('TAKE_EXIT')).toBe('exit-right');
-    expect(tomtomManeuver('TAKE_EXIT', 'LEFT')).toBe('exit-left');
+    // Côté de la sortie : signe de turnAngleInDecimalDegrees, pas le côté de circulation.
+    expect(tomtomManeuver('TAKE_EXIT', -35, 'RIGHT')).toBe('exit-left');
+    expect(tomtomManeuver('TAKE_EXIT', 30, 'LEFT')).toBe('exit-right');
+    expect(tomtomManeuver('TAKE_EXIT', undefined, 'LEFT')).toBe('exit-left');
+    expect(tomtomManeuver('TAKE_EXIT', 0, 'RIGHT')).toBe('exit-right');
     expect(tomtomManeuver('ROUNDABOUT_BACK')).toBe('roundabout');
     expect(tomtomManeuver('KEEP_LEFT')).toBe('keep-left');
     expect(tomtomManeuver('BEAR_RIGHT')).toBe('slight-right');
@@ -127,6 +131,27 @@ describe('POST /v1/route v2 — TomTom (sections, instructions balisées)', () =
     expect(tomtomManeuver('ARRIVE_LEFT')).toBe('arrive');
     expect(tomtomManeuver('INCONNU')).toBe('straight');
     expect(stripTags('Prenez <roadNumber>A4</roadNumber>/<roadNumber>E19</roadNumber> vers <signpostText>Den Haag</signpostText>')).toBe('Prenez A4/E19 vers Den Haag');
+  });
+});
+
+describe('TomTom TAKE_EXIT : sortie à gauche en circulation à droite', () => {
+  it('angle négatif → exit-left, icône et consigne à gauche', () => {
+    const pts = [0, 1, 2, 3].map((k) => ({ latitude: 48.8 + k * 0.001, longitude: 2.3 }));
+    const route = parseTomTomRoute({
+      summary: { lengthInMeters: 330, travelTimeInSeconds: 20 },
+      legs: [{ points: pts }],
+      guidance: {
+        instructions: [
+          { routeOffsetInMeters: 0, point: pts[0], pointIndex: 0, maneuver: 'DEPART', drivingSide: 'RIGHT' },
+          { routeOffsetInMeters: 110, point: pts[1], pointIndex: 1, maneuver: 'TAKE_EXIT', drivingSide: 'RIGHT', turnAngleInDecimalDegrees: -40, exitNumber: '12', signpostText: 'Lyon' },
+          { routeOffsetInMeters: 220, point: pts[2], pointIndex: 2, maneuver: 'TAKE_EXIT', drivingSide: 'RIGHT', turnAngleInDecimalDegrees: 35 },
+          { routeOffsetInMeters: 330, point: pts[3], pointIndex: 3, maneuver: 'ARRIVE', drivingSide: 'RIGHT' },
+        ],
+      },
+    })!;
+    expect(route.steps.map((s) => s.maneuver)).toEqual(['depart', 'exit-left', 'exit-right', 'arrive']);
+    expect(route.steps[1]!.instruction).toMatch(/gauche/);
+    expect(route.steps[2]!.instruction).toMatch(/droite/);
   });
 });
 

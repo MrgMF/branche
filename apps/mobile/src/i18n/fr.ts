@@ -4,7 +4,7 @@ import type { IdEntryInfo, InstrParts, MethodCtx, MethodTexts, ReaderInfo } from
 const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const s = (n: number) => (n > 1 ? 's' : '');
 /** « de » élidé devant voyelle (d’IZIVIA, d’ENGIE Vianeo) ; « de l’opérateur » inchangé. */
-const de = (op: string) => (/^[aeiouyàâéèêëîïôûüAEIOUYÀÂÉÈÊËÎÏÔÛÜ]/.test(op) ? `d’${op}` : `${de(op)}`);
+const de = (op: string) => (/^[aeiouyàâéèêëîïôûüAEIOUYÀÂÉÈÊËÎÏÔÛÜ]/.test(op) ? `d’${op}` : `de ${op}`);
 const ptOf = (c: MethodCtx) => (c.short ? `le point …⁠${c.short}` : 'le point choisi');
 const nearOf = (c: MethodCtx) => (c.short ? `du point …⁠${c.short}` : 'du point choisi');
 /** « du point … » : contraction de + le (l'identifiant du point, près du point). */
@@ -424,6 +424,13 @@ export const fr = {
     noTrafficStatic: 'Sans trafic en temps réel : itinéraire calculé par le serveur public OpenStreetMap (FOSSGIS), sans compte ni serveur Branché.',
     noFeedStatic: 'Perturbations et signalements indisponibles dans cette version sans serveur.',
     attrStatic: 'Itinéraire © contributeurs OpenStreetMap, Valhalla (serveur public FOSSGIS).',
+    offRoute: 'Hors itinéraire, recalcul…',
+    trafficLost: 'Trafic en temps réel indisponible',
+    gainLabel: (min: number) => `−${min} min`,
+    viaInVoice: (d: string) => `Dans ${d}, vous arrivez à votre étape.`,
+    socAsk: 'Batterie après la recharge ?',
+    socChoiceA11y: (p: number) => `Batterie à ${p} %, reprendre le trajet`,
+    socKeep: (p: number) => `Reprendre, batterie estimée ${p} %`,
   },
   instr: {
     depart: (p: InstrParts) => `Partez${onto(p)}`,

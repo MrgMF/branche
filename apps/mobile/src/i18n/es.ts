@@ -421,6 +421,13 @@ export const es: Dict = {
     noTrafficStatic: 'Sin tráfico en tiempo real: ruta calculada por el servidor público de OpenStreetMap (FOSSGIS), sin cuenta ni servidor de Branché.',
     noFeedStatic: 'Incidencias y avisos no disponibles en esta versión sin servidor.',
     attrStatic: 'Ruta © colaboradores de OpenStreetMap, Valhalla (servidor público FOSSGIS).',
+    offRoute: 'Fuera de ruta, recalculando…',
+    trafficLost: 'Tráfico en tiempo real no disponible',
+    gainLabel: (min: number) => `−${min} min`,
+    viaInVoice: (d: string) => `En ${d}, llegarás a tu parada.`,
+    socAsk: '¿Batería tras la recarga?',
+    socChoiceA11y: (p: number) => `Batería al ${p} %, reanudar el viaje`,
+    socKeep: (p: number) => `Reanudar, batería estimada ${p} %`,
   },
   instr: {
     depart: (p: InstrParts) => `Sal${onto(p)}`,

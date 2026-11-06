@@ -9,8 +9,9 @@ import { apiEnabled } from '../lib/api';
 import { getCommunity, type Community } from '../lib/community';
 import { DEV_HOSTS } from '../lib/config';
 import { postReport } from '../lib/navigation';
-import { directPayUrl, openOperatorPayment, operatorLabel, operatorOf } from '../lib/connectors';
+import { directPayUrl, openOperatorPayment, operatorLabel, operatorOf, startReaderCharge } from '../lib/connectors';
 import { payLabel } from '../lib/format';
+import type { MethodId } from '../lib/history';
 import { verifyQr, type Operator, type QrResult } from '../lib/qr';
 import { findStation, pointById, pointsOf, type ChargePoint } from '../lib/evse';
 import { payOptions, reader2027Applies } from '../lib/methods';
@@ -55,6 +56,7 @@ export default function Payer() {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [community, setCommunity] = useState<Community | null>(null);
   const [portals, setPortals] = useState<Portals>({});
+  const [offline, setOffline] = useState(false);
   const params = useLocalSearchParams<{ from?: string }>();
   const [plan, setPlanState] = useState(store.plan());
   const planPoint = station && plan?.stationId === station.id ? pointById(station, plan.pdcId) : undefined;
@@ -94,10 +96,19 @@ export default function Payer() {
   const opName = operatorLabel(station, ops);
   const knownUrl = station ? directPayUrl(station, ops) : null;
 
+  /** Voies officielles de la borne (page de paiement connue, lecteur CB déclaré) : un lien Stripe/SumUp y est bloqué. */
+  function officialOf(st: Station | null) {
+    if (!st) return undefined;
+    const o = payOptions(st, st.id === station?.id ? (planPoint ?? summaryPoint ?? null) : null, ops, { portals });
+    const rd = o.find((x) => x.id === 'reader');
+    return { page: !!o.find((x) => x.id === 'operator-link')?.available, reader: !!rd?.available && !rd.speculative };
+  }
+
   async function check(raw: string, override?: Station) {
     let at = override ?? station;
     setLastRaw(raw);
-    let r = verifyQr(raw, at?.ok ?? null, ops, { devHosts: DEV_HOSTS });
+    setOffline(false);
+    let r = verifyQr(raw, at?.ok ?? null, ops, { devHosts: DEV_HOSTS, official: officialOf(at) });
     // Identifiant de point : QR code « identifiant seul », ou dans le lien (…?evse=FR*ABC*E123)
     const evse = r.kind === 'evse' ? (r.evse ?? null) : /^https?:/i.test(raw.trim()) ? evseInText(raw) : null;
     const chosenPdc = at && plan?.stationId === at.id ? (plan.pdcId ?? null) : null;
@@ -108,7 +119,7 @@ export default function Payer() {
       at = target.station;
       setStation(at);
       store.setCurrent(at);
-      r = verifyQr(raw, at.ok ?? null, ops, { devHosts: DEV_HOSTS });
+      r = verifyQr(raw, at.ok ?? null, ops, { devHosts: DEV_HOSTS, official: officialOf(at) });
     }
     if (r.kind === 'evse' && r.evse) {
       if (target.kind === 'select' || target.kind === 'same') {
@@ -165,7 +176,7 @@ export default function Payer() {
   }
 
   /** Paiement depuis l'accueil : le suivi reprend le point et le tarif vus dans le résumé. */
-  function pay(url: string, name: string) {
+  function planFromHome(method: MethodId) {
     if (station && fromHome && summaryPoint) {
       const fresh = vehicle && Date.now() - vehicle.socUpdatedAt < 3 * 3600_000 ? vehicle.socPercent : null;
       store.setPlan({
@@ -173,7 +184,7 @@ export default function Payer() {
         pdcId: summaryPoint.id,
         pointKw: summaryPoint.kw,
         plugs: summaryPoint.plugs,
-        method: 'scan',
+        method,
         socPercent: fresh,
         vehicle: vehicle ? { name: vehicle.name, batteryKWh: vehicle.batteryKWh, maxDcKW: vehicle.maxDcKW, maxAcKW: vehicle.maxAcKW } : null,
         tariffRaw: station.prix,
@@ -181,8 +192,25 @@ export default function Payer() {
         stationKw: station.kw,
         pay: station.pay,
       });
+    } else {
+      // Parcours « Recharger » : la méthode réellement utilisée (voie officielle proposée) est reprise par le suivi
+      const pl = store.plan();
+      if (pl && station && pl.stationId === station.id && pl.method !== method) store.setPlan({ ...pl, method });
     }
-    openOperatorPayment(url, station, name);
+  }
+
+  /** Sans réseau, rien n'est ouvert : « Pas de réseau : payez au lecteur CB ou réessayez ». */
+  function pay(url: string, name: string, method: MethodId = 'scan') {
+    planFromHome(method);
+    setOffline(false);
+    openOperatorPayment(url, station, name).then((r) => setOffline(r === 'offline'));
+  }
+
+  /** Voie officielle proposée à la place d'un lien bloqué (page connue de l'opérateur ou lecteur CB de la borne). */
+  function payAtReader() {
+    if (!station) return;
+    planFromHome('reader');
+    startReaderCharge(station, opName);
   }
 
   function onScan(e: BarcodeScanningResult) {
@@ -221,6 +249,8 @@ export default function Payer() {
       ? result.verdict === 'unknown'
         ? P.evseDiff
         : P.evseOk
+      : result.source === 'site' && result.verdict === 'unknown'
+        ? P.toneSiteUnverified
       : result.source === 'portal' && result.verdict === 'official'
         ? P.toneOfficialPay
         : result.source === 'site' && result.verdict === 'official'
@@ -230,6 +260,8 @@ export default function Payer() {
           : P.tone[result.verdict];
   const canPay = !!result && !mismatch && result.kind === 'url' && PAYABLE.has(result.verdict) && !!result.url;
   const canConfirm = !!result && !mismatch && result.kind === 'url' && (result.verdict === 'unknown' || result.verdict === 'other-operator' || result.verdict === 'payment-platform') && !!result.url;
+  // Lien bloqué alors qu'une voie officielle existe : cette voie, proposée en un geste
+  const officialLink = station ? payOptions(station, planPoint ?? summaryPoint ?? null, ops, { portals }).find((o) => o.id === 'operator-link' && o.available)?.url : undefined;
   const summary = fromHome && station && summaryPoint && (canPay || canConfirm) ? <PriceSummary station={station} point={summaryPoint} vehicle={vehicle} community={community} preauthMax={preauthMaxOf(portal)} /> : null;
 
   return (
@@ -331,10 +363,14 @@ export default function Payer() {
             </>
           ) : null}
 
-          {result.verdict === 'dangerous' ? (
+          {result.verdict === 'dangerous' && !result.alternative ? (
             <Text style={[styles.reason, { color: tone.fg }]}>
               {P.dangerous(atStation.length ? atStation.join(', ') : null)}
             </Text>
+          ) : null}
+          {result.alternative === 'page' && officialLink ? <Button label={P.useOfficialPage(opName)} onPress={() => pay(officialLink, opName, 'operator-link')} /> : null}
+          {result.alternative === 'reader' || (result.alternative === 'page' && !officialLink && readerConfirmed) ? (
+            <Button label={P.useReader} variant={result.alternative === 'reader' ? 'primary' : 'secondary'} onPress={payAtReader} hint={t.recharger.hintReader} />
           ) : null}
 
           {result.kind === 'evse' && !mismatch ? (
@@ -363,6 +399,11 @@ export default function Payer() {
           </Pressable>
         ) : null}
       </View>
+      {offline ? (
+        <View role="alert" accessibilityLiveRegion="assertive">
+          <Notice tone="error">{t.common.noNetwork}</Notice>
+        </View>
+      ) : null}
       {Platform.OS === 'web' ? <Text style={styles.small}>{P.webTab}</Text> : null}
     </ScrollView>
   );

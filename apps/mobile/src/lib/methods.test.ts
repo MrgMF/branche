@@ -261,7 +261,7 @@ describe('lien de secours sans QR : page de démarrage sourcée (webStart https)
     const link = payOptions(s, pt(s), ops, { portals: P }).find((o) => o.id === 'operator-link')!;
     expect(link).toMatchObject({ available: true, url: 'https://chge.eu' });
     expect(link.copyId).toBeUndefined();
-    expect(link.steps[0]).toBe('Sur la page de paiement de Virta, saisissez le numéro de 4 à 5 chiffres inscrit sur la borne, près du point …⁠9470 (ce n’est pas l’identifiant affiché par Branché).');
+    expect(link.steps[0]).toBe('Sur la page de paiement de l’opérateur, saisissez le numéro de 4 à 5 chiffres inscrit sur la borne, près du point …⁠9470 (ce n’est pas l’identifiant affiché par Branché).');
   });
   it('Ionity (idEntry select) : choix du point dans la liste, rien à copier', () => {
     const s: Station = { ...base, ok: 'ionity', kw: 350, c: ['ccs'], pay: [], pdc: [['FRIONE0001', 350, ['ccs']]] };

@@ -1,6 +1,7 @@
 // Analyse du champ libre IRVE `tarification` (texte saisi par chaque opérateur) — fonction pure, testée dans tariff.test.ts.
 import { tr } from '../i18n';
 import { num, perKwh as perKwhFmt, perMin as perMinFmt } from '../i18n/format';
+import { verifyQr, type Operator } from './qr';
 // But : afficher AVANT de payer un prix lisible (€/kWh, €/min, frais de session, occupation) et estimer le coût.
 // Prudence : on n'invente rien. Si le texte est ambigu, le résultat le dit (guessedUnit, kind 'unknown').
 
@@ -262,3 +263,13 @@ export const planTariff = (p: { tariffRaw?: string; free?: boolean; stationKw?: 
 
 /** Multiplicateur TTC (les prix HT sont majorés de la TVA à 20 %). */
 export const ttcFactor = (t: Pick<Tariff, 'ht'>) => (t.ht ? 1.2 : 1);
+
+/**
+ * Lien de tarif IRVE sûr à ouvrir : https seulement, et passé par le vérificateur de QR (mêmes règles anti-sosie,
+ * raccourcisseurs, liens entre particuliers). Sinon null : le lien n'est pas proposé.
+ */
+export function safeTariffUrl(url: string | undefined, operatorKey: string | null, ops: Operator[]): string | null {
+  if (!url || !/^https:\/\//i.test(url.trim())) return null;
+  const r = verifyQr(url.trim(), operatorKey, ops);
+  return r.kind === 'url' && r.verdict !== 'dangerous' && r.url?.startsWith('https://') ? r.url : null;
+}

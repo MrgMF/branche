@@ -420,6 +420,13 @@ export const de: Dict = {
     noTrafficStatic: 'Ohne Echtzeitverkehr: Route vom öffentlichen OpenStreetMap-Server (FOSSGIS) berechnet, ohne Konto und ohne Branché-Server.',
     noFeedStatic: 'Verkehrsstörungen und Meldungen sind in dieser Version ohne Server nicht verfügbar.',
     attrStatic: 'Route © OpenStreetMap-Mitwirkende, Valhalla (öffentlicher FOSSGIS-Server).',
+    offRoute: 'Abseits der Route, Neuberechnung…',
+    trafficLost: 'Echtzeitverkehr nicht verfügbar',
+    gainLabel: (min: number) => `−${min} Min.`,
+    viaInVoice: (d: string) => `In ${d} erreichen Sie Ihren Zwischenstopp.`,
+    socAsk: 'Akkustand nach dem Laden?',
+    socChoiceA11y: (p: number) => `Akku bei ${p} %, Fahrt fortsetzen`,
+    socKeep: (p: number) => `Fortsetzen, geschätzter Akku ${p} %`,
   },
   instr: {
     depart: (p: InstrParts) => `Fahren Sie los${onto(p)}`,

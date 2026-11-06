@@ -81,9 +81,49 @@ export function announcementText(level: AnnounceLevel, inM: number, step: RouteS
   const v = tr().voice;
   const what = instructionOf(step).replace(/\.$/, '');
   const base = level === 'near' ? what : v.inDist(spokenDist(inM), what);
-  if (then && then.gapM < 150 && maneuverOf(then.step) !== 'arrive') return v.then(base, instructionOf(then.step).replace(/\.$/, ''));
+  if (then && then.gapM < 150 && maneuverOf(then.step) !== 'arrive' && maneuverOf(then.step) !== 'waypoint') return v.then(base, instructionOf(then.step).replace(/\.$/, ''));
   return `${base}.`;
 }
+
+/**
+ * Annonce vocale d'une étape au niveau `level`, ou null. Arrivée et étape (waypoint) : seulement « Dans X, … »,
+ * jamais au niveau proche — l'arrivée à l'étape et à destination a sa propre annonce (pas de double annonce).
+ */
+export function maneuverVoice(level: AnnounceLevel, inM: number, step: RouteStep, then?: { step: RouteStep; gapM: number }): string | null {
+  const m = maneuverOf(step);
+  if (m === 'arrive' || m === 'waypoint') {
+    if (level === 'near') return null;
+    return m === 'arrive' ? tr().voice.arrivingIn(spokenDist(inM)) : tr().navx.viaInVoice(spokenDist(inM));
+  }
+  return announcementText(level, inM, step, then);
+}
+
+// ---------------------------------------------------------------- Guidage : états
+
+/** Tracé de la proposition de trajet plus rapide, affiché sur la carte jusqu'à la décision (« −X min »). */
+export const OFFER_ROUTE_ID = '__offer';
+export function offerAlt(offer: { route: Pick<RouteOption, 'geometry'>; gainS: number } | null | undefined): { id: string; coords: LonLat[]; label: string }[] {
+  if (!offer || offer.route.geometry.length < 2) return [];
+  return [{ id: OFFER_ROUTE_ID, coords: offer.route.geometry, label: tr().navx.gainLabel(Math.max(1, Math.round(offer.gainS / 60))) }];
+}
+
+/** Bascule du fournisseur en cours de guidage : TomTom (trafic) → Valhalla (sans trafic) = toast d'avertissement. */
+export function lostTraffic(prev: { provider: string | null; traffic: boolean }, next: { provider: string | null; traffic: boolean }): boolean {
+  return prev.provider === 'tomtom' && prev.traffic && next.provider !== 'tomtom' && !next.traffic;
+}
+
+/**
+ * Batterie de départ après une étape : niveau déclaré après une recharge, sinon l'estimation courante.
+ * Sans recharge déclarée, la batterie ne remonte jamais (pas de retour au niveau saisi au départ).
+ */
+export function socAfterStop(estimate: number, declared?: number | null): number {
+  const clamp = (x: number) => Math.max(0, Math.min(100, x));
+  if (typeof declared === 'number' && Number.isFinite(declared)) return clamp(Math.round(declared));
+  return clamp(estimate);
+}
+
+/** Choix proposés à l'étape (batterie après la recharge, en %). */
+export const SOC_CHOICES = [50, 60, 70, 80, 90, 100] as const;
 
 // ---------------------------------------------------------------- Vitesse
 

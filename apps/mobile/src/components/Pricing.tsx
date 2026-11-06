@@ -1,10 +1,13 @@
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { lastPriceText, reliabilityText, type Community } from '../lib/community';
 import type { ChargePoint } from '../lib/evse';
 import { durationLabel, estimateCharge } from '../lib/estimate';
 import { euros } from '../lib/format';
-import type { Station } from '../lib/stations';
-import { describeTariff, stationTariff } from '../lib/tariff';
+import type { Operator } from '../lib/qr';
+import { loadOperators, type Station } from '../lib/stations';
+import { describeTariff, safeTariffUrl, stationTariff } from '../lib/tariff';
 import type { Vehicle } from '../lib/vehicle';
 import { eur, kwhText } from '../i18n/format';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
@@ -18,6 +21,16 @@ export function TariffLines({ station, community, compact }: { station: Station;
   const rel = reliabilityText(community);
   const last = lastPriceText(community);
   const rate = community?.successRate;
+  const [ops, setOps] = useState<Operator[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    if (t.url) loadOperators().then((o) => alive && setOps(o));
+    return () => {
+      alive = false;
+    };
+  }, [t.url]);
+  // Vérifié une fois le registre des opérateurs chargé ; ouvert dans le navigateur intégré (pas l'app externe)
+  const tariffUrl = ops ? safeTariffUrl(t.url, station.ok ?? null, ops) : null;
   return (
     <View style={styles.wrap}>
       {lines.length ? (
@@ -32,8 +45,8 @@ export function TariffLines({ station, community, compact }: { station: Station;
           {t.notes.length ? ` ${t.notes.join(' ')}` : ''}
         </Text>
       )}
-      {t.url ? (
-        <Pressable accessibilityRole="link" accessibilityLabel={T.pricing.seeOperatorA11y} onPress={() => Linking.openURL(t.url!)} style={styles.link}>
+      {tariffUrl ? (
+        <Pressable accessibilityRole="link" accessibilityLabel={T.pricing.seeOperatorA11y} onPress={() => void WebBrowser.openBrowserAsync(tariffUrl).catch(() => undefined)} style={styles.link}>
           <Text style={styles.linkText}>{T.pricing.seeOperator}</Text>
         </Pressable>
       ) : null}

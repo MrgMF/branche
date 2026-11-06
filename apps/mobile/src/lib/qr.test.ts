@@ -180,18 +180,32 @@ describe('verifyQr — pages de paiement officielles sourcées (payDomains)', ()
 describe('verifyQr — domaines des sites sourcés (siteDomains, publiés par pipeline/src/portals.mjs)', () => {
   // Tels que publiés dans operators.json : domaines IRVE + siteDomains tirés des URL sourcées (hors sites tiers)
   const REG: Operator[] = [
-    { key: 'bouygues-energies-services', names: ['Bouygues Energies & Services'], domains: ['alizecharge.fr', 'bouygues-es.com'], payUrl: null, siteDomains: ['alizecharge.com', 'reveocharge.com'] },
+    {
+      key: 'bouygues-energies-services',
+      names: ['Bouygues Energies & Services'],
+      domains: ['alizecharge.fr', 'bouygues-es.com'],
+      payUrl: null,
+      siteDomains: ['alizecharge.com', 'reveocharge.com'],
+      siteHosts: ['alizecharge.com', 'my2.alizecharge.com', 'reveocharge.com', 'support.alizecharge.com', 'support.reveocharge.com'],
+    },
     { key: 'reveo-syaden', names: ['Révéo'], domains: ['reveocharge.com'], payUrl: null },
-    { key: 'engie-vianeo', names: ['ENGIE Vianeo'], domains: ['engie.com', 'greenflux.com'], payUrl: null, payDomains: ['charge.engie-vianeo.com'], siteDomains: ['engie-vianeo.com'] },
-    { key: 'qwello', names: ['Qwello France SAS'], domains: ['qwello.fr'], payUrl: null, payDomains: ['wa.qwello.eu'], siteDomains: ['qwello.eu'] },
+    { key: 'engie-vianeo', names: ['ENGIE Vianeo'], domains: ['engie.com', 'greenflux.com'], payUrl: null, payDomains: ['charge.engie-vianeo.com'], siteDomains: ['engie-vianeo.com'], siteHosts: ['charge.engie-vianeo.com', 'engie-vianeo.com'] },
+    { key: 'qwello', names: ['Qwello France SAS'], domains: ['qwello.fr'], payUrl: null, payDomains: ['wa.qwello.eu'], siteDomains: ['qwello.eu'], siteHosts: ['wa.qwello.eu'] },
     { key: 'izivia', names: ['IZIVIA'], domains: ['izivia.com'], payUrl: null },
   ];
-  it('pay.alizecharge.com sur une borne Bouygues → officiel (site sourcé, pas un sosie d’alizecharge.fr)', () => {
+  it('pay.alizecharge.com sur une borne Bouygues : domaine du site sourcé mais hôte non sourcé → confirmation (ni vert, ni sosie)', () => {
     const r = verifyQr('https://pay.alizecharge.com/FRS77E770340011', 'bouygues-energies-services', REG);
-    expect(r.verdict).toBe('official');
-    expect(r.source).toBe('site');
-    expect(r.operatorKey).toBe('bouygues-energies-services');
+    expect(r).toMatchObject({ verdict: 'unknown', source: 'site', operatorKey: 'bouygues-energies-services' });
+    expect(r.reasons[0]).toBe('Adresse sur le domaine de Bouygues Energies & Services (alizecharge.com), mais absente des pages sourcées par Branché : vérifiez avant de payer.');
+  });
+  it('hôte exact des sources → « Site officiel » (vert)', () => {
+    const r = verifyQr('https://support.alizecharge.com/x', 'bouygues-energies-services', REG);
+    expect(r).toMatchObject({ verdict: 'official', source: 'site' });
     expect(r.reasons[0]).toBe('Domaine du site officiel de Bouygues Energies & Services (sources vérifiées par Branché).');
+  });
+  it('sans siteHosts publiés (ancien registre) : jamais vert, confirmation', () => {
+    const old = REG.map(({ siteHosts: _h, ...o }) => o);
+    expect(verifyQr('https://support.alizecharge.com/x', 'bouygues-energies-services', old).verdict).toBe('unknown');
   });
   it('sans siteDomains, la même page était bloquée (« porte le nom de… ») : régression corrigée', () => {
     const bare = REG.map(({ siteDomains: _s, ...o }) => o);
@@ -200,9 +214,11 @@ describe('verifyQr — domaines des sites sourcés (siteDomains, publiés par pi
   it.each([
     ['https://support.reveocharge.com/x', 'bouygues-energies-services'],
     ['https://www.engie-vianeo.com/', 'engie-vianeo'],
-    ['https://www.qwello.eu/', 'qwello'],
-  ])('%s sur une borne %s → officiel', (raw, op) => {
+  ])('%s sur une borne %s → officiel (hôte sourcé, www. ignoré)', (raw, op) => {
     expect(verifyQr(raw, op, REG).verdict).toBe('official');
+  });
+  it('www.qwello.eu (seul wa.qwello.eu est sourcé) → confirmation', () => {
+    expect(verifyQr('https://www.qwello.eu/', 'qwello', REG)).toMatchObject({ verdict: 'unknown', source: 'site' });
   });
   it('domaine IRVE prioritaire sur le site sourcé (Révéo déclare reveocharge.com dans l’IRVE)', () => {
     const r = verifyQr('https://my.reveocharge.com/', 'reveo-syaden', REG);
@@ -219,4 +235,42 @@ describe('verifyQr — domaines des sites sourcés (siteDomains, publiés par pi
       expect(verifyQr(raw, 'bouygues-energies-services', REG).verdict).toBe('dangerous');
     },
   );
+});
+
+describe('verifyQr — liens de paiement entre particuliers et liens Stripe/SumUp', () => {
+  it.each([
+    ['https://paypal.me/borne-recharge/12', 'PayPal.me'],
+    ['https://www.paypal.com/paypalme/borne', 'PayPal.me'],
+    ['https://lydia-app.com/collect/borne', 'Lydia'],
+    ['https://revolut.me/jdupont', 'Revolut'],
+    ['https://checkout.revolut.com/pay/abc', 'Revolut'],
+    ['https://sumup.me/borne', 'SumUp (lien personnel)'],
+  ])('%s → bloqué (%s)', (raw, name) => {
+    const r = verifyQr(raw, 'izivia', OPS);
+    expect(r.verdict).toBe('dangerous');
+    expect(r.reasons[0]).toBe(`Lien de paiement entre particuliers (${name}) : l’argent irait à une personne, pas à l’opérateur de la borne.`);
+  });
+  it('paypal.com hors PayPal.me : plateforme, bénéficiaire à vérifier', () => {
+    expect(verifyQr('https://www.paypal.com/checkoutnow?token=x', 'izivia', OPS).verdict).toBe('payment-platform');
+  });
+  it.each(['https://buy.stripe.com/test_abc', 'https://checkout.stripe.com/c/pay/cs_x', 'https://pay.sumup.com/b2c/Q123'])(
+    '%s sur une borne à page officielle connue (gabarit Metropolis) → bloqué, page proposée',
+    (raw) => {
+      const r = verifyQr(raw, 'metropolis', OPS);
+      expect(r).toMatchObject({ verdict: 'dangerous', alternative: 'page' });
+      expect(r.reasons[0]).toContain('Metropolis a une page de paiement officielle connue');
+    },
+  );
+  it('Stripe sur une borne à lecteur CB déclaré (sans page connue) → bloqué, lecteur proposé', () => {
+    const r = verifyQr('https://buy.stripe.com/x', 'izivia', OPS, { official: { reader: true } });
+    expect(r).toMatchObject({ verdict: 'dangerous', alternative: 'reader' });
+    expect(r.reasons[0]).toContain('accepte la carte sur le lecteur de la borne');
+  });
+  it('page officielle signalée par payOptions (lien sourcé) → page proposée en priorité', () => {
+    expect(verifyQr('https://buy.stripe.com/x', 'izivia', OPS, { official: { page: true, reader: true } }).alternative).toBe('page');
+  });
+  it('Stripe sans voie officielle connue : plateforme, confirmation (inchangé)', () => {
+    expect(verifyQr('https://buy.stripe.com/x', 'izivia', OPS).verdict).toBe('payment-platform');
+    expect(verifyQr('https://buy.stripe.com/x', null, OPS).verdict).toBe('payment-platform');
+  });
 });

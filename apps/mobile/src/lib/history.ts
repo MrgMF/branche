@@ -87,6 +87,19 @@ export async function updateRecord(id: string, patch: Partial<ChargeRecord>): Pr
   return next;
 }
 
+/**
+ * Stockage plein : supprime toutes les photos de tickets (place libérée) ; les recharges restent dans l'historique.
+ * Renvoie le nombre de photos supprimées. Si l'historique ne peut pas être réécrit, les photos sont quand même
+ * supprimées (la fiche affiche alors « photo supprimée »).
+ */
+export async function removeAllTickets(): Promise<number> {
+  const list = await loadHistory();
+  const withTicket = list.filter((r) => r.ticket);
+  await Promise.all(withTicket.map((r) => removeTicket(r.id)));
+  if (withTicket.length) await save(list.map((r) => (r.ticket ? { ...r, ticket: false } : r))).catch(() => undefined);
+  return withTicket.length;
+}
+
 export async function clearHistory(): Promise<void> {
   const list = cache ?? (await loadHistory());
   await Promise.all(list.filter((r) => r.ticket).map((r) => removeTicket(r.id)));

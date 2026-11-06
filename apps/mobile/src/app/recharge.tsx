@@ -9,6 +9,7 @@ import { ActivityIndicator, AppState, Image, Linking, Platform, Pressable, Scrol
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CopyId } from '../components/CopyId';
 import { NoCharge } from '../components/NoCharge';
+import { SaveFailed } from '../components/SaveFailed';
 import { Button, Notice } from '../components/ui';
 import { loadWallet, markConnected } from '../lib/accounts';
 import { apiEnabled } from '../lib/api';
@@ -306,11 +307,7 @@ export default function Recharge() {
   return (
     <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
       <ScreenHeader dark title={t.titles.maRecharge} sub={`${d.station.name}${pointText}`} />
-      {persistErr || d.saveFailed ? (
-        <Notice dark tone="error">
-          {t.common.saveFailed}
-        </Notice>
-      ) : null}
+      {persistErr || d.saveFailed ? <SaveFailed dark /> : null}
 
       {d.accountAsk ? (
         <View style={[styles.card, styles.ask]} accessibilityLiveRegion="polite">
@@ -476,11 +473,7 @@ export default function Recharge() {
             <Text style={styles.small}>{C.ticketHint}</Text>
             {ticketMsg ? <Text style={styles.error} role="alert">{ticketMsg}</Text> : null}
           </View>
-          {saveErr ? (
-            <Notice dark tone="error">
-              {t.common.saveFailed}
-            </Notice>
-          ) : null}
+          {saveErr ? <SaveFailed dark /> : null}
           <Button label={C.save} onPress={save} hint={C.saveHint} />
           <Button label={C.resume} variant="ghost" onPress={() => update({ endedAt: null, autoEnded: false })} />
         </>

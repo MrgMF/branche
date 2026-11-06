@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navigationLinks } from '../lib/charge';
 import { kw } from '../lib/format';
 import { displayName } from '../lib/stations';
-import { bigDist, etaClock, instructionOf, isOverSpeed, LOW_SOC, maneuverOf } from '../lib/guidance';
+import { bigDist, etaClock, instructionOf, isOverSpeed, LOW_SOC, maneuverOf, SOC_CHOICES } from '../lib/guidance';
 import { useT } from '../i18n';
 import { speedUnit, speedValue } from '../i18n/format';
 import { distText, durationText, incidentLabel, postReport, type IncidentType } from '../lib/navigation';
@@ -13,7 +13,7 @@ import { etaMessage, shareEta } from '../lib/shareEta';
 import type { TripApi } from '../lib/useTrip';
 import { isMuted, onMutedChange, setMuted } from '../lib/voice';
 import type { Station } from '../lib/stations';
-import { colors, fonts, radius } from '../theme';
+import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { LaneArrow, ManeuverIcon, NavIcon } from './ManeuverIcon';
 import { Button } from './ui';
 
@@ -56,6 +56,8 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
     ? t.guidance.follow
     : m === 'arrive'
       ? trip.dest.name
+      : m === 'waypoint' && trip.via[0]
+        ? trip.via[0].name
       : signpost
         ? next.step.towards ?? next.step.street ?? instructionOf(next.step)
         : next.step.street ?? next.step.towards ?? instructionOf(next.step);
@@ -72,6 +74,11 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
   const station = trip.arrivedAtVia?.station ?? (trip.arrived ? trip.dest.station : undefined);
   const exitTxt = next?.step.exit ? t.guidance.exit(next.step.exit) : '';
   const what = t.guidance.maneuver[m] ?? '';
+  // Site statique (itinéraire calculé par l'app) : pas d'API, donc pas de signalement.
+  const canReport = !trip.client;
+  // Étape atteinte avec un véhicule : batterie après la recharge (un tap), ou estimation courante gardée.
+  const askSoc = !!trip.arrivedAtVia && !!trip.vehicleName;
+  const socEst = typeof trip.socNow === 'number' ? trip.socNow : null;
 
   async function report(type: IncidentType) {
     setReporting(false);
@@ -90,7 +97,13 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
     setNote(r === 'copied' ? t.guidance.shareCopied : r === 'shared' ? t.guidance.shareDone : t.guidance.shareFailed);
   }
 
-  const banner = trip.arrived || trip.arrivedAtVia ? null : (
+  const banner = trip.arrived || trip.arrivedAtVia ? null : trip.offRoute ? (
+    <View style={styles.banner} accessible accessibilityRole="summary" accessibilityLiveRegion="polite" accessibilityLabel={t.navx.offRoute} testID="off-route">
+      <View style={styles.bannerRow}>
+        <Text style={styles.offRoute}>{t.navx.offRoute}</Text>
+      </View>
+    </View>
+  ) : (
     <View
       style={styles.banner}
       accessible
@@ -185,7 +198,7 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
             {trip.toast.text}
           </Text>
         ) : null}
-        {trip.rerouting ? <Text style={[styles.pill, styles.pillInfo]}>{t.guidance.rerouting}</Text> : null}
+        {trip.rerouting && !trip.offRoute ? <Text style={[styles.pill, styles.pillInfo]}>{t.guidance.rerouting}</Text> : null}
         {note ? <Text style={[styles.pill, styles.pillInfo]}>{note}</Text> : null}
       </View>
 
@@ -206,9 +219,11 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
             <RoundBtn label={muted ? t.guidance.voiceOn : t.guidance.voiceOff} pressed={muted} onPress={() => setMuted(!muted)}>
               <NavIcon name={muted ? 'voice-off' : 'voice-on'} size={26} color={muted ? colors.danger : colors.ink} />
             </RoundBtn>
-            <RoundBtn label={t.guidance.report} onPress={() => setReporting(true)}>
-              <NavIcon name="report" size={26} color={colors.busy} />
-            </RoundBtn>
+            {canReport ? (
+              <RoundBtn label={t.guidance.report} onPress={() => setReporting(true)}>
+                <NavIcon name="report" size={26} color={colors.busy} />
+              </RoundBtn>
+            ) : null}
             <RoundBtn label={t.guidance.share} onPress={share}>
               <NavIcon name="share" size={24} />
             </RoundBtn>
@@ -224,7 +239,29 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
               {(trip.arrivedAtVia ?? trip.dest).name}
             </Text>
             {station ? <Button label={t.here.rechargeHere} onPress={() => onRecharge(station)} hint={t.guidance.rechargeHint} /> : null}
-            {trip.arrivedAtVia ? <Button label={t.guidance.resume} variant="secondary" onPress={nav.resumeAfterVia} /> : null}
+            {askSoc ? (
+              <View style={{ gap: 6 }} testID="soc-ask">
+                <Text style={styles.smallDark} accessibilityRole="header">
+                  {t.navx.socAsk}
+                </Text>
+                <View style={styles.socRow}>
+                  {SOC_CHOICES.map((p) => (
+                    <Pressable
+                      key={p}
+                      accessibilityRole="button"
+                      accessibilityLabel={t.navx.socChoiceA11y(p)}
+                      onPress={() => nav.resumeAfterVia(p)}
+                      style={({ pressed }) => [styles.socChip, pressed && { backgroundColor: colors.surfaceAlt }]}
+                    >
+                      <Text style={styles.socChipText}>{p} %</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+            {trip.arrivedAtVia ? (
+              <Button label={askSoc && socEst !== null ? t.navx.socKeep(socEst) : t.guidance.resume} variant="secondary" onPress={() => nav.resumeAfterVia()} />
+            ) : null}
             <Button label={t.guidance.finish} variant="ghost" onPress={nav.clear} />
           </View>
         ) : (
@@ -262,7 +299,7 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
         </View>
       ) : null}
 
-      {reporting ? (
+      {reporting && canReport ? (
         <View style={styles.scrim}>
           <View style={[styles.reportSheet, { paddingBottom: insets.bottom + 16 }]} accessibilityViewIsModal>
             <Text style={styles.arrTitle} accessibilityRole="header">
@@ -344,6 +381,10 @@ const styles = StyleSheet.create({
   scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,26,23,0.45)', justifyContent: 'flex-end' },
   reportSheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: 18, gap: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  offRoute: { flex: 1, fontFamily: fonts.display, fontSize: 26, lineHeight: 32, color: '#FFFFFF', paddingVertical: 10 },
+  socRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  socChip: { minWidth: MIN_TOUCH, minHeight: 48, flexGrow: 1, paddingHorizontal: 8, borderRadius: radius.md, borderWidth: 2, borderColor: colors.accent, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  socChipText: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
   reportBtn: { minHeight: 64, flexBasis: '47%', flexGrow: 1 },
 });
 

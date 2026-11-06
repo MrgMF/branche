@@ -418,6 +418,13 @@ export const nl: Dict = {
     noTrafficStatic: 'Geen realtime verkeer: route berekend door de openbare OpenStreetMap-server (FOSSGIS), zonder account of Branché-server.',
     noFeedStatic: 'Verkeershinder en meldingen zijn niet beschikbaar in deze versie zonder server.',
     attrStatic: 'Route © OpenStreetMap-bijdragers, Valhalla (openbare FOSSGIS-server).',
+    offRoute: 'Van de route af, herberekenen…',
+    trafficLost: 'Realtime verkeer niet beschikbaar',
+    gainLabel: (min: number) => `−${min} min`,
+    viaInVoice: (d: string) => `Over ${d} bereikt u uw tussenstop.`,
+    socAsk: 'Batterij na het laden?',
+    socChoiceA11y: (p: number) => `Batterij op ${p}%, rit hervatten`,
+    socKeep: (p: number) => `Hervatten, geschatte batterij ${p}%`,
   },
   instr: {
     depart: (p: InstrParts) => `Vertrek${onto(p)}`,

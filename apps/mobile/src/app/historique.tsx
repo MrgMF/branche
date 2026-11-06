@@ -2,12 +2,14 @@
 // Tout est stocké sur l'appareil ; rien n'est envoyé.
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Notice, Stat } from '../components/ui';
 import { durationLabel } from '../lib/estimate';
 import { euros } from '../lib/format';
-import { clearHistory, loadHistory, methodLabel, monthStats, removeRecord, toCsv, totals, updateRecord, type ChargeRecord } from '../lib/history';
+import { clearHistory, loadHistory, methodLabel, monthStats, removeRecord, totals, updateRecord, type ChargeRecord } from '../lib/history';
+import { exportHistoryCsv } from '../lib/historyExport';
+import { SaveFailed } from '../components/SaveFailed';
 import { loadTicket, removeTicket } from '../lib/ticket';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { ScreenHeader } from '../components/Screen';
@@ -34,22 +36,8 @@ export default function Historique() {
 
   async function exportCsv() {
     if (!list?.length) return;
-    const csv = toCsv(list);
-    const name = `${H.csvFile}-${new Date().toISOString().slice(0, 10)}.csv`;
-    if (Platform.OS === 'web') {
-      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setMsg(H.downloaded(name));
-    } else {
-      // Feuille de partage du système (e-mail, Fichiers, messagerie…) : le CSV en texte.
-      await Share.share({ title: name, message: csv }).catch(() => undefined);
-    }
+    const name = await exportHistoryCsv();
+    if (name) setMsg(H.downloaded(name));
   }
 
   const m = list ? monthStats(list) : null;
@@ -153,7 +141,7 @@ export default function Historique() {
           </Pressable>
         )
       ) : null}
-      {saveErr ? <Notice tone="error">{t.common.saveFailed}</Notice> : null}
+      {saveErr ? <SaveFailed onChanged={() => loadHistory().then((l) => setList([...l]))} /> : null}
       <Text style={styles.small}>{H.footer}</Text>
     </ScrollView>
   );

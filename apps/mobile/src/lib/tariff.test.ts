@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeTariff, freeCredible, parseTariff, planTariff, stationTariff, ttcFactor } from './tariff';
+import { describeTariff, freeCredible, parseTariff, planTariff, stationTariff, safeTariffUrl, ttcFactor } from './tariff';
 
 // Textes RÉELS du champ `tarification` de la base IRVE (site/data/tiles/*.json, novembre 2026), copiés tels quels.
 type Case = [string, Record<string, unknown>];
@@ -172,5 +172,15 @@ describe('gratuité déclarée : crédible seulement < 50 kW et sans moyen de pa
     expect(planTariff({ tariffRaw: '', free: true, stationKw: 300, pointKw: 22, pay: ['badge'] }).freeDoubtful).toBe(true);
     // Ancien plan sans puissance de station : puissance du point
     expect(planTariff({ tariffRaw: '', free: true, pointKw: 22 }).kind).toBe('free');
+  });
+});
+
+describe('safeTariffUrl — lien de tarif IRVE passé par le vérificateur', () => {
+  const OPS = [{ key: 'izivia', names: ['Izivia'], domains: ['izivia.com'], payUrl: null }];
+  it('https sur le domaine de l’opérateur : ouvert', () => {
+    expect(safeTariffUrl('https://izivia.com/tarifs', 'izivia', OPS)).toBe('https://izivia.com/tarifs');
+  });
+  it.each(['http://izivia.com/tarifs', 'javascript:alert(1)', 'https://bit.ly/tarif', 'https://izivia.com.evil.site/', 'https://paypal.me/x', undefined])('%s → refusé', (u) => {
+    expect(safeTariffUrl(u, 'izivia', OPS)).toBeNull();
   });
 });

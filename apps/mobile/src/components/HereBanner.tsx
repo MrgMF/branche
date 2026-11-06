@@ -17,7 +17,7 @@ import { autoFinish, departed } from '../lib/autoEnd';
 import { allDown, nearestFree } from '../lib/nearestFree';
 import { store, type DirectCharge } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
-import { Button } from './ui';
+import { Button, Notice } from './ui';
 import { useT } from '../i18n';
 import { distText } from '../i18n/format';
 
@@ -34,6 +34,7 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
   const [around, setAround] = useState<Station[]>([]);
   const [hidden, setHidden] = useState<string | null>(null);
   const [prepared, setPrepared] = useState<Prepared | null>(null);
+  const [offline, setOffline] = useState(false);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [pick, setPick] = useState<{ s: Station; d: number; free: number; known: number; down: boolean } | null>(null);
   // Borne où l'on se trouve entièrement hors service : borne libre la plus proche (undefined = recherche en cours).
@@ -148,12 +149,21 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
         <Button
           label={t.here.payNow}
           onPress={() => {
-            clearPrepared();
-            setPrepared(null);
-            runPlan(hit.station, p.plan, p.operatorName, p.url);
+            setOffline(false);
+            // Sans réseau : la recharge préparée est gardée (rien n'est ouvert), message affiché
+            runPlan(hit.station, p.plan, p.operatorName, p.url).then((r) => {
+              if (r === 'offline') return setOffline(true);
+              clearPrepared();
+              setPrepared(null);
+            });
           }}
           hint={t.here.payHint(p.operatorName)}
         />
+        {offline ? (
+          <View role="alert" accessibilityLiveRegion="assertive">
+            <Notice tone="error">{t.common.noNetwork}</Notice>
+          </View>
+        ) : null}
         <Text style={styles.small}>{t.here.payNote(p.operatorName)}</Text>
       </View>
     );

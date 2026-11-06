@@ -317,9 +317,17 @@ const TOMTOM_MANEUVER: Record<string, Maneuver> = {
   WAYPOINT_REACHED: 'waypoint',
 };
 
-/** Manœuvre TomTom (guidance instructions) → manœuvre normalisée. */
-export function tomtomManeuver(code: unknown, drivingSide?: unknown): Maneuver {
-  if (code === 'TAKE_EXIT') return drivingSide === 'LEFT' ? 'exit-left' : 'exit-right';
+/**
+ * Manœuvre TomTom (guidance instructions) → manœuvre normalisée. TAKE_EXIT : le côté de la sortie vient du signe de
+ * `turnAngleInDecimalDegrees` (< 0 : gauche, > 0 : droite) — `drivingSide` est le côté de circulation du pays, pas
+ * celui de la sortie ; il ne sert que de repli sans angle (sorties à gauche usuelles quand on roule à gauche).
+ */
+export function tomtomManeuver(code: unknown, turnAngle?: unknown, drivingSide?: unknown): Maneuver {
+  if (code === 'TAKE_EXIT') {
+    const a = num(turnAngle);
+    if (a !== null && a !== 0) return a < 0 ? 'exit-left' : 'exit-right';
+    return drivingSide === 'LEFT' ? 'exit-left' : 'exit-right';
+  }
   return (typeof code === 'string' && TOMTOM_MANEUVER[code]) || 'straight';
 }
 
@@ -397,7 +405,7 @@ export function parseTomTomRoute(r: unknown): RouteOption | null {
     const offset = num(i.routeOffsetInMeters) ?? 0;
     const next = instructions[k + 1];
     const nextOffset = next ? num(next.routeOffsetInMeters) : null;
-    const maneuver = tomtomManeuver(i.maneuver, i.drivingSide);
+    const maneuver = tomtomManeuver(i.maneuver, i.turnAngleInDecimalDegrees, i.drivingSide);
     const roadNumbers = Array.isArray(i.roadNumbers) ? i.roadNumbers.filter((x): x is string => typeof x === 'string').join('/') : '';
     const step: RouteStep = {
       instruction: '',
