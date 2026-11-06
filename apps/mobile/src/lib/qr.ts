@@ -59,6 +59,12 @@ const SHORTENERS = new Set([
   'qr-code-generator.com', 'me-qr.com', 'linktr.ee', 'tiny.cc', 'rb.gy', 'v.gd', 's.id', 'u.to',
   // Liens de partage et de redirection : la destination réelle est masquée comme avec un raccourcisseur
   't.me', 'lnkd.in', 't.ly', 'bit.do', 'surl.li', 'urlz.fr', 'cutt.us', 'tr.ee', 'urldefense.com',
+  // Générateurs de QR codes dynamiques et raccourcisseurs (destination modifiable à tout moment)
+  'qrfy.io', 'qr1.be', 'l.ead.me', 'scan.page', 'qrs.ly', 'short.io',
+  // Liens dynamiques Firebase (*.page.link) et Branch (*.app.link) : redirection vers une destination masquée
+  'page.link', 'app.link',
+  // Anonymiseur de référent : redirige vers l'adresse passée après « ? »
+  'href.li',
 ]);
 /** Redirecteurs hébergés sur un grand domaine (hôte exact ou suffixe) : traités comme des raccourcisseurs. */
 const REDIRECT_HOSTS = ['l.facebook.com', 'lm.facebook.com', 'l.instagram.com', 'l.messenger.com', 'l.wl.co', 'out.reddit.com', 'safelinks.protection.outlook.com', 'urldefense.proofpoint.com'];
@@ -68,7 +74,10 @@ export function isRedirector(host: string, path: string): boolean {
   const d = registrableDomain(h);
   if (SHORTENERS.has(d) || SHORTENERS.has(h)) return true;
   if (REDIRECT_HOSTS.some((x) => h === x || h.endsWith(`.${x}`))) return true;
-  if (/^(www\.)?google\.[a-z]{2,3}(\.[a-z]{2})?$/.test(h) && /^\/url\/?$/i.test(path)) return true;
+  // google.xx/url et google.xx/amp/s/<page> (AMP : affiche une page d'un autre site sous l'adresse Google)
+  if (/^(www\.)?google\.[a-z]{2,3}(\.[a-z]{2})?$/.test(h) && (/^\/url\/?$/i.test(path) || /^\/amp\/s\//i.test(path))) return true;
+  // bing.com/ck/a : lien de suivi des résultats Bing, redirige vers la page cible
+  if (/(^|\.)bing\.com$/.test(h) && /^\/ck\/a\/?$/i.test(path)) return true;
   return /(^|\.)youtube\.com$/.test(h) && /^\/redirect\/?$/i.test(path);
 }
 
@@ -98,6 +107,9 @@ const P2P_DOMAINS: Record<string, string> = {
   'sumup.me': 'SumUp (lien personnel)',
   'sumup.link': 'SumUp (lien de paiement)',
   'mollie.me': 'Mollie (lien de paiement)',
+  'monzo.me': 'Monzo',
+  // Cagnottes en ligne : l'argent va à l'organisateur de la cagnotte
+  'leetchi.com': 'Leetchi',
 };
 const P2P_HOSTS: Record<string, string> = { 'checkout.revolut.com': 'Revolut' };
 export function p2pPlatform(host: string, path: string): string | null {
@@ -106,6 +118,8 @@ export function p2pPlatform(host: string, path: string): string | null {
   if (P2P_DOMAINS[d]) return P2P_DOMAINS[d];
   if (P2P_HOSTS[h]) return P2P_HOSTS[h];
   if (d === 'paypal.com' && /^\/paypalme(\/|$)/i.test(path)) return 'PayPal.me';
+  // wise.com/pay/me/<nom> : lien de paiement personnel Wise (le reste de wise.com n'est pas concerné)
+  if (d === 'wise.com' && /^\/pay\/me(\/|$)/i.test(path)) return 'Wise';
   return null;
 }
 

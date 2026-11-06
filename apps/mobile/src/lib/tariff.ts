@@ -93,11 +93,17 @@ const toMin = (n: number, unit: string) => (/^h/.test(unit) ? n * 60 : n);
 
 /** Décimales écrites d'un nombre (« 0.33334 » → 5, « 6.0 » → 0). */
 const decimals = (x: string) => (x.split('.')[1] ?? '').replace(/0+$/, '').length;
-/** TVA 20 % : un prix HT publié vaut le prix TTC rond (au centime) divisé par 1,2, à 1e-3 près. */
+/**
+ * TVA 20 % : un prix HT publié vaut le prix TTC rond (au centime) divisé par 1,2, à 1e-3 près. À partir de 6 décimales
+ * écrites (`dec`), un TTC au millième est aussi accepté (0,30916667 × 1,2 = 0,371) : une telle précision ne s'explique
+ * que par une division, et l'écart d'arrondi reste sous 1e-6.
+ */
 const VAT = 1.2;
-export function htRound(v: number): boolean {
+export function htRound(v: number, dec = 0): boolean {
   const ttc = v * VAT;
-  return v > 0 && Math.abs(ttc - Math.round(ttc * 100) / 100) <= 1e-3 + 1e-9;
+  if (!(v > 0)) return false;
+  if (Math.abs(ttc - Math.round(ttc * 100) / 100) <= 1e-3 + 1e-9) return true;
+  return dec >= 6 && Math.abs(ttc - Math.round(ttc * 1000) / 1000) <= 2e-6;
 }
 /**
  * Montants publiés probablement HT : au moins un montant à 4 décimales ou plus, et tous ceux-là sont des prix ronds
@@ -106,7 +112,7 @@ export function htRound(v: number): boolean {
 function likelyHt(values: { v: number; dec: number }[], text: string): boolean {
   if (/ttc/.test(text)) return false;
   const long = values.filter((a) => a.v > 0 && a.dec >= 4);
-  return long.length > 0 && long.every((a) => htRound(a.v));
+  return long.length > 0 && long.every((a) => htRound(a.v, a.dec));
 }
 
 export function parseTariff(raw: string | null | undefined, opts: FreeContext = {}): Tariff {

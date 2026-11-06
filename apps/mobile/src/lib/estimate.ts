@@ -47,8 +47,12 @@ export const DEFAULT_SOC = 20;
 export const DEFAULT_TARGET = 80;
 const STEP = 0.5; // % par pas de simulation
 
-export const isDc = (pointKw: number, plugs: Plug[]) =>
-  plugs.some((p) => p === 'ccs' || p === 'chademo') ? pointKw === 0 || pointKw >= 25 : pointKw > 43;
+export const isDc = (pointKw: number, plugs: Plug[]) => {
+  const dcPlug = (p: Plug) => p === 'ccs' || p === 'chademo';
+  // Prise CCS ou CHAdeMO seule : courant continu quelle que soit la puissance (Electra 24 kW CHAdeMO)
+  if (plugs.length && plugs.every(dcPlug)) return true;
+  return plugs.some(dcPlug) ? pointKw === 0 || pointKw >= 25 : pointKw > 43;
+};
 
 /** Puissance (kW) acceptée à l'état de charge `soc` (%). */
 export function powerAt(maxKw: number, soc: number, dc: boolean): number {

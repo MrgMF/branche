@@ -18,6 +18,13 @@ describe('estimateCharge', () => {
     expect(e.unknownPrice).toBe(false);
   });
 
+  it('Electra 24 kW CHAdeMO : courant continu malgré la puissance < 25 kW (pertes DC, puissance DC du véhicule)', () => {
+    const e = estimateCharge({ vehicle: v('nissan-leaf-40'), socPercent: 20, pointKw: 24, plugs: ['chademo'], tariff: kwh049 });
+    expect(e.dc).toBe(true);
+    expect(e.powerKw).toBe(24);
+    expect(e.kWhBilled).toBeCloseTo(e.kWh * 1.05, 1);
+  });
+
   it('DC : la courbe ralentit au-delà de 50 % (plus long qu’à puissance constante)', () => {
     const e = estimateCharge({ vehicle: v('kia-ev6-77'), socPercent: 10, pointKw: 150, plugs: ['ccs'], tariff: kwh049 });
     expect(e.dc).toBe(true);
@@ -97,6 +104,11 @@ describe('utilitaires', () => {
     expect(isDc(22, ['t2'])).toBe(false);
     expect(isDc(22, ['t2', 'chademo'])).toBe(false);
     expect(isDc(0, ['ccs'])).toBe(true);
+    // Prise CCS ou CHAdeMO seule : courant continu quelle que soit la puissance (Electra 24 kW CHAdeMO)
+    expect(isDc(24, ['chademo'])).toBe(true);
+    expect(isDc(20, ['ccs'])).toBe(true);
+    expect(isDc(24, ['ccs', 'chademo'])).toBe(true);
+    expect(isDc(22, ['t2', 'ccs'])).toBe(false);
     expect(powerAt(100, 30, true)).toBe(100);
     expect(powerAt(100, 80, true)).toBeCloseTo(45);
     expect(powerAt(11, 80, false)).toBe(11);

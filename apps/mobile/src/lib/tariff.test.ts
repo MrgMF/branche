@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeTariff, freeCredible, parseTariff, planTariff, stationTariff, safeTariffUrl, ttcFactor } from './tariff';
+import { describeTariff, freeCredible, parseTariff, planTariff, htRound, stationTariff, safeTariffUrl, ttcFactor } from './tariff';
 
 // Textes RÉELS du champ `tarification` de la base IRVE (site/data/tiles/*.json, novembre 2026), copiés tels quels.
 type Case = [string, Record<string, unknown>];
@@ -226,11 +226,19 @@ describe('prix publiés probablement HT (prix rond / 1,2)', () => {
     expect(c.energy).toBeCloseTo(0.4583 * 10 * 1.2, 6);
     expect(c.energy).toBeCloseTo(5.5, 2);
   });
-  it('0,30916667 × 1,2 = 0,371 : pas un prix rond au centime → inchangé', () => {
+  it('6 décimales ou plus : TTC au millième accepté (0,30916667 × 1,2 = 0,371) → HT probable', () => {
+    expect(htRound(0.30916667, 8)).toBe(true);
+    expect(htRound(0.309167, 6)).toBe(true);
+    // Moins de 6 décimales : TTC au centime exigé (0,3092 × 1,2 = 0,37104, ni au centime ni à 4 décimales d'un millième)
+    expect(htRound(0.30916667, 4)).toBe(false);
+    expect(htRound(0.30917, 5)).toBe(false);
+    // 6 décimales mais TTC sans rien de rond (0,123457 × 1,2 = 0,1481484)
+    expect(htRound(0.123457, 6)).toBe(false);
     const t = parseTariff(EASY_030916667);
-    expect(t.htLikely).toBeUndefined();
-    expect(ttcFactor(t)).toBe(1);
-    expect(describeTariff(t)[0]).toBe('Énergie : 0,31 €/kWh');
+    expect(t.htLikely).toBe(true);
+    expect(ttcFactor(t)).toBe(1.2);
+    expect(describeTariff(t)[0]).toBe('Énergie : ≈ 0,37 €/kWh');
+    expect(describeTariff(t).some((l) => l.includes('0,30917 €/kWh, soit ≈ 0,371 €/kWh TTC'))).toBe(true);
   });
   it('jamais si le texte dit TTC ou HT, ni sur un prix rond (0,325 ; 0,45)', () => {
     expect(parseTariff('0.4583€ TTC par kwh de charge').htLikely).toBeUndefined();

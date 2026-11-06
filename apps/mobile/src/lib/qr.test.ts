@@ -249,6 +249,9 @@ describe('verifyQr — liens de paiement entre particuliers et liens Stripe/SumU
     ['https://lien.lydia.me/r/abc', 'Lydia'],
     ['https://sumup.link/borne-12', 'SumUp (lien de paiement)'],
     ['https://mollie.me/jdupont/12', 'Mollie (lien de paiement)'],
+    ['https://wise.com/pay/me/jeand', 'Wise'],
+    ['https://monzo.me/jdupont/12.50', 'Monzo'],
+    ['https://www.leetchi.com/c/borne-recharge', 'Leetchi'],
   ])('%s → bloqué (%s), borne payable la plus proche proposée faute de voie officielle', (raw, name) => {
     const r = verifyQr(raw, 'izivia', OPS);
     expect(r).toMatchObject({ verdict: 'dangerous', alternative: 'nearest' });
@@ -280,6 +283,18 @@ describe('verifyQr — liens de paiement entre particuliers et liens Stripe/SumU
     'https://lnkd.in/abc',
     'https://eur01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fpay.izivia.com',
     'https://www.youtube.com/redirect?q=https://pay.izivia.com',
+    'https://qrfy.io/r/abc123',
+    'https://qr1.be/ABCD',
+    'https://l.ead.me/bcXyZ',
+    'https://scan.page/p/abc',
+    'https://qrs.ly/abc',
+    'https://short.io/abc',
+    'https://izivia.page.link/pay',
+    'https://borne.app.link/xyz',
+    'https://www.google.com/amp/s/pay.izivia.com/c/FRIZIE123',
+    'https://google.fr/amp/s/evil.site/pay',
+    'https://www.bing.com/ck/a?!&&p=abc&u=a1aHR0cHM6Ly9ldmlsLnNpdGU',
+    'https://href.li/?https://evil.site/pay',
   ])('redirecteur traité comme raccourcisseur : %s → bloqué', (raw) => {
     const r = verifyQr(raw, 'izivia', OPS);
     expect(r.verdict).toBe('dangerous');
@@ -287,7 +302,13 @@ describe('verifyQr — liens de paiement entre particuliers et liens Stripe/SumU
   });
   it('google.com hors /url, facebook.com : pas des redirecteurs', () => {
     expect(verifyQr('https://www.google.com/maps/place/x', 'izivia', OPS).reasons).not.toContain('Lien raccourci : la destination réelle est masquée.');
+    expect(verifyQr('https://www.google.com/ampersand', 'izivia', OPS).reasons).not.toContain('Lien raccourci : la destination réelle est masquée.');
+    expect(verifyQr('https://www.bing.com/search?q=borne', 'izivia', OPS).reasons).not.toContain('Lien raccourci : la destination réelle est masquée.');
     expect(verifyQr('https://www.facebook.com/izivia', 'izivia', OPS).reasons).not.toContain('Lien raccourci : la destination réelle est masquée.');
+  });
+  it('wise.com hors /pay/me : pas un lien entre particuliers', () => {
+    expect(verifyQr('https://wise.com/fr/pricing', 'izivia', OPS).reasons[0] ?? '').not.toContain('entre particuliers');
+    expect(verifyQr('https://wise.com/payme', 'izivia', OPS).reasons[0] ?? '').not.toContain('entre particuliers');
   });
   it('paypal.com hors PayPal.me : plateforme, bénéficiaire à vérifier', () => {
     expect(verifyQr('https://www.paypal.com/checkoutnow?token=x', 'izivia', OPS).verdict).toBe('payment-platform');
