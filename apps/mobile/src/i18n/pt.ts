@@ -575,12 +575,12 @@ export const pt: Dict = {
       const pt = ptOf(c);
       const cable = cableOf(c);
       return {
-        label: `Iniciar na app ${c.op}`,
+        label: `Iniciar na app ${deOp(c.op)}`,
         why: `${c.op} só aceita a sua app. O Branché leva-o lá num toque: inicia o carregamento na app oficial, onde ficam a sua conta e o seu cartão. O Branché não efetua o pagamento.`,
         steps: c.dc
-          ? [`Ligue ${cable} ao seu carro.`, `Abra a app ${c.op} (ou instale-a) e inicie o carregamento em ${pt}${targeted ? '' : ' (escolha-o na app)'}.`, 'Volte ao Branché: o acompanhamento começa.']
-          : [`Abra a app ${c.op} (ou instale-a) e inicie o carregamento em ${pt}${targeted ? '' : ' (escolha-o na app)'}.`, `Ligue ${cable}.`, 'Volte ao Branché: o acompanhamento começa.'],
-        cta: `Abrir a app ${c.op}`,
+          ? [`Ligue ${cable} ao seu carro.`, `Abra a app ${deOp(c.op)} (ou instale-a) e inicie o carregamento em ${pt}${targeted ? '' : ' (escolha-o na app)'}.`, 'Volte ao Branché: o acompanhamento começa.']
+          : [`Abra a app ${deOp(c.op)} (ou instale-a) e inicie o carregamento em ${pt}${targeted ? '' : ' (escolha-o na app)'}.`, `Ligue ${cable}.`, 'Volte ao Branché: o acompanhamento começa.'],
+        cta: `Abrir a app ${deOp(c.op)}`,
       };
     },
     account: (c: MethodCtx, connected: string | null): MethodTexts => {
