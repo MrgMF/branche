@@ -1,11 +1,12 @@
 // Usage : node src/cli.mjs [--input fichier.csv] [--out dossier]
 // Sans --input : télécharge la base nationale IRVE consolidée (data.gouv.fr).
 import { createReadStream } from 'node:fs';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { join, resolve } from 'node:path';
 import { parse } from 'csv-parse';
 import { createAggregator, evseIndex, toTiles, TILE_SIZE } from './normalize.mjs';
+import { publishPortals } from './portals.mjs';
 
 const DEFAULT_URL = 'https://www.data.gouv.fr/api/1/datasets/r/eb76d20a-8501-400e-b336-d85724de5435';
 
@@ -48,15 +49,14 @@ const meta = {
   evseBuckets: index.size,
 };
 await writeFile(join(outDir, 'meta.json'), JSON.stringify(meta));
-// Portails des opérateurs (site officiel, démarrage web, paiement ponctuel, badges) : publié tel quel s'il existe.
-const portalsSrc = resolve(import.meta.dirname, '..', 'data', 'operator-portals.json');
+// Portails des opérateurs (site officiel, démarrage web, paiement ponctuel, badges, payDomains) : validés puis publiés ;
+// les payDomains sont recopiés dans operators.json (vérificateur de QR codes de l'app).
+let registry = agg.operators();
 try {
-  const portals = JSON.parse(await readFile(portalsSrc, 'utf8'));
-  if (portals?.v === 1 && portals.operators && typeof portals.operators === 'object') await writeFile(join(outDir, 'operator-portals.json'), JSON.stringify(portals));
-  else console.warn('operator-portals.json ignoré : format inattendu.');
-} catch {
+  registry = await publishPortals(outDir, registry);
+} catch (e) {
+  if (e?.code !== 'ENOENT') throw e;
   console.warn('operator-portals.json absent : l’app utilise la base IRVE seule.');
+  await writeFile(join(outDir, 'operators.json'), JSON.stringify(registry));
 }
-const registry = agg.operators();
-await writeFile(join(outDir, 'operators.json'), JSON.stringify(registry));
 console.log(`OK : ${st.rows} lignes, ${st.skipped} ignorées, ${st.stations} stations, ${st.pdc} points, ${tiles.size} tuiles, ${registry.operators.length} opérateurs → ${outDir}`);

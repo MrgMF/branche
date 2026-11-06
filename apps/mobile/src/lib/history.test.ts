@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { addRecord, clearHistory, loadHistory, monthStats, removeRecord, toCsv, totals, type ChargeRecord } from './history';
+import { addRecord, clearHistory, csvCell, loadHistory, monthStats, removeRecord, toCsv, totals, updateRecord, type ChargeRecord } from './history';
+import { loadTicket, saveTicket } from './ticket';
 
 const rec = (o: Partial<ChargeRecord>): ChargeRecord => ({
   id: 'r1',
@@ -54,5 +55,47 @@ describe('historique local', () => {
     expect(line).toContain('2026-11-05 14:00;2026-11-05 14:40;"Parking ""Gare""; niveau -1";Opérateur Test;FRTSTE0001;');
     expect(line).toContain(';25,25;non;12,5;10,1;oui;');
     expect(toCsv([]).split('\r\n')).toHaveLength(2);
+  });
+});
+
+describe('export CSV — injection de formules', () => {
+  it('neutralise les cellules commençant par = + - @ (apostrophe), nombres intacts', () => {
+    expect(csvCell('=HYPERLINK("http://x","clic")', ';')).toBe(`"'=HYPERLINK(""http://x"",""clic"")"`);
+    expect(csvCell('+33 1 23', ';')).toBe("'+33 1 23");
+    expect(csvCell('-2+3', ';')).toBe("'-2+3");
+    expect(csvCell('@SUM(A1)', ';')).toBe("'@SUM(A1)");
+    expect(csvCell('  =1+1', ';')).toBe("'  =1+1");
+    expect(csvCell('\tcmd', ';')).toBe("'\tcmd");
+    expect(csvCell('Borne A', ';')).toBe('Borne A');
+    expect(csvCell(-1.5, ';')).toBe('-1,5');
+  });
+  it('un nom de station piégé est neutralisé dans le fichier', () => {
+    const csv = toCsv([rec({ stationName: '=cmd|"/c calc"!A1', operatorName: '@op' })]);
+    expect(csv).toContain(`"'=cmd|""/c calc""!A1"`);
+    expect(csv).toContain(";'@op;");
+    expect(csv).not.toMatch(/;=|;@|;\+/);
+  });
+});
+
+describe('photo du ticket (locale)', () => {
+  it('stockée sur l’appareil, liée à la recharge, supprimée avec elle', async () => {
+    await addRecord(rec({ id: 't1' }));
+    expect(await saveTicket('t1', 'data:image/jpeg;base64,AAAA')).toBe(true);
+    await updateRecord('t1', { ticket: true });
+    expect((await loadHistory())[0].ticket).toBe(true);
+    expect(await loadTicket('t1')).toBe('data:image/jpeg;base64,AAAA');
+    await removeRecord('t1');
+    expect(await loadTicket('t1')).toBeNull();
+  });
+  it('refuse ce qui n’est pas une image ou trop lourd', async () => {
+    expect(await saveTicket('x', 'javascript:alert(1)')).toBe(false);
+    expect(await saveTicket('x', `data:image/jpeg;base64,${'A'.repeat(1_000_000)}`)).toBe(false);
+  });
+  it('« Tout supprimer » efface aussi les photos', async () => {
+    await addRecord(rec({ id: 't2' }));
+    await saveTicket('t2', 'data:image/jpeg;base64,BBBB');
+    await updateRecord('t2', { ticket: true });
+    await clearHistory();
+    expect(await loadTicket('t2')).toBeNull();
   });
 });

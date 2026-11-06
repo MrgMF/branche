@@ -4,8 +4,7 @@ import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { displayName, type Station } from './stations';
-import { markConnected } from './accounts';
-import { store, type ChargePlan } from './store';
+import { store, type ChargePlan, type DirectCharge } from './store';
 import { tr } from '../i18n';
 
 export { directPayUrl, operatorLabel, operatorOf, payOptions, type PayOption } from './methods';
@@ -19,7 +18,7 @@ function stationRef(station: Station | null) {
 }
 
 /** Démarre le suivi d'une recharge (avant confirmation du démarrage). */
-export function beginCharge(url: string, station: Station | null, operatorName: string) {
+export function beginCharge(url: string, station: Station | null, operatorName: string, extra: Partial<DirectCharge> = {}) {
   const p = store.plan();
   const plan = p && station && p.stationId === station.id ? p : null;
   store.setDirect({
@@ -30,6 +29,7 @@ export function beginCharge(url: string, station: Station | null, operatorName: 
     chargeStartedAt: null,
     endedAt: null,
     ...(plan ? { plan } : {}),
+    ...extra,
   });
 }
 
@@ -40,12 +40,12 @@ export function startReaderCharge(station: Station, operatorName: string) {
 }
 
 /** Ouvre la page de paiement officielle dans le navigateur intégré, puis affiche le suivi de recharge. */
-export async function openOperatorPayment(url: string, station: Station | null, operatorName: string) {
-  beginCharge(url, station, operatorName);
+export async function openOperatorPayment(url: string, station: Station | null, operatorName: string, extra: Partial<DirectCharge> = {}) {
+  beginCharge(url, station, operatorName, extra);
   if (Platform.OS === 'web') {
     window.open(url, '_blank', 'noopener,noreferrer');
   } else {
-    // SFSafariViewController / Chrome Custom Tabs : Apple Pay et Google Pay disponibles, cookies isolés de l'app.
+    // SFSafariViewController / Chrome Custom Tabs : page de l'opérateur telle quelle, cookies isolés de l'app.
     await WebBrowser.openBrowserAsync(url, {
       presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
       enableBarCollapsing: true,
@@ -59,9 +59,11 @@ export async function openOperatorPayment(url: string, station: Station | null, 
 export function runPlan(station: Station, plan: ChargePlan, operatorName: string, url?: string) {
   store.setCurrent(station);
   store.setPlan(plan);
-  // Compte imposé par l'opérateur : ajouté une fois (sur son site, dans le navigateur intégré), réutilisé ensuite
-  if (plan.method === 'account' && station.ok) markConnected(station.ok, operatorName);
   if (plan.method === 'reader' || plan.method === 'badge') startReaderCharge(station, operatorName);
-  else if ((plan.method === 'operator-link' || plan.method === 'account') && url) openOperatorPayment(url, station, operatorName);
+  else if (plan.method === 'account' && url) {
+    // Compte imposé par l'opérateur : jamais « connecté » à l'ouverture du site. Au retour, le suivi demande
+    // « Êtes-vous connecté à votre compte X ? » (comme Mes comptes) ; seul un « oui » est retenu, puis réutilisé.
+    openOperatorPayment(url, station, operatorName, station.ok ? { accountAsk: { key: station.ok, name: operatorName } } : {});
+  } else if (plan.method === 'operator-link' && url) openOperatorPayment(url, station, operatorName);
   else router.push({ pathname: '/payer', params: { from: 'recharger' } });
 }

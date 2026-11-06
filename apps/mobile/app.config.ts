@@ -7,6 +7,9 @@ const baseUrl = process.env.BASE_URL ?? '';
 if (process.env.EAS_BUILD && [process.env.DATA_URL, process.env.SITE_URL, process.env.API_URL].some((v) => !v || v.includes('REPLACE_ME'))) {
   throw new Error('eas.json : remplacez REPLACE_ME par votre identifiant GitHub (DATA_URL, SITE_URL) et l’URL de votre API Render (API_URL) avant de lancer un build.');
 }
+// Un seul texte d'autorisation (iOS n'en garde qu'un, partagé par expo-camera et expo-image-picker) couvrant tous les usages.
+const CAMERA_TEXT =
+  'Branché utilise l’appareil photo pour lire le QR code de la borne (analysé sur votre téléphone, jamais enregistré ni envoyé) et, si vous le souhaitez, pour reconnaître votre véhicule (photo envoyée pour l’identification puis oubliée) ou photographier le ticket de recharge (gardé uniquement sur votre téléphone).';
 const config: ExpoConfig = {
   name: 'Branché',
   slug: 'branche',
@@ -39,11 +42,11 @@ const config: ExpoConfig = {
     'expo-localization',
     // Rappels locaux de fin de charge et avant pénalité d'occupation (aucune notification distante)
     ['expo-notifications', { color: '#0B7A55' }],
-    // Véhicule : photo facultative (envoyée pour identification, jamais conservée) et marques des applis constructeur (<queries>)
-    ['expo-image-picker', { cameraPermission: 'Branché peut reconnaître votre véhicule sur une photo. Elle est envoyée pour l’identification puis oubliée, jamais conservée.', photosPermission: false, microphonePermission: false }],
+    // Véhicule : photo facultative (envoyée pour identification, jamais conservée) ; ticket de recharge (local uniquement) ; marques des applis constructeur (<queries>)
+    ['expo-image-picker', { cameraPermission: CAMERA_TEXT, photosPermission: false, microphonePermission: false }],
     ['./plugins/withVehicleAppQueries', { packages: (vehicleApps.android as { package: string }[]).map((a) => a.package) }],
     ['expo-splash-screen', { image: './assets/splash-icon.png', imageWidth: 160, resizeMode: 'contain', backgroundColor: '#FFFFFF' }],
-    ['expo-camera', { cameraPermission: 'Branché utilise l’appareil photo pour lire le QR code de la borne. L’image est analysée sur votre téléphone, jamais enregistrée ni envoyée.', recordAudioAndroid: false }],
+    ['expo-camera', { cameraPermission: CAMERA_TEXT, recordAudioAndroid: false }],
     [
       'expo-location',
       { locationWhenInUsePermission: 'Branché utilise votre position pour trouver la borne la plus proche, sur votre appareil. Elle n’est envoyée à nos serveurs que si vous demandez un itinéraire ou faites un signalement.' },

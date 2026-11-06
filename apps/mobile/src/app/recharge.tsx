@@ -5,16 +5,20 @@ import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, AppState, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CopyId } from '../components/CopyId';
+import { NoCharge } from '../components/NoCharge';
 import { Button, Notice } from '../components/ui';
+import { loadWallet, markConnected } from '../lib/accounts';
 import { apiEnabled } from '../lib/api';
 import { sendCheckin } from '../lib/community';
 import { durationLabel, estimateCharge, progressAt, type EstimateInput } from '../lib/estimate';
 import { euros } from '../lib/format';
 import { autoFinish, departed, distanceToStation, recordOf, AUTO_END_M } from '../lib/autoEnd';
-import { addRecord, methodLabel, type ChargeRecord } from '../lib/history';
+import { addRecord, methodLabel, updateRecord, type ChargeRecord } from '../lib/history';
+import { saveTicket } from '../lib/ticket';
+import { takeTicketPhoto } from '../lib/ticketPhoto';
 import { postReport } from '../lib/navigation';
 import { cancelAlerts, scheduleAlerts, type Alert } from '../lib/notify';
 import { store, type DirectCharge } from '../lib/store';
@@ -35,6 +39,8 @@ const parseEuros = (x: string) => {
   const n = Number(x.replace(/\s|€/g, '').replace(',', '.'));
   return x.trim() && Number.isFinite(n) && n >= 0 && n < 1000 ? Math.round(n * 100) / 100 : null;
 };
+/** Saisie facultative : vide = OK ; texte non numérique ou hors bornes = erreur affichée, rien n'est enregistré. */
+const invalid = (x: string) => x.trim() !== '' && parseEuros(x) == null;
 
 function inputOf(d: DirectCharge): EstimateInput {
   const p = d.plan;
@@ -61,10 +67,22 @@ export default function Recharge() {
   const [details, setDetails] = useState(false);
   const [ok, setOk] = useState<boolean | null>(null);
   const [saved, setSaved] = useState<ChargeRecord | null>(null);
+  const [ticket, setTicket] = useState<string | null>(null);
+  const [ticketMsg, setTicketMsg] = useState<string | null>(null);
+  const [tried, setTried] = useState(false);
+  const [queued, setQueued] = useState(false);
 
   useEffect(() => {
     if (d === undefined) store.loadDirect().then(setD);
   }, [d]);
+  // Compte déjà confirmé auparavant : on ne repose pas la question
+  useEffect(() => {
+    const ask = d?.accountAsk;
+    if (!ask) return;
+    loadWallet().then((w) => {
+      if (w.accounts.some((a) => a.operatorKey === ask.key)) update({ accountAsk: undefined });
+    });
+  }, [d?.accountAsk?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const charging = !!d?.chargeStartedAt && !d.endedAt;
 
@@ -182,17 +200,46 @@ export default function Recharge() {
     }
   }
 
+  async function answerAccount(yes: boolean) {
+    const ask = d?.accountAsk;
+    if (!ask) return;
+    if (yes) await markConnected(ask.key, ask.name);
+    update({ accountAsk: undefined });
+  }
+
+  async function addTicket() {
+    setTicketMsg(null);
+    try {
+      const r = await takeTicketPhoto();
+      if (!r) return;
+      if ('error' in r) setTicketMsg(r.error === 'tooBig' ? C.ticketTooBig : C.ticketFailed);
+      else setTicket(r.data);
+    } catch {
+      setTicketMsg(C.ticketFailed);
+    }
+  }
+
   async function save() {
     if (!d || !est) return;
+    setTried(true);
+    if (invalid(paid) || invalid(kwhIn) || invalid(preauthIn)) return;
     const ended = d.endedAt ?? Date.now();
     const kWh = parseEuros(kwhIn);
     const pricePaid = parseEuros(paid);
     const preauth = parseEuros(preauthIn);
     const base = recordOf(d, ended);
-    const r: ChargeRecord = { ...base, kWh: kWh ?? base.kWh, kWhEstimated: kWh == null, pricePaid, ok };
+    let r: ChargeRecord = { ...base, kWh: kWh ?? base.kWh, kWhEstimated: kWh == null, pricePaid, ok };
     await addRecord(r);
+    if (ticket) {
+      if (await saveTicket(r.id, ticket)) {
+        r = { ...r, ticket: true };
+        await updateRecord(r.id, { ticket: true });
+      } else setTicketMsg(C.ticketFull);
+    }
     if (ok != null && d.station.id !== 'inconnue') {
-      sendCheckin({ stationId: d.station.id, ok, ...(pricePaid != null ? { pricePaid } : {}), ...(kWh != null ? { kWh } : {}), ...(preauth != null ? { preauth } : {}) });
+      sendCheckin({ stationId: d.station.id, ok, ...(pricePaid != null ? { pricePaid } : {}), ...(kWh != null ? { kWh } : {}), ...(preauth != null ? { preauth } : {}) }).then(
+        (res) => res === 'queued' && setQueued(true),
+      );
     }
     store.setPlan(null);
     update(null);
@@ -211,8 +258,11 @@ export default function Recharge() {
           <Row k={C.duration} v={durationLabel((saved.endedAt - saved.startedAt) / 60_000)} />
           <Row k={saved.kWhEstimated ? C.energyEst : C.energy} v={saved.kWh != null ? kwhText(saved.kWh) : '—'} />
           <Row k={C.paid} v={saved.pricePaid != null ? euros(Math.round(saved.pricePaid * 100)) : t.common.notProvided} strong />
+          {saved.ticket && ticket ? <Image source={{ uri: ticket }} style={styles.ticket} resizeMode="contain" accessibilityLabel={C.ticketA11y} /> : null}
           <Text style={styles.mutedLeft}>{C.keptHere(saved.operatorName)}</Text>
         </View>
+        {ticketMsg ? <Notice dark>{ticketMsg}</Notice> : null}
+        {queued ? <Notice dark>{C.queued}</Notice> : null}
         <Button label={C.seeHistory} onPress={() => router.replace('/historique')} />
         <Button label={t.common.backToMap} variant="light" onPress={() => router.replace('/')} />
       </ScrollView>
@@ -228,17 +278,10 @@ export default function Recharge() {
   }
   if (!d || !est || !input) {
     return (
-      <View style={[styles.root, { paddingTop: insets.top + 12 }]}>
-        <View style={styles.body}>
-          <ScreenHeader title={t.titles.maRecharge} dark />
-        </View>
-        <View style={[styles.center, { flex: 1 }]}>
-          <Text style={styles.title} accessibilityRole="header">{C.none}</Text>
-          <Text style={styles.muted}>{C.noneBody}</Text>
-          <Button label={t.common.findStation} onPress={() => router.replace('/')} style={{ alignSelf: 'stretch' }} />
-          <Button label={C.historyBtn} variant="light" onPress={() => router.replace('/historique')} style={{ alignSelf: 'stretch' }} />
-        </View>
-      </View>
+      <ScrollView style={[styles.root, { backgroundColor: colors.surface }]} contentContainerStyle={[styles.body, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]}>
+        <ScreenHeader title={t.titles.maRecharge} />
+        <NoCharge />
+      </ScrollView>
     );
   }
 
@@ -256,6 +299,15 @@ export default function Recharge() {
   return (
     <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
       <ScreenHeader dark title={t.titles.maRecharge} sub={`${d.station.name}${pointText}`} />
+
+      {d.accountAsk ? (
+        <View style={[styles.card, styles.ask]} accessibilityLiveRegion="polite">
+          <Text style={styles.cardTitle} accessibilityRole="header">{C.accountQ(d.accountAsk.name)}</Text>
+          <Text style={styles.mutedLeft}>{C.accountBody}</Text>
+          <Button label={t.accounts.yesConnected} onPress={() => answerAccount(true)} />
+          <Button label={t.accounts.notNow} variant="ghost" onPress={() => answerAccount(false)} />
+        </View>
+      ) : null}
 
       {!d.chargeStartedAt && !help ? (
         <>
@@ -314,9 +366,10 @@ export default function Recharge() {
             </View>
             <View style={styles.stats}>
               <Stat label={C.energy} value={kwhText(prog.kWhBilled)} />
-              <Stat label={C.costEst} value={prog.cost != null ? euros(Math.round(prog.cost * 100)) : t.common.unknownPrice} />
+              <Stat label={C.costEst} value={prog.cost != null ? euros(Math.round(prog.cost * 100)) : '—'} a11y={prog.cost != null ? undefined : `${C.costEst} : ${t.common.unknownPrice}`} />
               <Stat label={C.elapsed} value={fmt(elapsedMs)} />
             </View>
+            {prog.cost == null ? <Text style={styles.small}>{`${C.costEst} : ${t.common.unknownPrice}`}</Text> : null}
             <Text style={styles.muted}>
               {C.estimateNote(d.plan?.vehicle?.name ?? null, est.fromSoc, `${num(est.powerKw)} kW`, d.operatorName)}
             </Text>
@@ -377,17 +430,39 @@ export default function Recharge() {
               keyboardType="decimal-pad"
               aria-label={C.paidA11y}
               accessibilityLabelledBy="paid-label"
-              style={styles.input}
+              style={[styles.input, (tried || paid.length > 2) && invalid(paid) && styles.inputBad]}
+              aria-invalid={invalid(paid)}
             />
+            {(tried || paid.length > 2) && invalid(paid) ? (
+              <Text style={styles.error} accessibilityLiveRegion="polite" role="alert">
+                {C.amountInvalid}
+              </Text>
+            ) : null}
             <Pressable accessibilityRole="button" accessibilityState={{ expanded: details }} onPress={() => setDetails((x) => !x)} style={styles.link}>
               <Text style={styles.linkText}>{details ? C.less : C.more}</Text>
             </Pressable>
             {details ? (
               <>
-                <TextInput value={kwhIn} onChangeText={setKwhIn} placeholder={C.kwhPh(num(prog.kWhBilled))} placeholderTextColor={colors.nightMuted} keyboardType="decimal-pad" aria-label={C.kwhA11y} style={styles.input} />
-                <TextInput value={preauthIn} onChangeText={setPreauthIn} placeholder={C.preauthPh} placeholderTextColor={colors.nightMuted} keyboardType="decimal-pad" aria-label={C.preauthA11y} style={styles.input} />
+                <TextInput value={kwhIn} onChangeText={setKwhIn} placeholder={C.kwhPh(num(prog.kWhBilled))} placeholderTextColor={colors.nightMuted} keyboardType="decimal-pad" aria-label={C.kwhA11y} aria-invalid={invalid(kwhIn)} style={[styles.input, tried && invalid(kwhIn) && styles.inputBad]} />
+                {tried && invalid(kwhIn) ? <Text style={styles.error} role="alert">{C.kwhInvalid}</Text> : null}
+                <TextInput value={preauthIn} onChangeText={setPreauthIn} placeholder={C.preauthPh} placeholderTextColor={colors.nightMuted} keyboardType="decimal-pad" aria-label={C.preauthA11y} aria-invalid={invalid(preauthIn)} style={[styles.input, tried && invalid(preauthIn) && styles.inputBad]} />
+                {tried && invalid(preauthIn) ? <Text style={styles.error} role="alert">{C.preauthInvalid}</Text> : null}
               </>
             ) : null}
+
+            <Text style={styles.label}>{C.ticketTitle}</Text>
+            {ticket ? (
+              <>
+                <Image source={{ uri: ticket }} style={styles.ticket} resizeMode="contain" accessibilityLabel={C.ticketA11y} />
+                <Pressable accessibilityRole="button" onPress={() => setTicket(null)} style={styles.link}>
+                  <Text style={styles.linkDanger}>{C.ticketRemove}</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Button label={C.ticketTake} variant="light" onPress={addTicket} hint={C.ticketHint} />
+            )}
+            <Text style={styles.small}>{C.ticketHint}</Text>
+            {ticketMsg ? <Text style={styles.error} role="alert">{ticketMsg}</Text> : null}
           </View>
           <Button label={C.save} onPress={save} hint={C.saveHint} />
           <Button label={C.resume} variant="ghost" onPress={() => update({ endedAt: null, autoEnded: false })} />
@@ -408,13 +483,12 @@ function Row({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+/** Valeur sur 2 lignes au plus, jamais tronquée par « … » (montants longs, petites largeurs, grandes polices). */
+function Stat({ label, value, a11y }: { label: string; value: string; a11y?: string }) {
   return (
-    <View style={styles.stat}>
+    <View style={styles.stat} accessible accessibilityLabel={a11y ?? `${label} : ${value}`}>
       <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-      </Text>
+      <Text style={styles.statValue}>{value}</Text>
     </View>
   );
 }
@@ -450,6 +524,11 @@ const styles = StyleSheet.create({
   input: { minHeight: 52, borderRadius: radius.md, borderWidth: 1, borderColor: '#3A4A45', paddingHorizontal: 14, fontFamily: fonts.medium, fontSize: 16, color: '#F2F6F4', backgroundColor: colors.nightBg },
   link: { minHeight: MIN_TOUCH, justifyContent: 'center' },
   linkText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.charge },
+  linkDanger: { fontFamily: fonts.semibold, fontSize: 15, color: '#FF9C9C' },
+  inputBad: { borderColor: '#FF9C9C', borderWidth: 2 },
+  error: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20, color: '#FFB4B4' },
+  ticket: { width: '100%', height: 220, borderRadius: radius.md, backgroundColor: colors.nightBg },
+  ask: { borderWidth: 2, borderColor: colors.charge },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   rowK: { fontFamily: fonts.medium, fontSize: 15, color: colors.nightMuted },
   rowV: { flex: 1, textAlign: 'right', fontFamily: fonts.semibold, fontSize: 15, color: '#F2F6F4' },

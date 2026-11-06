@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node src/cli.mjs",
+    "portals": "node src/portals.mjs",
     "radars": "node src/radars.mjs",
     "test": "node --test test/*.test.mjs"
   },

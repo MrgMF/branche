@@ -8,6 +8,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Onboarding } from '../components/Onboarding';
 import { useLocale, useT } from '../i18n';
+import { startCheckinSync } from '../lib/checkinSync';
 import { loadSettings } from '../lib/settings';
 import { useOnboarding } from '../lib/useOnboarding';
 import { loadVoicePref } from '../lib/voice';
@@ -29,6 +30,8 @@ export default function RootLayout() {
   useEffect(() => {
     Promise.all([loadSettings(), loadVoicePref()]).finally(() => setReady(true));
   }, []);
+  // Retours « Ça a marché ? » saisis hors ligne : renvoyés au retour du réseau
+  useEffect(() => startCheckinSync(), []);
   // Langue du document (lecteurs d'écran, césure, traduction du navigateur)
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') document.documentElement.lang = tag;

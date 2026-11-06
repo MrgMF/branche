@@ -1,6 +1,9 @@
 """E2E V2 « paiement A → Z » sans compte : détection → Recharger ici → point → prix/estimation → QR vérifié →
 page CPO de test → démarrage → suivi → fin → historique → export CSV ; parcours « carte au lecteur » (API coupée :
 dégradation propre) ; parcours « échec de démarrage » ouvert par lien profond /recharger?evse=.
+Critique paiement : QR d'un autre point / d'une autre borne (confirmation explicite), pages officielles sourcées
+(payDomains : ENGIE Vianeo, Virta), lecteur CB 2027 seulement ≥ 50 kW, Lidl « appli seule » → borne payable la plus
+proche + « Y aller », scan depuis l'accueil → résumé prix + estimation avant « Payer ».
 
 Prérequis : un site assemblé (scripts/assemble-site.mjs + scripts/e2e-setup.mjs) avec une app exportée par
   EXPO_OFFLINE=1 BASE_URL=/branche/app DATA_URL=http://127.0.0.1:8080/branche/data SITE_URL=http://127.0.0.1:8080/branche \
@@ -31,6 +34,7 @@ STUB_STYLE = {"version": 8, "glyphs": "https://example.invalid/{fontstack}/{rang
 TEST_POS = {'latitude': 48.75856, 'longitude': 2.30352}       # à ~6 m de la borne de test FRTSTP0001
 EXPRESS_POS = {'latitude': 48.76304, 'longitude': 2.30668}    # Metropolis Express Antony (réelle, CB, 150 kW)
 log = []
+PENDING = {}  # requêtes en cours (diagnostic d'un « networkidle » jamais atteint)
 
 
 def ok(msg):
@@ -117,6 +121,9 @@ def new_ctx(b, pos):
                         permissions=['geolocation', 'notifications'], locale='fr-FR', timezone_id='Europe/Paris', accept_downloads=True)
     ctx.route('**/tiles.openfreemap.org/**', lambda r: r.fulfill(status=200, content_type='application/json', body=json.dumps(STUB_STYLE)))
     ctx.route('**/fonts.gstatic.com/**', lambda r: r.abort())
+    ctx.on('request', lambda r: PENDING.__setitem__(r, time.time()))
+    ctx.on('requestfinished', lambda r: PENDING.pop(r, None))
+    ctx.on('requestfailed', lambda r: PENDING.pop(r, None))
     ctx.route('**/v1/incidents**', lambda r: r.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin': '*'},
                                                        body=json.dumps({'updatedAt': None, 'source': 'test', 'feedOk': True, 'incidents': []})))
     return ctx
@@ -189,6 +196,24 @@ try:
         page.get_by_role('button', name='Vérifier').click()
         page.wait_for_selector('text=paiement bloqué')
         ok('anti-quishing : lien raccourci bloqué')
+        # QR code d'un AUTRE point de la même borne : message clair + confirmation, jamais de bascule silencieuse
+        box.fill('http://localhost:8090/pay?evse=FR*TST*E0002')
+        page.get_by_role('button', name='Vérifier').click()
+        page.wait_for_selector('text=Ce QR code concerne le point …0002, pas le point …0001 que vous avez choisi.')
+        assert page.get_by_role('button', name='Payer sur la page Opérateur Test').count() == 0, 'paiement proposé sans confirmation'
+        page.get_by_text('Point …0001', exact=True).wait_for()
+        shot(page, 'a4a-qr-autre-point')
+        page.get_by_role('button', name='Garder mon choix et scanner à nouveau').click()
+        page.get_by_text('Ce QR code concerne le point', exact=False).wait_for(state='detached')
+        # QR code d'une AUTRE borne (Metropolis Express Antony, réelle) : nommée, confirmation
+        box.fill('http://localhost:8090/pay?evse=FR*MGP*E92002CB1P1')
+        page.get_by_role('button', name='Vérifier').click()
+        page.wait_for_selector('text=Ce QR code concerne une autre borne : Metropolis - Express - Antony - Général de Gaulle.', timeout=15000)
+        assert page.get_by_role('button', name='Payer sur la page Opérateur Test').count() == 0
+        page.get_by_role('button', name='Passer à Metropolis - Express - Antony - Général de Gaulle').wait_for()
+        shot(page, 'a4b-qr-autre-borne')
+        page.get_by_role('button', name='Garder mon choix et scanner à nouveau').click()
+        ok('QR d’un autre point (…0002) ou d’une autre borne (nommée) : message clair, paiement seulement après confirmation')
         box.fill('http://localhost:8090/pay?evse=FR*TST*E0001')
         page.get_by_role('button', name='Vérifier').click()
         page.wait_for_selector('text=Domaine de l’opérateur (base IRVE)')
@@ -310,13 +335,18 @@ try:
         shot(page, 'c1-lien-profond')
         ok('lien profond /recharger?evse= : borne et point ouverts directement (index EVSE)')
         page.get_by_role('button', name='Scanner le QR code').click()
-        page.get_by_placeholder('ex. FR*ABC*E1234 ou https://…').fill('http://localhost:8090/pay?evse=FR*TST*E0002')
+        page.get_by_placeholder('ex. FR*ABC*E1234 ou https://…').fill('http://localhost:8090/pay?evse=FR*TST*E0001')
         page.get_by_role('button', name='Vérifier').click()
+        page.wait_for_selector('text=Ce QR code concerne le point …0001, pas le point …0002 que vous avez choisi.')
+        page.get_by_role('button', name='Recharger sur le point …0001').click()
+        page.get_by_text('Point …0001', exact=True).wait_for()
         page.wait_for_selector('text=Domaine de l’opérateur (base IRVE)')
+        ok('autre point confirmé explicitement : le point …0001 devient le point de la recharge')
         with ctx.expect_page() as pop:
             page.get_by_role('button', name='Payer sur la page Opérateur Test').click()
         pop.value.close()
         page.wait_for_selector('text=Paiement chez Opérateur Test')
+        assert '0001' in page.inner_text('body'), 'le suivi doit reprendre le point confirmé'
         page.get_by_role('button', name='Ça ne démarre pas').click()
         page.wait_for_selector('text=La charge ne démarre pas')
         page.get_by_role('button', name='Signaler la borne hors service').click()
@@ -393,7 +423,109 @@ try:
         ok(f'fin automatique au départ ({how}) : reçu déjà dans l’historique sans aucun geste')
         assert not errors, errors
         ctx.close()
+
+        # ---------- E. Pages de paiement officielles sourcées (payDomains) ; lecteur CB 2027 seulement ≥ 50 kW ----------
+        ctx = new_ctx(b, {'latitude': 48.85, 'longitude': 2.35})
+        page = ctx.new_page()
+        errors = []
+        page.on('pageerror', lambda e: errors.append(str(e)))
+        page.goto(f'{BASE}/app/recharger?evse=FRVIAE12345955331', wait_until='networkidle')  # ENGIE Vianeo, Chevilly (réelle, 22 kW, CB)
+        page.wait_for_selector('text=Prix avant de payer', timeout=20000)
+        page.get_by_role('button', name='Scanner le QR code').click()
+        box = page.get_by_placeholder('ex. FR*ABC*E1234 ou https://…')
+        box.fill('https://charge.engie-vianeo.com/')
+        page.get_by_role('button', name='Vérifier').click()
+        page.wait_for_selector('text=Page de paiement officielle de l’opérateur')
+        page.wait_for_selector('text=Adresse de paiement officielle publiée par ENGIE Vianeo.')
+        page.get_by_role('button', name='Payer sur la page ENGIE Vianeo').wait_for()
+        assert 'à partir de 2027' not in page.inner_text('body')
+        shot(page, 'e1-engie-officiel')
+        box.fill('https://charge-engie-vianeo.com/')
+        page.get_by_role('button', name='Vérifier').click()
+        page.wait_for_selector('text=paiement bloqué')
+        ok('ENGIE Vianeo : charge.engie-vianeo.com officiel (page sourcée), sosie charge-engie-vianeo.com bloqué')
+        page.goto(f'{BASE}/app/recharger?evse=FRVIRE269470', wait_until='networkidle')  # Virta, Massy (réelle)
+        page.wait_for_selector('text=Prix avant de payer', timeout=20000)
+        page.get_by_role('button', name='Scanner le QR code').click()
+        page.get_by_placeholder('ex. FR*ABC*E1234 ou https://…').fill('https://chge.eu/')
+        page.get_by_role('button', name='Vérifier').click()
+        page.wait_for_selector('text=Page de paiement officielle de l’opérateur')
+        page.get_by_role('button', name='Payer sur la page Virta').wait_for()
+        shot(page, 'e2-virta-chge')
+        ok('Virta : chge.eu officiel (page sourcée)')
+        page.goto(f'{BASE}/app/recharger?evse=FRHPCENF080017001', wait_until='networkidle')  # TotalEnergies Massy, 300 kW, sans CB IRVE
+        page.wait_for_selector('text=Prix avant de payer', timeout=20000)
+        page.get_by_role('button', name='Scanner le QR code').click()
+        page.wait_for_selector('text=obligatoire sur toutes les bornes rapides (≥ 50 kW) à partir de 2027')
+        page.goto(f'{BASE}/app/recharger?evse=FRVIRE269470', wait_until='networkidle')
+        page.wait_for_selector('text=Prix avant de payer', timeout=20000)
+        ok('mention « lecteur CB obligatoire ≥ 50 kW en 2027 » sur une borne de 300 kW, absente sur une borne de 22 kW')
+        assert not errors, errors
+        ctx.close()
+
+        # ---------- F. Lidl (appli seule) par lien profond : rien de payable, borne payable la plus proche, « Y aller » ----------
+        ctx = new_ctx(b, TEST_POS)
+        page = ctx.new_page()
+        errors = []
+        page.on('pageerror', lambda e: errors.append(str(e)))
+        page.goto(f'{BASE}/app/recharger?evse=FRLDLE00004111', wait_until='networkidle')  # Lidl Châtenay-Malabry (acte + badge IRVE)
+        page.wait_for_selector('text=Pas de paiement possible dans Branché ici', timeout=20000)
+        body = page.inner_text('body')
+        assert 'Ajouter mon compte' not in body and 'Lidl Plus' not in body, 'ni compte, ni appli tierce'
+        page.wait_for_selector('text=Borne payable la plus proche', timeout=20000)
+        page.get_by_text('Pas de paiement possible dans Branché ici').scroll_into_view_if_needed()
+        no_overflow(page, 'lidl')
+        shot(page, 'f1-lidl-bloque')
+        ok('Lidl (appli seule, acte IRVE) : « Pas de paiement possible dans Branché ici », ni QR ni compte, tuiles chargées autour')
+        page.get_by_role('button', name='Y aller').click()
+        page.wait_for_url('**/app/?go=*', timeout=15000)
+        # L'itinéraire s'ouvre quand index.tsx appelle useGoParam (src/lib/useGoParam.ts)
+        try:
+            page.get_by_role('button', name='Fermer l’itinéraire').wait_for(timeout=12000)
+            how = 'itinéraire ouvert'
+        except Exception:
+            how = 'carte ouverte avec ?go= (useGoParam à brancher dans index.tsx)'
+        shot(page, 'f2-y-aller')
+        ok(f'« Y aller » vers la borne payable la plus proche : {how}')
+        assert not errors, errors
+        ctx.close()
+
+        # ---------- G. Scan depuis l'accueil : résumé prix + estimation avant « Payer » ----------
+        ctx = new_ctx(b, TEST_POS)
+        page = ctx.new_page()
+        errors = []
+        page.on('pageerror', lambda e: errors.append(str(e)))
+        page.goto(f'{BASE}/app/', wait_until='networkidle')
+        page.wait_for_selector('text=Vous êtes à', timeout=20000)
+        page.get_by_role('button', name='Scanner le QR code d’une borne').click()
+        page.wait_for_selector('text=Payer la borne')
+        page.get_by_placeholder('ex. FR*ABC*E1234 ou https://…').fill('http://localhost:8090/pay?evse=FR*TST*E0002')
+        page.get_by_role('button', name='Vérifier').click()
+        page.wait_for_selector('text=Domaine de l’opérateur (base IRVE)')
+        page.wait_for_selector('text=Prix avant de payer')
+        page.wait_for_selector('text=Énergie : 0,49 €/kWh')
+        page.wait_for_selector('text=Estimation pour un véhicule moyen (55 kWh), de 20 % à 80 %')
+        page.get_by_text('Point …0002', exact=True).wait_for()
+        pay_btn = page.get_by_role('button', name='Payer sur la page Opérateur Test')
+        y_sum = page.get_by_text('Prix avant de payer').bounding_box()['y']
+        assert y_sum < pay_btn.bounding_box()['y'], 'résumé prix avant « Payer »'
+        assert 'à partir de 2027' not in page.inner_text('body'), 'borne de 22 kW : pas de mention 2027'
+        page.wait_for_selector('text=Aucun lecteur de carte déclaré pour cette borne.')
+        pay_btn.scroll_into_view_if_needed()
+        no_overflow(page, 'résumé')
+        shot(page, 'g1-accueil-resume-prix')
+        with ctx.expect_page() as pop:
+            pay_btn.click()
+        pop.value.close()
+        page.wait_for_selector('text=Paiement chez Opérateur Test')
+        ok('scan depuis l’accueil : borne et point du QR retenus, résumé prix + estimation avant « Payer », suivi du bon point')
+        assert not errors, errors
+        ctx.close()
         b.close()
+except Exception:
+    now = time.time()
+    print('Requêtes en cours :', [(r.method, r.url[:140], round(now - t, 1)) for r, t in PENDING.items() if now - t > 2], flush=True)
+    raise
 finally:
     for pr in procs:
         pr.terminate()

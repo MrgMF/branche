@@ -36,6 +36,7 @@ export function StationDetail(props: {
   const [avail, setAvail] = useState<Record<string, AvailItem>>({});
   const live = stationSummary(s, avail);
   const near = distance != null && distance < 0.3;
+  const tel = s.tel ? phone(s.tel) : null;
   useEffect(() => {
     let alive = true;
     setCommunity(null);
@@ -78,25 +79,8 @@ export function StationDetail(props: {
         <Stat label={t.station.access} value={reserved ? t.station.reserved : t.station.open} />
       </View>
 
-      <View style={styles.tags}>
-        {s.c.map((c) => (
-          <Tag key={c}>{plugLabel(c)}</Tag>
-        ))}
-        {s.h ? <Tag>{s.h === '24/7' ? t.station.h24 : s.h.length > 32 ? t.station.restricted : s.h}</Tag> : null}
-        {s.free ? <Tag>{t.station.free}</Tag> : null}
-      </View>
-
-      {reserved ? <Notice tone="demo">{t.station.reservedNotice}</Notice> : null}
-      {s.a ? <Text style={styles.addr}>{s.a}</Text> : null}
-
-      <View style={styles.payCard}>
-        <Text style={styles.payTitle}>{t.station.payTitle}</Text>
-        {live.known ? (
-          <Text style={[styles.live, { color: live.free ? colors.accentPressed : colors.busy }]}>
-            {live.free ? t.station.liveFree(live.free, live.total) : t.station.liveNone}{t.station.liveSuffix}{live.down ? t.station.liveDown(live.down) : ''}
-          </Text>
-        ) : null}
-        <Text style={styles.payText}>{t.station.payText(opName)}</Text>
+      {/* Action principale juste sous les chiffres clés : visible sans défiler, même en 320 px. */}
+      <View style={styles.cta}>
         <Button
           label={near ? t.here.rechargeHere : t.station.prepare}
           onPress={() => {
@@ -117,6 +101,28 @@ export function StationDetail(props: {
             <Text style={styles.linkText}>{t.station.alreadyThere}</Text>
           </Pressable>
         ) : null}
+      </View>
+
+      {live.known ? (
+        <Text style={[styles.live, { color: live.free ? colors.accentPressed : colors.busy }]}>
+          {live.free ? t.station.liveFree(live.free, live.total) : t.station.liveNone}{t.station.liveSuffix}{live.down ? t.station.liveDown(live.down) : ''}
+        </Text>
+      ) : null}
+
+      <View style={styles.tags}>
+        {s.c.map((c) => (
+          <Tag key={c}>{plugLabel(c)}</Tag>
+        ))}
+        {s.h ? <Tag>{s.h === '24/7' ? t.station.h24 : s.h.length > 32 ? t.station.restricted : s.h}</Tag> : null}
+        {s.free ? <Tag>{t.station.free}</Tag> : null}
+      </View>
+
+      {reserved ? <Notice tone="demo">{t.station.reservedNotice}</Notice> : null}
+      {s.a ? <Text style={styles.addr}>{s.a}</Text> : null}
+
+      <View style={styles.payCard}>
+        <Text style={styles.payTitle}>{t.station.payTitle}</Text>
+        <Text style={styles.payText}>{t.station.payText(opName)}</Text>
         <Text style={styles.boxTitle}>{t.station.priceTitle}</Text>
         <TariffLines station={s} community={community} compact />
         {payAtStation.length ? <Text style={styles.small}>{t.station.acceptedOnSite(payAtStation.join(' · '))}</Text> : null}
@@ -131,14 +137,27 @@ export function StationDetail(props: {
 
       {err ? <Notice tone="error">{err}</Notice> : null}
 
-      {s.tel ? (
-        <Pressable accessibilityRole="link" onPress={() => Linking.openURL(`tel:${s.tel!.replace(/[^+\d]/g, '')}`)} style={styles.link}>
-          <Text style={styles.linkText}>{t.station.call(s.tel)}</Text>
+      {tel ? (
+        <Pressable accessibilityRole="link" onPress={() => Linking.openURL(`tel:${tel.dial}`)} style={styles.link}>
+          <Text style={styles.linkText}>{t.station.call(tel.text)}</Text>
         </Pressable>
       ) : null}
       <Text style={styles.small}>{t.station.source(s.maj ? dateNum(s.maj) : null)}</Text>
     </View>
   );
+}
+
+/**
+ * Numéro lisible et numéro à composer : « tel:+33176401280 » → « +33 1 76 40 12 80 » ; « 0176401280 » → « 01 76 40 12 80 ».
+ */
+export function phone(raw: string): { text: string; dial: string } | null {
+  const dial = raw.replace(/^\s*tel:/i, '').replace(/[^+\d]/g, '');
+  if (dial.replace(/\D/g, '').length < 6) return null;
+  const fr = /^(?:\+33|0033)(\d)(\d{8})$/.exec(dial);
+  if (fr) return { text: `+33 ${fr[1]} ${fr[2].match(/\d{2}/g)!.join(' ')}`, dial: `+33${fr[1]}${fr[2]}` };
+  if (/^0\d{9}$/.test(dial)) return { text: dial.match(/\d{2}/g)!.join(' '), dial };
+  if (dial.startsWith('+')) return { text: `+${dial.slice(1).replace(/(\d{2})(?=\d)/g, '$1 ')}`.trim(), dial };
+  return { text: dial.replace(/(\d{2})(?=\d)/g, '$1 '), dial };
 }
 
 const styles = StyleSheet.create({
@@ -151,6 +170,7 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', gap: 10 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   addr: { fontFamily: fonts.body, fontSize: 14, color: colors.inkMuted },
+  cta: { gap: 2 },
   payCard: { borderWidth: 2, borderColor: colors.accent, borderRadius: radius.lg, padding: 14, gap: 10 },
   live: { fontFamily: fonts.bold, fontSize: 14 },
   payTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.ink },

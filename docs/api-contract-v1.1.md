@@ -4,7 +4,7 @@
 Interface `PaymentConnector { id; label; available(station): boolean; start(ctx): Promise<void> }`.
 | id | Principe | Contrat requis |
 |---|---|---|
-| `scan` | QR code de la borne (ou saisie manuelle) → domaine vérifié → page de paiement officielle ouverte dans l'app (navigateur intégré, Apple Pay / Google Pay possibles) | Aucun |
+| `scan` | QR code de la borne (ou saisie manuelle) → domaine vérifié → page de paiement officielle ouverte dans l'app (navigateur intégré) | Aucun |
 | `operator-link` | URL de paiement ad hoc connue pour l'opérateur (registre) | Aucun |
 | `branche-card` | Carte virtuelle Branché (BaaS) présentée sur le lecteur CB de la borne | Partenaire d'émission (pas d'itinérance) |
 | `branche-pay` | Session API existante (`docs/api-contract.md`) | Itinérance (futur) — démo |

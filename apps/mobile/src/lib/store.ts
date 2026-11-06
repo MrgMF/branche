@@ -34,6 +34,8 @@ export interface DirectCharge {
   lastNearAt?: number;
   /** Fin détectée automatiquement (départ de la borne). */
   autoEnded?: boolean;
+  /** Compte opérateur ouvert pour démarrer : à confirmer par l'utilisateur au retour (jamais supposé connecté). */
+  accountAsk?: { key: string; name: string };
 }
 
 const KEY = 'branche.direct.v1';

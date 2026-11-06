@@ -4,7 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Icon } from '../components/Icon';
+import { NoCharge } from '../components/NoCharge';
 import { ScreenHeader } from '../components/Screen';
 import { Button } from '../components/ui';
 import { useT } from '../i18n';
@@ -73,19 +73,7 @@ export default function MaRecharge() {
         </View>
       ) : null}
 
-      {prep === null && !active ? (
-        <View style={styles.empty}>
-          <View style={styles.emptyIcon}>
-            <Icon name="bolt" size={34} color={colors.accentPressed} />
-          </View>
-          <Text style={styles.title} accessibilityRole="header">
-            {M.emptyTitle}
-          </Text>
-          <Text style={[styles.p, { textAlign: 'center' }]}>{M.emptyBody}</Text>
-          <Button label={t.common.findStation} onPress={() => router.replace('/')} style={{ alignSelf: 'stretch' }} />
-          <Button label={t.common.scanQr} variant="secondary" onPress={() => router.push('/payer')} style={{ alignSelf: 'stretch' }} />
-        </View>
-      ) : null}
+      {prep === null && !active ? <NoCharge /> : null}
     </ScrollView>
   );
 }
@@ -98,6 +86,4 @@ const styles = StyleSheet.create({
   kicker: { fontFamily: fonts.semibold, fontSize: 12, color: colors.accentPressed, textTransform: 'uppercase', letterSpacing: 0.5 },
   title: { fontFamily: fonts.display, fontSize: 20, color: colors.ink, textAlign: 'left' },
   p: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.inkMuted },
-  empty: { alignItems: 'center', gap: 12, paddingVertical: 24, paddingHorizontal: 8 },
-  emptyIcon: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
 });

@@ -35,6 +35,8 @@ export interface PayOption {
   url?: string;
   /** Identifiant du point à saisir sur la page de l'opérateur (aucun gabarit {evse} publié). */
   copyId?: string;
+  /** QR code « éventuel », non déclaré par l'opérateur : ne suffit pas à dire la borne payable. */
+  speculative?: true;
 }
 
 export interface PayContext {
@@ -44,9 +46,11 @@ export interface PayContext {
 
 /**
  * Méthodes classées, tout dans Branché, sans contrat ni compte par défaut :
- * (1) paiement ponctuel sans compte (QR vérifié, lien connu) ; (2) carte bancaire au lecteur ; (3) badge accepté ;
- * (4) compte opérateur — seulement si l'opérateur l'impose (« Ajouter mon compte X une fois », puis réutilisé) ;
- * (5) QR éventuel non déclaré. Mode d'emploi adapté à la borne.
+ * (1) paiement ponctuel web déclaré (QR dynamique / site web IRVE, page sourcée) ; (1,5) lien connu ;
+ * (2) carte bancaire au lecteur ; (2,2) QR code sur la seule foi de `acte` IRVE ; (3) badge accepté ;
+ * (4) compte opérateur — seulement si l'opérateur l'impose ET que son site démarre une charge ;
+ * (5) QR éventuel non déclaré. Opérateur « appli seule » (source officielle) : ni `acte` ni `paiement_cb` IRVE ne
+ * suffisent. Mode d'emploi adapté à la borne.
  */
 export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[], ctx: PayContext = {}): PayOption[] {
   const op = operatorLabel(s, ops);
@@ -55,12 +59,19 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
   const kw = point?.kw ?? s.kw;
   const dc = isDc(kw, plugs);
   const plugName = plugs.filter((p) => p !== 'ef').map((p) => plugLabel(p)).join(tr().guidance.or);
-  const reader = s.pay.includes('cb') || s.pay.includes('sans_contact') || portal?.cardReader === true;
+  const appOnlyPortal = portal?.appOnly === true;
+  // Opérateur « appli seule » (source officielle) : `paiement_cb` IRVE désigne alors la carte enregistrée dans son appli,
+  // pas un lecteur sur la borne. Un lecteur confirmé par le portail (cardReader) reste proposé.
+  const reader = portal?.cardReader === true || (!appOnlyPortal && (s.pay.includes('cb') || s.pay.includes('sans_contact')));
   const contactless = s.pay.includes('sans_contact');
   const mc: MethodCtx = { op, short: point?.short ?? null, plugs: plugName, stationCable: dc || !!s.cab, dc, contactless };
   const M = tr().methods;
   const order: PayOption['order'] = dc ? 'plug-first' : 'pay-first';
-  const declaredAdHoc = s.pay.some((p) => p === 'qr_dynamique' || p === 'site_web' || p === 'acte') || !!portal?.adhocWeb;
+  // Paiement ponctuel web déclaré (QR dynamique, site web IRVE, ou page sourcée) ; `acte` seul = « paiement à l'acte »
+  // sans précision du canal : il ne vaut rien chez un opérateur « appli seule », et passe après un lecteur CB déclaré.
+  const webAdHoc = s.pay.some((p) => p === 'qr_dynamique' || p === 'site_web') || !!portal?.adhocWeb;
+  const acteOnly = !webAdHoc && !appOnlyPortal && s.pay.includes('acte');
+  const declaredAdHoc = webAdHoc || acteOnly;
   // adhocWeb : URL seule (éventuellement avec {evse}) ; un texte descriptif signale seulement un paiement ponctuel
   const adhocRaw = typeof portal?.adhocWeb === 'string' && /^https:\/\/[^\s{}]+(\{evse\}[^\s{}]*)?$/.test(portal.adhocWeb) ? portal.adhocWeb : null;
   const portalAdhocUrl = adhocRaw ? (adhocRaw.includes('{evse}') ? (point ? adhocRaw.replace('{evse}', encodeURIComponent(point.id)) : null) : adhocRaw) : null;
@@ -74,7 +85,8 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
 
   // Règle produit : sans compte d'abord. Un compte n'est proposé que si l'opérateur l'impose (aucune voie sans compte).
   const noAccountWay = declaredAdHoc || !!link || reader;
-  const accountUrl = startUrl ?? portal?.webPortal ?? null;
+  // Compte seulement si son site permet de démarrer une charge (un simple portail de connexion ne sert à rien à la borne)
+  const accountUrl = startUrl;
   const ranked: { rank: number; o: PayOption }[] = [];
   if (!noAccountWay && accountUrl) {
     ranked.push({
@@ -90,12 +102,13 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
     });
   }
   ranked.push({
-    rank: declaredAdHoc ? 1 : 5,
+    rank: webAdHoc ? 1 : acteOnly ? 2.2 : 5,
     o: {
       id: 'scan',
       ...M.scan(mc, declaredAdHoc),
-      available: !(portal?.appOnly && !declaredAdHoc),
+      available: !(appOnlyPortal && !declaredAdHoc),
       order,
+      ...(declaredAdHoc ? {} : { speculative: true as const }),
     },
   });
   ranked.push({
@@ -136,3 +149,21 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
 export function appOnly(options: PayOption[]): boolean {
   return !options.some((o) => o.available);
 }
+
+/** Payable depuis Branché sur la foi d'une déclaration (pas seulement « si un QR code est collé »). */
+export function surelyPayable(options: PayOption[]): boolean {
+  return options.some((o) => o.available && !o.speculative);
+}
+
+/** Borne payable la plus proche (stations triées par distance) : la première dont une méthode déclarée est disponible. */
+export function nearestPayable<T extends { s: Station }>(sorted: T[], ops: Operator[], ctx: PayContext = {}): T | null {
+  return sorted.find(({ s }) => surelyPayable(payOptions(s, null, ops, ctx))) ?? null;
+}
+
+/** Badges acceptés à afficher : jamais d'appli tierce (« apps : … », « Plugsurfing (appli) »). */
+export function badgeNames(list: string[] | null | undefined): string[] {
+  return (list ?? []).filter((b) => !/\b(apps?|appli(cation)?s?)\b/i.test(b)).map((b) => b.trim()).filter(Boolean);
+}
+
+/** Lecteur de carte obligatoire (AFIR) à partir de 2027 : mention réservée aux points ≥ 50 kW. */
+export const reader2027Applies = (kw: number) => kw >= 50;

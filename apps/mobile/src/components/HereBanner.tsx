@@ -12,7 +12,7 @@ import { methodLabel } from '../lib/history';
 import { clearPrepared, loadPrepared, type Prepared } from '../lib/prepared';
 import { compatible, loadVehicle, type Vehicle } from '../lib/vehicle';
 import { nearbyStation } from '../lib/proximity';
-import { displayName, distanceKm, loadAround, nearest, type Station } from '../lib/stations';
+import { applyFilters, displayName, distanceKm, loadAround, nearest, NO_FILTERS, type Filters, type Station } from '../lib/stations';
 import { autoFinish, departed } from '../lib/autoEnd';
 import { store, type DirectCharge } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
@@ -22,7 +22,11 @@ import { distText } from '../i18n/format';
 
 type Pos = { lat: number; lon: number };
 
-export function HereBanner({ user, onPick }: { user: Pos | null; onPick?: (s: Station) => void }) {
+/**
+ * `filters` : la borne conseillée respecte les filtres de la carte. `onAdvised` : identifiant de la borne conseillée affichée
+ * (la carte l'omet de sa liste pour ne pas la répéter). Sans position, aucune borne n'est conseillée (pas de distance inventée).
+ */
+export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { user: Pos | null; onPick?: (s: Station) => void; filters?: Filters; onAdvised?: (id: string | null) => void }) {
   const t = useT();
   const [pos, setPos] = useState<Pos | null>(user);
   const [hit, setHit] = useState<{ station: Station; distanceM: number } | null>(null);
@@ -77,10 +81,10 @@ export function HereBanner({ user, onPick }: { user: Pos | null; onPick?: (s: St
 
   // Sans geste : borne compatible la plus proche (libre en priorité si l'info existe)
   useEffect(() => {
-    if (!pos || !around.length) return;
+    if (!pos || !around.length) return setPick(null);
     let alive = true;
-    const cands = nearest(around.filter((s) => s.acc !== 'reserve' && compatible(s.c, vehicle)), pos, 6);
-    if (!cands.length) return;
+    const cands = nearest(applyFilters(around, filters).filter((s) => s.acc !== 'reserve' && compatible(s.c, vehicle)), pos, 6);
+    if (!cands.length) return setPick(null);
     getAvailability(cands.flatMap(({ s }) => (s.pdc ?? []).map(([id]) => id))).then((items) => {
       if (!alive) return;
       const scored = cands.map(({ s, d }) => ({ s, d, ...stationSummary(s, items) }));
@@ -92,7 +96,16 @@ export function HereBanner({ user, onPick }: { user: Pos | null; onPick?: (s: St
     return () => {
       alive = false;
     };
-  }, [around, vehicle, pos?.lat, pos?.lon]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [around, vehicle, pos?.lat, pos?.lon, filters]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Borne conseillée réellement affichée (cas 3 ci-dessous), signalée à la carte.
+  const preparedHere = !!(hit && prepared && prepared.station.id === hit.station.id);
+  const hereShown = !!(hit && hidden !== hit.station.id);
+  const advisedId = !preparedHere && !hereShown && onPick ? (prepared ? prepared.station.id : pick?.s.id ?? null) : null;
+  useEffect(() => {
+    onAdvised?.(advisedId);
+  }, [advisedId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onAdvised?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 1. Arrivé à une borne préparée : un seul geste pour payer
   if (hit && prepared && prepared.station.id === hit.station.id) {

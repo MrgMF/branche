@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'light';
@@ -30,16 +31,17 @@ export function Button(props: {
         v === 'secondary' && { borderWidth: 2, borderColor: colors.ink, backgroundColor: pressed ? colors.surfaceAlt : colors.surface },
         v === 'ghost' && { backgroundColor: pressed ? colors.border : colors.surfaceAlt },
         v === 'light' && { backgroundColor: pressed ? colors.border : colors.surface },
-        off && { opacity: 0.45 },
+        // Désactivé : texte inkMuted sur fond gris clair (>= 4,5:1), pas d'opacité.
+        off && !props.loading && { backgroundColor: colors.disabledBg, borderWidth: 2, borderColor: colors.border, borderStyle: 'dashed' },
         props.style,
       ]}
     >
       {props.loading ? (
-        <ActivityIndicator color={v === 'primary' ? '#fff' : colors.ink} />
+        <ActivityIndicator color={v === 'primary' ? colors.onAccent : colors.ink} />
       ) : (
         <View style={styles.row}>
           {props.icon}
-          <Text style={[styles.label, { color: v === 'primary' ? '#FFFFFF' : colors.ink }]}>{props.label}</Text>
+          <Text style={[styles.label, { color: off ? colors.disabledText : v === 'primary' ? colors.onAccent : colors.ink }]}>{props.label}</Text>
         </View>
       )}
     </Pressable>
@@ -56,17 +58,30 @@ export function Chip(props: { label: string; a11y?: string; active: boolean; onP
       onPress={props.onPress}
       style={[styles.chip, props.active ? styles.chipOn : styles.chipOff]}
     >
-      <Text style={[styles.chipText, { color: props.active ? '#FFFFFF' : colors.ink }]}>{props.label}</Text>
+      <View style={styles.row}>
+        {props.active ? (
+          <Svg width={14} height={14} viewBox="0 0 24 24" accessibilityElementsHidden importantForAccessibility="no">
+            <Path d="M5 12.5l4.5 4.5L19 7.5" stroke={colors.accentPressed} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        ) : null}
+        <Text style={[styles.chipText, { color: props.active ? colors.accentPressed : colors.ink }]}>{props.label}</Text>
+      </View>
     </Pressable>
   );
 }
 
 export function Notice(props: { children: ReactNode; tone?: 'demo' | 'info' | 'error'; dark?: boolean }) {
   const tone = props.tone ?? 'info';
-  const bg = tone === 'demo' ? colors.warnSoft : tone === 'error' ? '#FDECEC' : colors.accentSoft;
-  const fg = tone === 'demo' ? '#7A3E06' : tone === 'error' ? colors.danger : colors.accentPressed;
+  const bg = tone === 'demo' ? colors.warnSoft : tone === 'error' ? colors.dangerSoft : colors.accentSoft;
+  const fg = tone === 'demo' ? colors.warnText : tone === 'error' ? colors.danger : colors.accentPressed;
+  const err = tone === 'error';
   return (
-    <View accessibilityRole="text" style={[styles.notice, { backgroundColor: bg }]}>
+    <View
+      accessibilityRole={err ? 'alert' : 'text'}
+      accessibilityLiveRegion={err ? 'assertive' : undefined}
+      {...(err ? ({ 'aria-live': 'assertive' } as object) : null)}
+      style={[styles.notice, { backgroundColor: bg }]}
+    >
       <Text style={[styles.noticeText, { color: fg }]}>{props.children}</Text>
     </View>
   );
@@ -84,7 +99,7 @@ export function Stat({ label, value, dark }: { label: string; value: string; dar
   return (
     <View style={[styles.stat, dark && { backgroundColor: colors.nightCard }]}>
       <Text style={[styles.statLabel, dark && { color: colors.nightMuted }]}>{label}</Text>
-      <Text style={[styles.statValue, dark && { color: '#F2F6F4' }]} adjustsFontSizeToFit numberOfLines={1}>
+      <Text style={[styles.statValue, dark && { color: colors.nightText }]} adjustsFontSizeToFit numberOfLines={1}>
         {value}
       </Text>
     </View>
@@ -96,8 +111,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   label: { fontFamily: fonts.bold, fontSize: 17 },
   chip: { minHeight: MIN_TOUCH, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink },
-  chipOff: { backgroundColor: colors.surface, borderWidth: 1, borderColor: '#C9D3D0' },
+  chipOn: { backgroundColor: colors.accentSoft, borderWidth: 2, borderColor: colors.accent, paddingHorizontal: 13 },
+  chipOff: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong },
   chipText: { fontFamily: fonts.semibold, fontSize: 13 },
   notice: { borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 12 },
   noticeText: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 },

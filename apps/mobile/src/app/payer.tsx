@@ -3,15 +3,20 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PriceSummary } from '../components/Pricing';
 import { Button, Notice } from '../components/ui';
 import { apiEnabled } from '../lib/api';
+import { getCommunity, type Community } from '../lib/community';
 import { DEV_HOSTS } from '../lib/config';
 import { postReport } from '../lib/navigation';
 import { directPayUrl, openOperatorPayment, operatorLabel, operatorOf } from '../lib/connectors';
 import { payLabel } from '../lib/format';
 import { verifyQr, type Operator, type QrResult } from '../lib/qr';
-import { findStation, pointById } from '../lib/evse';
+import { findStation, pointById, pointsOf, type ChargePoint } from '../lib/evse';
+import { reader2027Applies } from '../lib/methods';
+import { evseInText, qrTarget, type QrTarget } from '../lib/qrTarget';
 import { displayName, loadOperators, type Station } from '../lib/stations';
+import { loadVehicle, type Vehicle } from '../lib/vehicle';
 import { store } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { ScreenHeader } from '../components/Screen';
@@ -42,9 +47,19 @@ export default function Payer() {
   const [confirmUnknown, setConfirmUnknown] = useState(false);
   const locked = useRef(false);
   const [reported, setReported] = useState<string | null>(null);
+  // QR code d'un autre point ou d'une autre borne : confirmation explicite, jamais de bascule silencieuse
+  const [mismatch, setMismatch] = useState<Extract<QrTarget, { kind: 'point' | 'station' }> | null>(null);
+  const [lastRaw, setLastRaw] = useState('');
+  const [scannedPdc, setScannedPdc] = useState<string | null>(null);
+  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [community, setCommunity] = useState<Community | null>(null);
   const params = useLocalSearchParams<{ from?: string }>();
-  const plan = store.plan();
+  const [plan, setPlanState] = useState(store.plan());
   const planPoint = station && plan?.stationId === station.id ? pointById(station, plan.pdcId) : undefined;
+  // Pas de parcours « Recharger » avant (scan depuis l'accueil) : résumé prix + estimation avant « Payer »
+  const fromHome = !planPoint;
+  const pts = station ? pointsOf(station) : [];
+  const summaryPoint: ChargePoint | undefined = (station && scannedPdc ? pointById(station, scannedPdc) : undefined) ?? planPoint ?? (pts.length === 1 ? pts[0] : undefined);
 
   // Depuis le parcours « Recharger » sur téléphone : appareil photo ouvert d'office (un geste de moins)
   useEffect(() => {
@@ -67,45 +82,102 @@ export default function Payer() {
 
   useEffect(() => {
     loadOperators().then(setOps);
+    loadVehicle().then(setVehicle).catch(() => undefined);
   }, []);
+  useEffect(() => {
+    if (station) getCommunity(station.id).then(setCommunity);
+  }, [station]);
 
   const opName = operatorLabel(station, ops);
   const knownUrl = station ? directPayUrl(station, ops) : null;
 
-  async function check(raw: string) {
-    let at = station;
-    // Identifiant de point dans le lien (…?evse=FR*ABC*E123) : sélectionne la station et le point
-    const inUrl = decodeURIComponent(raw).toUpperCase().match(/[A-Z]{2}\*?[A-Z0-9]{3}\*?E[A-Z0-9*]{1,40}/)?.[0];
-    if (!at && inUrl && /^https?:/i.test(raw.trim())) {
-      const f = await findStation(inUrl, store.stations());
-      if (f) {
-        at = f.station;
-        setStation(at);
-        store.setCurrent(at);
-      }
+  async function check(raw: string, override?: Station) {
+    let at = override ?? station;
+    setLastRaw(raw);
+    let r = verifyQr(raw, at?.ok ?? null, ops, { devHosts: DEV_HOSTS });
+    // Identifiant de point : QR code « identifiant seul », ou dans le lien (…?evse=FR*ABC*E123)
+    const evse = r.kind === 'evse' ? (r.evse ?? null) : /^https?:/i.test(raw.trim()) ? evseInText(raw) : null;
+    const chosenPdc = at && plan?.stationId === at.id ? (plan.pdcId ?? null) : null;
+    const local = at && evse ? pointById(at, evse) : undefined;
+    const found = evse && !local ? await findStation(evse, store.stations()) : null;
+    const target = qrTarget(at, chosenPdc, evse, found);
+    if (target.kind === 'select') {
+      at = target.station;
+      setStation(at);
+      store.setCurrent(at);
+      r = verifyQr(raw, at.ok ?? null, ops, { devHosts: DEV_HOSTS });
     }
-    const r = verifyQr(raw, at?.ok ?? null, ops, { devHosts: DEV_HOSTS });
     if (r.kind === 'evse' && r.evse) {
-      const found = await findStation(r.evse, store.stations());
-      if (found) {
+      if (target.kind === 'select' || target.kind === 'same') {
         // Le QR ne contient que l'identifiant : on ouvre le parcours sur ce point, sans lien de paiement.
-        store.setCurrent(found.station);
         setScanning(false);
         router.replace({ pathname: '/recharger', params: { evse: r.evse, noLink: '1' } });
         return;
       }
-      r.verdict = 'unknown';
-      r.reasons = [t.qr.evseUnknown];
+      if (target.kind === 'none') {
+        r.verdict = 'unknown';
+        r.reasons = [t.qr.evseUnknown];
+      }
     }
-    if (r.kind === 'url' && at && inUrl) {
-      const pt = pointById(at, inUrl);
-      const pl = store.plan();
-      if (pt && pl?.stationId === at.id && pl.pdcId !== pt.id) store.setPlan({ ...pl, pdcId: pt.id, pointKw: pt.kw, plugs: pt.plugs });
-    }
+    setMismatch(target.kind === 'point' || target.kind === 'station' ? target : null);
+    if (target.kind === 'same' && target.point) setScannedPdc(target.point.id);
+    else if (target.kind === 'select') setScannedPdc(target.pdcId);
     setConfirmUnknown(false);
     setReported(null);
     setResult(r);
     setScanning(false);
+  }
+
+  /** L'utilisateur confirme le point ou la borne du QR code. */
+  function acceptMismatch() {
+    if (!mismatch || !result) return;
+    if (mismatch.kind === 'point') {
+      const pt = mismatch.point;
+      const pl = store.plan();
+      if (pl && station && pl.stationId === station.id) {
+        const next = { ...pl, pdcId: pt.id, pointKw: pt.kw, plugs: pt.plugs };
+        store.setPlan(next);
+        setPlanState(next);
+      }
+      setScannedPdc(pt.id);
+      setMismatch(null);
+      if (result.kind === 'evse') router.replace({ pathname: '/recharger', params: { evse: pt.id, noLink: '1' } });
+      return;
+    }
+    const next = mismatch.station;
+    setStation(next);
+    store.setCurrent(next);
+    store.setPlan(null);
+    setPlanState(null);
+    setScannedPdc(mismatch.pdcId);
+    setMismatch(null);
+    if (result.kind === 'evse') router.replace({ pathname: '/recharger', params: { evse: mismatch.pdcId ?? next.id, noLink: '1' } });
+    else check(lastRaw, next);
+  }
+
+  function rejectMismatch() {
+    setMismatch(null);
+    setResult(null);
+    setManual('');
+  }
+
+  /** Paiement depuis l'accueil : le suivi reprend le point et le tarif vus dans le résumé. */
+  function pay(url: string, name: string) {
+    if (station && fromHome && summaryPoint) {
+      const fresh = vehicle && Date.now() - vehicle.socUpdatedAt < 3 * 3600_000 ? vehicle.socPercent : null;
+      store.setPlan({
+        stationId: station.id,
+        pdcId: summaryPoint.id,
+        pointKw: summaryPoint.kw,
+        plugs: summaryPoint.plugs,
+        method: 'scan',
+        socPercent: fresh,
+        vehicle: vehicle ? { name: vehicle.name, batteryKWh: vehicle.batteryKWh, maxDcKW: vehicle.maxDcKW, maxAcKW: vehicle.maxAcKW } : null,
+        tariffRaw: station.prix,
+        free: station.free,
+      });
+    }
+    openOperatorPayment(url, station, name);
   }
 
   function onScan(e: BarcodeScanningResult) {
@@ -125,18 +197,35 @@ export default function Payer() {
   }
 
   const payName = result?.operatorKey ? (ops.find((o) => o.key === result.operatorKey)?.names[0] ?? opName) : opName;
-  const tone = result ? TONE[result.verdict] : null;
+  const tone = result ? (mismatch ? WARN : TONE[result.verdict]) : null;
   const atStation = station?.pay.filter((p) => p === 'cb' || p === 'sans_contact').map((p) => payLabel(p)) ?? [];
+  // Obligation AFIR (lecteur de carte) : seulement pour les bornes ≥ 50 kW
+  const refKw = summaryPoint?.kw ?? planPoint?.kw ?? station?.kw ?? 0;
+  const readerLine = atStation.length ? P.reader(atStation) : station ? (reader2027Applies(refKw) ? P.reader2027 : P.readerNone) : null;
+  const title = !result
+    ? ''
+    : result.kind === 'evse'
+      ? result.verdict === 'unknown'
+        ? P.evseDiff
+        : P.evseOk
+      : result.source === 'portal' && result.verdict === 'official'
+        ? P.toneOfficialPay
+        : result.source === 'portal' && result.verdict === 'known-operator'
+          ? P.toneKnownPay
+          : P.tone[result.verdict];
+  const canPay = !!result && !mismatch && result.kind === 'url' && PAYABLE.has(result.verdict) && !!result.url;
+  const canConfirm = !!result && !mismatch && result.kind === 'url' && (result.verdict === 'unknown' || result.verdict === 'other-operator' || result.verdict === 'payment-platform') && !!result.url;
+  const summary = fromHome && station && summaryPoint && (canPay || canConfirm) ? <PriceSummary station={station} point={summaryPoint} vehicle={vehicle} community={community} /> : null;
 
   return (
     <ScrollView style={{ backgroundColor: colors.surface }} contentContainerStyle={[styles.body, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 }]}>
       <ScreenHeader title={t.titles.payer} sub={station ? `${displayName(station)} · ${opName}` : undefined} />
-      {planPoint ? <Text style={styles.point}>{t.common.point(planPoint.short)}</Text> : null}
+      {planPoint ?? summaryPoint ? <Text style={styles.point}>{t.common.point((planPoint ?? summaryPoint)!.short)}</Text> : null}
 
       <Text style={styles.p}>{P.intro(opName)}</Text>
 
       {knownUrl ? (
-        <Button label={P.openPay(opName)} onPress={() => openOperatorPayment(knownUrl, station, opName)} hint={P.openPayHint} />
+        <Button label={P.openPay(opName)} onPress={() => pay(knownUrl, opName)} hint={P.openPayHint} />
       ) : null}
 
       {scanning ? (
@@ -181,9 +270,7 @@ export default function Payer() {
 
       {result && tone ? (
         <View style={[styles.result, { backgroundColor: tone.bg }]} accessibilityLiveRegion="polite">
-          <Text style={[styles.resultTitle, { color: tone.fg }]}>
-            {result.kind === 'evse' ? (result.verdict === 'unknown' ? P.evseDiff : P.evseOk) : P.tone[result.verdict]}
-          </Text>
+          <Text style={[styles.resultTitle, { color: tone.fg }]}>{title}</Text>
           {result.host ? <Text style={[styles.domain, { color: tone.fg }]}>{result.host}</Text> : null}
           {result.reasons.map((r) => (
             <Text key={r} style={[styles.reason, { color: tone.fg }]}>
@@ -191,14 +278,26 @@ export default function Payer() {
             </Text>
           ))}
 
-          {result.kind === 'url' && PAYABLE.has(result.verdict) && result.url ? (
-            <Text style={[styles.reason, { color: tone.fg }]}>{P.printed}</Text>
-          ) : null}
-          {result.kind === 'url' && PAYABLE.has(result.verdict) && result.url ? (
-            <Button label={P.payOn(payName)} onPress={() => openOperatorPayment(result.url!, station, payName)} />
+          {mismatch ? (
+            <View style={styles.mismatch} accessibilityLiveRegion="assertive">
+              <Text style={[styles.resultTitle, { color: tone.fg }]} accessibilityRole="header">
+                {mismatch.kind === 'point' ? P.otherPoint(mismatch.point.short, mismatch.chosen.short) : P.otherStation(displayName(mismatch.station))}
+              </Text>
+              <Text style={[styles.reason, { color: tone.fg }]}>{P.mismatchHelp}</Text>
+              <Button
+                label={mismatch.kind === 'point' ? P.usePoint(mismatch.point.short) : P.useStation(displayName(mismatch.station))}
+                variant="secondary"
+                onPress={acceptMismatch}
+              />
+              <Button label={P.keepChoice} variant="ghost" onPress={rejectMismatch} />
+            </View>
           ) : null}
 
-          {result.kind === 'url' && (result.verdict === 'unknown' || result.verdict === 'other-operator' || result.verdict === 'payment-platform') && result.url ? (
+          {canPay || canConfirm ? summary : null}
+          {canPay ? <Text style={[styles.reason, { color: tone.fg }]}>{P.printed}</Text> : null}
+          {canPay ? <Button label={P.payOn(payName)} onPress={() => pay(result.url!, payName)} /> : null}
+
+          {canConfirm ? (
             <>
               <Text style={[styles.reason, { color: tone.fg }]}>
                 {P.checkSticker}
@@ -213,7 +312,7 @@ export default function Payer() {
                 <View style={[styles.box, confirmUnknown && styles.boxOn]} />
                 <Text style={styles.checkText}>{P.confirm}</Text>
               </Pressable>
-              <Button label={P.continue} variant="secondary" disabled={!confirmUnknown} onPress={() => openOperatorPayment(result.url!, station, result.host ?? P.unknownSite)} />
+              <Button label={P.continue} variant="secondary" disabled={!confirmUnknown} onPress={() => pay(result.url!, result.host ?? P.unknownSite)} />
             </>
           ) : null}
 
@@ -223,7 +322,7 @@ export default function Payer() {
             </Text>
           ) : null}
 
-          {result.kind === 'evse' ? (
+          {result.kind === 'evse' && !mismatch ? (
             <Text style={[styles.reason, { color: tone.fg }]}>
               {P.evseNoLink}
             </Text>
@@ -238,7 +337,7 @@ export default function Payer() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{P.others}</Text>
-        <Text style={styles.p}>{atStation.length ? P.reader(atStation) : P.reader2027}</Text>
+        {readerLine ? <Text style={styles.p}>{readerLine}</Text> : null}
         {station?.tel ? (
           <Pressable accessibilityRole="link" style={styles.link} onPress={() => Linking.openURL(`tel:${station.tel!.replace(/[^+\d]/g, '')}`)}>
             <Text style={styles.linkText}>{P.call(opName)}</Text>
@@ -284,6 +383,7 @@ const styles = StyleSheet.create({
   domain: { fontFamily: fonts.semibold, fontSize: 15 },
   reason: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 20 },
   check: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: MIN_TOUCH },
+  mismatch: { gap: 8, borderTopWidth: 1, borderTopColor: '#E5C9A8', paddingTop: 10 },
   box: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#7A3E06', backgroundColor: '#FFFFFF' },
   boxOn: { backgroundColor: '#7A3E06' },
   checkText: { flex: 1, fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },

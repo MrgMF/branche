@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Branché — Every charger. One app.</title>
-  <meta name="description" content="Find the nearest EV charger, see its power, plugs and payment options, and pay from the app without downloading every operator’s app.">
+  <meta name="description" content="Find the nearest EV charger, see its power and plugs, then pay the operator from Branché: verified QR code or official page, no account and no operator app.">
   <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0F1A17" media="(prefers-color-scheme: dark)">
   <link rel="icon" type="image/png" sizes="48x48" href="../assets/favicon.png">
@@ -13,7 +13,7 @@
   <meta property="og:locale" content="en_GB">
   <meta property="og:site_name" content="Branché">
   <meta property="og:title" content="Branché — Every charger. One app.">
-  <meta property="og:description" content="The nearest charger, its power, its plugs. Pay from the app, without every operator’s app.">
+  <meta property="og:description" content="The nearest charger, its power, its plugs. Pay the operator from Branché, with no account and no operator app.">
   <meta property="og:image" content="assets/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -25,6 +25,7 @@
   <link rel="stylesheet" href="../assets/site.css">
   <link rel="alternate" hreflang="fr" href="../">
   <link rel="alternate" hreflang="en" href="./">
+  <link rel="alternate" hreflang="x-default" href="../">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -50,11 +51,26 @@
       </a>
       <nav class="site-nav" aria-label="Main navigation">
         <a class="nav-optional" href="#fonctionnement">How it works</a>
-        <a class="lang-switch" href="../" hreflang="fr" lang="fr" aria-label="Version française">Français</a>
+        <a class="lang-switch" href="../" hreflang="fr" lang="fr" aria-label="Version française"><span class="lang-long">Français</span><span class="lang-short" aria-hidden="true">FR</span></a>
         <a class="btn btn-primary btn-small" href="../app/">Open the app</a>
       </nav>
     </div>
   </header>
+
+  <div class="lang-suggest" id="lang-suggest" role="region" aria-label="Suggestion de langue" lang="fr" hidden>
+    <div class="container lang-suggest__inner">
+      <p>Cette page existe aussi en français.</p>
+      <div class="lang-suggest__actions">
+        <a class="btn btn-primary btn-small" href="../" hreflang="fr">Lire en français</a>
+        <button type="button" class="btn btn-secondary btn-small" data-dismiss>Rester en anglais</button>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function(){try{var k='branche.langSuggest',b=document.getElementById('lang-suggest');if(localStorage.getItem(k))return;
+    var l=((navigator.languages&&navigator.languages[0])||navigator.language||'').toLowerCase();if(!l||!(l.indexOf('fr')===0))return;
+    b.hidden=false;b.querySelector('[data-dismiss]').addEventListener('click',function(){localStorage.setItem(k,'1');b.hidden=true})}catch(e){}})();
+  </script>
 
   <main id="contenu">
     <section class="hero" aria-labelledby="hero-titre">
@@ -62,22 +78,22 @@
         <div>
           <span class="badge">Electric vehicle charging</span>
           <h1 id="hero-titre" style="margin-top:16px">Every charger. <span>One app.</span></h1>
-          <p class="hero__lead">Find the nearest charger, see its power, plug types and published prices, then pay from the app, without downloading every operator’s app.</p>
+          <p class="hero__lead">Find the nearest charger, see its power, plugs and price when the operator publishes it, then pay the operator directly from Branché: the charger’s verified QR code or official payment page, with no account and no app to install.</p>
           <div class="hero__actions">
             <a class="btn btn-primary" href="../app/">
               Open the web app
               <svg aria-hidden="true" focusable="false"><use href="#i-arrow"/></svg>
             </a>
             <div class="hero__stores">
-              <a class="btn btn-secondary" role="link" aria-disabled="true">Android — coming soon to Google Play</a>
-              <a class="btn btn-secondary" role="link" aria-disabled="true">iPhone — coming soon</a>
+              <a class="btn btn-secondary btn-store" role="link" aria-disabled="true">Android — coming soon to Google Play</a>
+              <a class="btn btn-secondary btn-store" role="link" aria-disabled="true">iPhone — coming soon</a>
             </div>
           </div>
           <p class="hero__note">The web app works right now in your phone’s browser, in English, French, Spanish, German, Italian, Portuguese and Dutch.</p>
         </div>
 
         <figure class="mock" style="margin:0">
-          <div class="phone" role="img" aria-label="App preview: a map with price pins, the details of a selected charger and a Charge button.">
+          <div class="phone" role="img" aria-label="App preview: a map showing charger power in kW, the details of a selected charger and the Plan my charge button.">
             <div class="phone__screen" aria-hidden="true">
               <div class="phone__notch"></div>
               <div class="map">
@@ -92,38 +108,34 @@
                 <div class="map__road" style="left:-10%;top:52%;width:120%;height:8px;transform:rotate(6deg)"></div>
                 <div class="map__road" style="left:68%;top:10%;width:8px;height:60%;transform:rotate(-4deg)"></div>
                 <div class="map__me" style="left:46%;top:47%"></div>
-                <div class="pin pin--active" style="left:60%;top:33%"><span class="pin__dot"><svg><use href="#i-bolt"/></svg></span>€0.39</div>
-                <div class="pin" style="left:22%;top:31%"><span class="pin__dot"><svg><use href="#i-bolt"/></svg></span>€0.45</div>
-                <div class="pin pin--busy" style="left:82%;top:24%"><span class="pin__dot"><svg><use href="#i-bolt"/></svg></span>€0.52</div>
-                <div class="pin" style="left:26%;top:54%"><span class="pin__dot"><svg><use href="#i-bolt"/></svg></span>€0.35</div>
-                <div class="pin pin--off" style="left:80%;top:52%"><span class="pin__dot"><svg><use href="#i-bolt"/></svg></span>—</div>
+                <div class="dot dot--sel" style="left:60%;top:31%"><span>22 kW</span></div>
+                <div class="dot" style="left:22%;top:30%"><span>7 kW</span></div>
+                <div class="dot dot--fast" style="left:84%;top:25%"><span>150 kW</span></div>
+                <div class="dot" style="left:26%;top:53%"><span>11 kW</span></div>
+                <div class="dot dot--fast" style="left:80%;top:50%"><span>50 kW</span></div>
               </div>
-              <div class="mock__search">Nearest chargers</div>
+              <div class="mock__search"><svg><use href="#i-search"/></svg>Where to? Address, place…</div>
               <div class="mock__chips">
-                <span class="mock__chip mock__chip--on">Fast ≥ 50 kW</span>
+                <span class="mock__chip mock__chip--on"><svg><use href="#i-check"/></svg>Fast</span>
                 <span class="mock__chip">CCS</span>
                 <span class="mock__chip">Type 2</span>
+                <span class="mock__chip">Open access</span>
               </div>
               <div class="sheet">
                 <div class="sheet__grab"></div>
-                <div class="sheet__top">
-                  <div>
-                    <p class="sheet__title">Station car park</p>
-                    <p class="sheet__meta">Sample operator · 22 kW</p>
-                  </div>
-                  <div class="sheet__price">€0.39<small>per kWh</small></div>
+                <p class="sheet__title">Station car park</p>
+                <p class="sheet__meta">Sample operator · 350 m · 2 min</p>
+                <div class="sheet__stats">
+                  <div><small>Max power</small>22 kW</div>
+                  <div><small>Points</small>4</div>
+                  <div><small>Access</small>Open</div>
                 </div>
-                <div class="sheet__tags">
-                  <span class="sheet__tag sheet__tag--ok">CCS</span>
-                  <span class="sheet__tag">Type 2</span>
-                  <span class="sheet__tag">Combo CCS</span>
-                </div>
-                <div class="sheet__cta"><svg><use href="#i-bolt"/></svg>Charge</div>
-                <p class="sheet__alt">Or pay directly at the charger</p>
+                <div class="sheet__cta">Plan my charge</div>
+                <p class="sheet__alt">I’m already at the charger</p>
               </div>
             </div>
           </div>
-          <figcaption class="mock__caption">Illustration: fictitious station, operator and prices.</figcaption>
+          <figcaption class="mock__caption">Illustration: fictitious charger and operator.</figcaption>
         </figure>
       </div>
     </section>
@@ -142,13 +154,13 @@
           </li>
           <li class="step">
             <span class="step__num" aria-hidden="true">2</span>
-            <h3>Compare</h3>
-            <p>Price, power, plug type: see at a glance whether the charger suits your car.</p>
+            <h3>Choose</h3>
+            <p>Power, plugs, access and price when the operator publishes it: see at a glance whether the charger suits your car.</p>
           </li>
           <li class="step">
             <span class="step__num" aria-hidden="true">3</span>
-            <h3>Pay and charge</h3>
-            <p>Start charging from the app, without creating an account with every operator.</p>
+            <h3>Pay the operator</h3>
+            <p>Scan the charger’s QR code or tap “Charge here”: Branché checks that the payment page really belongs to the operator and opens it, no account needed. The operator takes the payment and starts the charge.</p>
           </li>
         </ol>
       </div>
@@ -158,14 +170,15 @@
       <div class="container honest">
         <div class="section__head">
           <span class="badge">Transparency</span>
-          <h2 id="honnete-titre" style="margin-top:14px">Honest from version 1</h2>
+          <h2 id="honnete-titre" style="margin-top:14px">What Branché does, and does not do</h2>
         </div>
         <div class="honest__card">
-          <p>The chargers shown are real: they come from France’s national IRVE database published on data.gouv.fr. In-app payment stays in demo mode until roaming agreements with operators are signed, and paying directly at the charger is always offered.</p>
+          <p>The chargers shown are real: they come from France’s national IRVE database published on data.gouv.fr. Branché takes no money: you pay the charger’s operator, on its verified official page or by bank card at the charger when it accepts one.</p>
           <ul class="honest__list">
             <li><svg aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Public data, sources cited</li>
-            <li><svg aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Demo mode clearly shown in the app</li>
-            <li><svg aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Direct payment at the charger shown when available</li>
+            <li><svg aria-hidden="true" focusable="false"><use href="#i-check"/></svg>No account, nothing charged by Branché</li>
+            <li><svg aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Operator payment pages verified before opening</li>
+            <li><svg aria-hidden="true" focusable="false"><use href="#i-check"/></svg>Card payment at the charger shown when available</li>
           </ul>
         </div>
       </div>

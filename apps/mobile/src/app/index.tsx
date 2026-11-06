@@ -11,7 +11,8 @@ import { TripPanel } from '../components/TripPanel';
 import { Guidance } from '../components/Guidance';
 import { SearchBar } from '../components/SearchBar';
 import { useRechargeHere } from '../lib/useRechargeHere';
-import { Chip, Notice } from '../components/ui';
+import { Button, Chip, Notice } from '../components/ui';
+import { getAvailability, stationSummary } from '../lib/availability';
 import { apiEnabled, getConfigWithRetry, type ApiConfig } from '../lib/api';
 import { DEFAULT_CENTER } from '../lib/config';
 import { km, kw, minutes, plugLabel } from '../lib/format';
@@ -56,6 +57,11 @@ export default function MapScreen() {
   const loadedFor = useRef<string>('');
   const [ops, setOps] = useState<Operator[]>([]);
   const [resume, setResume] = useState<string | null>(null);
+  // Mise en page mesurée : bas du bloc recherche + filtres, hauteur réelle de la fiche.
+  const [topH, setTopH] = useState(insets.top + 130);
+  const [sheetH, setSheetH] = useState(0);
+  const [advisedId, setAdvisedId] = useState<string | null>(null);
+  const [status, setStatus] = useState<Record<string, 'free' | 'busy' | 'down'>>({});
 
   // Au retour sur la carte : recharge en cours / préparée (badge du menu, bandeau « Reprendre »)
   useFocusEffect(
@@ -126,7 +132,28 @@ export default function MapScreen() {
 
   const all = useMemo(() => [...byId.values()], [byId]);
   const visible = useMemo(() => applyFilters(all, filters), [all, filters]);
-  const closest = useMemo(() => nearest(visible, ref, 5), [visible, ref.lat, ref.lon]);
+  // Liste : la borne conseillée (bandeau) n'y est pas répétée.
+  const closest = useMemo(() => nearest(visible.filter((s) => s.id !== advisedId), ref, 5), [visible, ref.lat, ref.lon, advisedId]);
+  // Disponibilité connue des bornes proches : pictogramme sur la carte (libre / occupé / hors service).
+  const statusKey = useMemo(() => nearest(visible, ref, 40).map(({ s }) => s.id).join(','), [visible, ref.lat, ref.lon]);
+  useEffect(() => {
+    if (!statusKey) return;
+    let alive = true;
+    const list = statusKey.split(',').map((id) => byId.get(id)).filter((s): s is Station => !!s);
+    getAvailability(list.flatMap((s) => (s.pdc ?? []).map(([id]) => id))).then((items) => {
+      if (!alive) return;
+      const next: Record<string, 'free' | 'busy' | 'down'> = {};
+      for (const s of list) {
+        const sum = stationSummary(s, items);
+        if (!sum.known) continue;
+        next[s.id] = sum.free ? 'free' : sum.down === sum.known ? 'down' : 'busy';
+      }
+      setStatus(next);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [statusKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const selected = selectedId ? byId.get(selectedId) ?? null : null;
   const nav = useTrip(map, geo.fix ?? user, Math.round(height * 0.55));
   const { trip, plan } = nav;
@@ -134,6 +161,7 @@ export default function MapScreen() {
   const [searching, setSearching] = useState(false);
   const controls = useMapControls(map, geo, { guiding: !!trip?.guiding, offsetY: wide ? 0 : -height * 0.18 });
   const sheetMax = Math.round(height * (trip ? 0.58 : selected ? 0.62 : 0.46));
+  const PANEL = 440;
 
   useEffect(() => {
     store.setStations(all);
@@ -147,9 +175,15 @@ export default function MapScreen() {
     if (!mapReady) return;
     map.current?.post({
       type: 'stations',
-      stations: visible.map((s) => ({ id: s.id, lat: s.lat, lon: s.lon, kw: s.kw, r: s.acc === 'reserve', label: s.kw ? kw(s.kw) : '' })),
+      stations: visible.map((s) => ({ id: s.id, lat: s.lat, lon: s.lon, kw: s.kw, r: s.acc === 'reserve', label: s.kw ? kw(s.kw) : '', st: status[s.id] })),
     });
-  }, [visible, mapReady]);
+  }, [visible, mapReady, status]);
+
+  // Attribution OSM / MapLibre toujours visible : au-dessus de la fiche (mobile) ou à droite du panneau (large).
+  useEffect(() => {
+    if (!mapReady) return;
+    map.current?.post(wide ? { type: 'pad', bottom: 0, left: 16 + PANEL + 8 } : { type: 'pad', bottom: trip?.guiding ? 0 : sheetH, left: 0 });
+  }, [mapReady, wide, sheetH, trip?.guiding]);
 
   // Premier centrage sur la position ; ensuite, recentrage/suivi via « Ma position » (MapControls).
   const flown = useRef(false);
@@ -195,7 +229,11 @@ export default function MapScreen() {
     <View style={styles.root}>
       <MapView ref={map} onMessage={onMap} />
 
-      <View style={[styles.top, { paddingTop: insets.top + 10 }, trip?.guiding ? { display: 'none' } : null, { flexDirection: 'column', alignItems: 'stretch', zIndex: 5 }, wide && { right: undefined, width: 440 }]} pointerEvents="box-none">
+      <View
+        style={[styles.top, { paddingTop: insets.top + 10 }, trip?.guiding ? { display: 'none' } : null, { flexDirection: 'column', alignItems: 'stretch', zIndex: 5 }, wide && { right: undefined, width: PANEL + 32, paddingHorizontal: 16 }]}
+        pointerEvents="box-none"
+        onLayout={(e) => setTopH(Math.round(e.nativeEvent.layout.height))}
+      >
         <View style={styles.searchRow}>
           {searching ? null : <MenuButton onPress={() => setMenu(true)} badge={badge} />}
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -211,7 +249,7 @@ export default function MapScreen() {
             />
           </View>
         </View>
-        <ScrollView horizontal style={[{ flexGrow: 0 }, searching || trip ? { display: 'none' } : null]} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityLabel={t.map.filters}>
+        <ScrollView horizontal style={[{ flexGrow: 0, paddingBottom: 8 }, searching || trip ? { display: 'none' } : null]} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityLabel={t.map.filters}>
           <Chip label={t.map.fast} a11y={t.map.fastA11y} active={filters.fast} onPress={() => toggle('fast')} />
           <Chip label={t.plugs.ccs.split(' ')[0]} a11y={t.plugs.ccs} active={filters.ccs} onPress={() => toggle('ccs')} />
           <Chip label={t.plugs.t2} active={filters.t2} onPress={() => toggle('t2')} />
@@ -223,6 +261,9 @@ export default function MapScreen() {
         <MapControls
           api={controls}
           status={geo.status}
+          height={height}
+          top={topH + 8}
+          left={wide ? 16 + PANEL + 12 : 12}
           bottom={wide ? 24 : sheetMax + 12}
           onLocate={() => {
             setPanned(false);
@@ -232,8 +273,17 @@ export default function MapScreen() {
       ) : null}
 
       {trip?.guiding ? <Guidance nav={nav} onRecharge={rechargeHere} /> : null}
-      <View style={[styles.sheet, wide && styles.sheetWide, { maxHeight: sheetMax, paddingBottom: insets.bottom + 12 }, trip?.guiding ? { display: 'none' } : null]}>
-        <View style={styles.grip} />
+      <View
+        style={[
+          styles.sheet,
+          wide ? [styles.sheetWide, { top: topH, width: PANEL }] : { maxHeight: sheetMax },
+          { paddingBottom: insets.bottom + 12 },
+          trip?.guiding ? { display: 'none' } : null,
+        ]}
+        onLayout={(e) => setSheetH(Math.round(e.nativeEvent.layout.height))}
+        testID="sheet"
+      >
+        {wide ? null : <View style={styles.grip} />}
         <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 8 }} keyboardShouldPersistTaps="handled">
           {trip ? (
             <TripPanel nav={nav} />
@@ -265,12 +315,26 @@ export default function MapScreen() {
                   <Text style={styles.resumeText}>{t.map.resume(resume)}</Text>
                 </Pressable>
               ) : (
-                <HereBanner user={user} onPick={select} />
+                <HereBanner user={user} onPick={select} filters={filters} onAdvised={setAdvisedId} />
               )}
               {loc === 'denied' && !panned ? (
                 <Notice>{t.map.locDenied}</Notice>
               ) : null}
-              {dataError ? <Notice tone="error">{t.map.dataError}</Notice> : null}
+              {dataError ? (
+                <View style={{ gap: 8 }} testID="data-error">
+                  <Notice tone="error">{t.map.dataError}</Notice>
+                  <Button
+                    label={t.mapCtl.retry}
+                    variant="secondary"
+                    style={{ minHeight: 48 }}
+                    loading={loading}
+                    onPress={() => {
+                      loadedFor.current = '';
+                      void load(ref);
+                    }}
+                  />
+                </View>
+              ) : null}
               {loading && !closest.length ? (
                 <View style={styles.loading}>
                   <ActivityIndicator color={colors.accent} />
@@ -287,12 +351,15 @@ export default function MapScreen() {
                   ) : null}
                 </View>
               ) : null}
-              {closest.map(({ s, d }, i) => (
+              {closest.map(({ s }, i) => {
+                // Distance seulement depuis la position réelle (jamais depuis le centre de la carte).
+                const d = user ? distanceKm(user, s) : null;
+                return (
                 <Pressable
                   key={s.id}
                   onPress={() => select(s)}
                   accessibilityRole="button"
-                  accessibilityLabel={t.map.itemA11y(displayName(s), km(d), kw(s.kw))}
+                  accessibilityLabel={d != null ? t.map.itemA11y(displayName(s), km(d), kw(s.kw)) : [displayName(s), kw(s.kw)].join(', ')}
                   style={({ pressed }) => [styles.item, i === 0 && styles.itemFirst, pressed && { backgroundColor: colors.surfaceAlt }]}
                 >
                   <View style={{ flex: 1, gap: 3 }}>
@@ -303,13 +370,16 @@ export default function MapScreen() {
                       {[kw(s.kw), s.c.map((c) => plugLabel(c)).join(', '), s.acc === 'reserve' ? t.map.reserved : null].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.dist}>{km(d)}</Text>
-                    <Text style={styles.itemSub}>{minutes(d)}</Text>
-                  </View>
+                  {d != null ? (
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.dist}>{km(d)}</Text>
+                      <Text style={styles.itemSub}>{minutes(d)}</Text>
+                    </View>
+                  ) : null}
                 </Pressable>
-              ))}
-              {Platform.OS === 'web' ? <Text style={styles.small}>{t.map.homeTip}</Text> : null}
+                );
+              })}
+              {Platform.OS === 'web' && !dataError && closest.length ? <Text style={styles.small}>{t.map.homeTip}</Text> : null}
             </>
           )}
         </ScrollView>
@@ -336,7 +406,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0F1A17',
+    shadowColor: colors.ink,
     shadowOpacity: 0.2,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
@@ -344,7 +414,7 @@ const styles = StyleSheet.create({
   },
   roundText: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   recenter: { position: 'absolute', right: 16 },
-  target: { width: 18, height: 18, borderRadius: 9, borderWidth: 3, borderColor: '#1D4ED8' },
+  target: { width: 18, height: 18, borderRadius: 9, borderWidth: 3, borderColor: colors.position },
   sheet: {
     position: 'absolute',
     left: 0,
@@ -355,18 +425,19 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     paddingHorizontal: 18,
     paddingTop: 8,
-    shadowColor: '#0F1A17',
+    shadowColor: colors.ink,
     shadowOpacity: 0.12,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: -4 },
     elevation: 12,
   },
-  sheetWide: { right: undefined, width: 440, left: 16, bottom: 16, borderRadius: radius.xl },
-  grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: '#C9D3D0', marginBottom: 10 },
+  // Large (>= 768 px) : panneau latéral pleine hauteur sous la recherche, sans poignée.
+  sheetWide: { right: undefined, left: 16, bottom: 16, borderRadius: radius.xl, paddingTop: 16 },
+  grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong, marginBottom: 10 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   infoBtn: { width: MIN_TOUCH, height: MIN_TOUCH, borderRadius: 22, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   resume: { minHeight: MIN_TOUCH, borderRadius: radius.md, backgroundColor: colors.ink, justifyContent: 'center', paddingHorizontal: 14 },
-  resumeText: { fontFamily: fonts.semibold, fontSize: 15, color: '#FFFFFF' },
+  resumeText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.onAccent },
   h1: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   loading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   muted: { fontFamily: fonts.medium, fontSize: 14, color: colors.inkMuted },

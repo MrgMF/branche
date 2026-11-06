@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { editDistance, normalizeEvse, operatorPayUrl, registrableDomain, verifyQr, type Operator } from './qr';
+// payDomains réels (pipeline/data/operator-portals.json), attachés au registre comme le fait le pipeline (portals.mjs)
+import realPortals from '../../../../pipeline/data/operator-portals.json';
 
 const OPS: Operator[] = [
   { key: 'izivia', names: ['Izivia'], domains: ['izivia.com'], payUrl: null },
@@ -108,5 +110,69 @@ describe('outils', () => {
   it('operatorPayUrl', () => {
     expect(operatorPayUrl(OPS[1], 'FR*MGP*E1')).toBe('https://pay.metropolis-recharge.fr/evse/FR*MGP*E1');
     expect(operatorPayUrl(OPS[0], 'X')).toBeNull();
+  });
+});
+
+describe('verifyQr — pages de paiement officielles sourcées (payDomains)', () => {
+  type Entry = { payDomains?: string[]; registryKeys?: string[] };
+  const entries = (realPortals as { operators: Record<string, Entry> }).operators;
+  const pay = (key: string) => [
+    ...new Set(Object.entries(entries).flatMap(([k, e]) => (k === key || e.registryKeys?.includes(key) ? (e.payDomains ?? []) : []))),
+  ];
+  // Domaines IRVE tels que publiés dans site/data/operators.json
+  const REG: Operator[] = [
+    { key: 'izivia', names: ['IZIVIA'], domains: ['izivia.com'], payUrl: null },
+    { key: 'engie-vianeo', names: ['ENGIE Vianeo'], domains: ['engie.com', 'greenflux.com'], payUrl: null },
+    { key: 'qwello', names: ['Qwello France SAS'], domains: ['qwello.fr'], payUrl: null },
+    { key: 'virta', names: ['Virta'], domains: ['virta.global'], payUrl: null },
+    { key: 'freshmile', names: ['Freshmile'], domains: ['freshmile.com'], payUrl: null },
+    { key: 'allego', names: ['Allego'], domains: ['allego.eu'], payUrl: null },
+    { key: 'ionity', names: ['Ionity'], domains: ['ionity.eu'], payUrl: null },
+  ].map((o) => ({ ...o, payDomains: pay(o.key) }));
+
+  it('sans payDomains, ces pages étaient bloquées comme sosies (régression corrigée)', () => {
+    const bare = REG.map(({ payDomains: _p, ...o }) => o);
+    expect(verifyQr('https://charge.engie-vianeo.com/', 'engie-vianeo', bare).verdict).toBe('dangerous');
+    expect(verifyQr('https://wa.qwello.eu/c/123', 'qwello', bare).verdict).toBe('dangerous');
+  });
+  it.each([
+    ['https://charge.engie-vianeo.com/', 'engie-vianeo'],
+    ['https://wa.qwello.eu/c/FR*QWE*E1', 'qwello'],
+    ['https://chge.eu/', 'virta'],
+    ['https://chge.eu/12345', 'virta'],
+    ['https://xfm.fr/AB12', 'freshmile'],
+    ['https://recharge.carrefour.fr/', 'allego'],
+    ['https://payment.ionity.eu/', 'ionity'],
+  ])('%s sur une borne %s → officiel (page sourcée)', (raw, op) => {
+    const r = verifyQr(raw, op, REG);
+    expect(r.verdict).toBe('official');
+    expect(r.source).toBe('portal');
+    expect(r.operatorKey).toBe(op);
+  });
+  it('page officielle d’un autre opérateur → opérateur reconnu, nommé', () => {
+    const r = verifyQr('https://chge.eu/', 'izivia', REG);
+    expect(r.verdict).toBe('known-operator');
+    expect(r.operatorKey).toBe('virta');
+    expect(r.reasons[0]).toContain('Virta');
+    expect(r.reasons[0]).toContain('IZIVIA');
+  });
+  it('autre page du même site (non sourcée) : non vérifiée, pas bloquée', () => {
+    expect(verifyQr('https://www.qwello.eu/', 'qwello', REG).verdict).toBe('unknown');
+  });
+  it.each([
+    'https://charge.engie-vianeo.com.evil.site/',
+    'https://charge-engie-vianeo.com/',
+    'https://engie-vlaneo.com/',
+    'https://wa.qwello.com/',
+    'https://qwe11o.eu/',
+    'https://chge.com/',
+    'https://xfm.fr.pay-borne.site/',
+    'https://evil.com/?next=chge.eu',
+    'https://recharge-carrefour.fr/',
+    'https://recharge.carrefour.fr.evil.site/',
+    'http://chge.eu/',
+    'https://xn--chge-2ra.eu/',
+  ])('sosie toujours bloqué : %s', (raw) => {
+    expect(verifyQr(raw, 'virta', REG).verdict).toBe('dangerous');
   });
 });

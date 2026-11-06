@@ -2,12 +2,13 @@
 // Tout est stocké sur l'appareil ; rien n'est envoyé.
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Notice, Stat } from '../components/ui';
 import { durationLabel } from '../lib/estimate';
 import { euros } from '../lib/format';
-import { clearHistory, loadHistory, methodLabel, monthStats, removeRecord, toCsv, totals, type ChargeRecord } from '../lib/history';
+import { clearHistory, loadHistory, methodLabel, monthStats, removeRecord, toCsv, totals, updateRecord, type ChargeRecord } from '../lib/history';
+import { loadTicket, removeTicket } from '../lib/ticket';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { ScreenHeader } from '../components/Screen';
 import { useT } from '../i18n';
@@ -103,6 +104,7 @@ export default function Historique() {
             {r.operatorName} · {methodLabel(r.method)} · {r.kWh != null ? `${kwhText(r.kWh)}${r.kWhEstimated ? H.kwhEst : ''}` : H.kwhUnknown}
             {r.ok === false ? H.failed : ''}
           </Text>
+          {r.ticket ? <TicketPhoto record={r} onRemoved={setList} /> : null}
           {confirmId === r.id ? (
             <View style={styles.row}>
               <Button label={t.common.delete} variant="secondary" onPress={async () => setList(await removeRecord(r.id))} style={styles.small2} />
@@ -145,8 +147,45 @@ export default function Historique() {
   );
 }
 
+/** Photo du ticket gardée sur ce téléphone : affichée à la demande, supprimable. */
+function TicketPhoto({ record, onRemoved }: { record: ChargeRecord; onRemoved: (l: ChargeRecord[]) => void }) {
+  const H = useT().history;
+  const [open, setOpen] = useState(false);
+  const [uri, setUri] = useState<string | null>(null);
+  const date = dateFr(record.startedAt);
+  async function toggle() {
+    if (!open && !uri) setUri(await loadTicket(record.id));
+    setOpen((x) => !x);
+  }
+  return (
+    <View style={{ gap: 6 }}>
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={H.ticketShowA11y(date)} onPress={toggle} style={styles.link}>
+        <Text style={styles.linkText}>{open ? H.ticketHide : H.ticketShow}</Text>
+      </Pressable>
+      {open ? (
+        <>
+          {uri ? <Image source={{ uri }} style={styles.ticket} resizeMode="contain" accessibilityLabel={H.ticketA11y(date)} /> : <Text style={styles.small}>{H.ticketGone}</Text>}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={H.ticketDelA11y(date)}
+            onPress={async () => {
+              await removeTicket(record.id);
+              onRemoved(await updateRecord(record.id, { ticket: false }));
+            }}
+            style={styles.link}
+          >
+            <Text style={styles.linkDanger}>{H.ticketDel}</Text>
+          </Pressable>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
+  ticket: { width: '100%', height: 260, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  linkText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.accent },
   body: { paddingHorizontal: 16, gap: 14, maxWidth: 600, width: '100%', alignSelf: 'center' },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   back: { minHeight: MIN_TOUCH, paddingHorizontal: 14 },

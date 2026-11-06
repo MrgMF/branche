@@ -14,6 +14,10 @@ export interface Portal {
   /** N'accepte que son appli (ou un badge). */
   appOnly?: boolean | null;
   roamingBadgesAccepted?: string[] | null;
+  /** Hôtes des pages de paiement officielles (URL sourcées) ; recopiés dans operators.json pour le vérificateur de QR. */
+  payDomains?: string[] | null;
+  /** Montant maximal pré-autorisé (€), seulement quand l'opérateur le publie. */
+  preauthMax?: number | null;
   sources?: string[] | null;
 }
 export type Portals = Record<string, Portal>;
@@ -37,4 +41,10 @@ export function webStartUrl(portal: Portal | undefined, evse: string | undefined
   const ws = portal?.webStart;
   if (!ws?.url || /non|absent|no|unavailable|indispon/i.test(ws.status ?? '')) return null;
   return ws.url.includes('{evse}') ? (evse ? ws.url.replace('{evse}', encodeURIComponent(evse)) : null) : ws.url;
+}
+
+/** Montant maximal pré-autorisé publié par l'opérateur (€), sinon null (texte générique). */
+export function preauthMaxOf(portal: Portal | undefined): number | null {
+  const v = portal?.preauthMax;
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
 }

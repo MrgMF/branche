@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Wallet } from './accounts';
 import { pointsOf } from './evse';
-import { appOnly, payOptions } from './methods';
+import { appOnly, badgeNames, nearestPayable, payOptions, surelyPayable } from './methods';
+// Données réelles du dépôt : mêmes portails que ceux publiés par le pipeline
+import realPortals from '../../../../pipeline/data/operator-portals.json';
 import type { Portals } from './portals';
 import type { Operator } from './qr';
 import type { Station } from './stations';
@@ -78,5 +80,85 @@ describe('payOptions — portails réels (pipeline/data/operator-portals.json)',
     const o = payOptions(fm, pt(fm), ops, { portals: real });
     expect(o[0].id).toBe('scan');
     expect(o.find((x) => x.id === 'operator-link')!.available).toBe(false);
+  });
+});
+
+describe('payOptions — opérateurs « appli seule » (Lidl, Sorégies, Seolis)', () => {
+  const P = (realPortals as { operators: Portals }).operators;
+  const regOps: Operator[] = [
+    { key: 'lidl', names: ['Lidl France'], domains: ['lidl.fr'], payUrl: null },
+    { key: 'soregies-mobilites', names: ['Sorégies Mobilités'], domains: ['soregies.fr'], payUrl: null },
+    { key: 'seolis', names: ['Seolis'], domains: ['seolis.net'], payUrl: null },
+  ];
+  const st = (ok: string, pay: Station['pay']): Station => ({ ...base, ok, pay, pdc: [['FRLIDE0001', 22, ['t2']]] });
+  const empty: Wallet = { accounts: [], badges: [] };
+  it.each([
+    ['lidl', ['acte']],
+    ['lidl', ['acte', 'cb']],
+    ['soregies-mobilites', ['acte', 'badge', 'cb']],
+    ['seolis', ['acte', 'badge']],
+  ] as [string, Station['pay']][])('%s %j : ni QR « paiement ponctuel » sur la foi de acte, ni compte, rien de payable', (ok, pay) => {
+    const s = st(ok, pay);
+    const o = payOptions(s, pt(s), regOps, { portals: P, wallet: empty });
+    expect(appOnly(o)).toBe(true);
+    expect(o.find((x) => x.id === 'account')).toBeUndefined(); // webPortal seul (evc-net) : pas de repli
+    expect(o.find((x) => x.id === 'scan')!.why).not.toContain('déclaré par l’opérateur');
+  });
+  it('compte proposé seulement si webStartUrl() renvoie une URL (portail de connexion seul : non)', () => {
+    const s = { ...base, pay: ['badge'] as Station['pay'] };
+    const loginOnly: Portals = { test: { name: 'Opérateur Test', webPortal: 'https://compte.test/', webStart: { status: 'no', url: null } } };
+    expect(payOptions(s, pt(s), ops, { portals: loginOnly }).find((x) => x.id === 'account')).toBeUndefined();
+  });
+  it('borne payable la plus proche : saute les stations « appli seule » et les QR seulement éventuels', () => {
+    const lidl = st('lidl', ['acte']);
+    const maybe: Station = { ...base, id: 'M', ok: 'test', pay: [] }; // QR éventuel, rien de déclaré
+    const reader: Station = { ...base, id: 'R', ok: 'test', pay: ['cb'] };
+    expect(surelyPayable(payOptions(maybe, null, ops, {}))).toBe(false);
+    const sorted = [lidl, maybe, reader].map((s, i) => ({ s, d: i }));
+    expect(nearestPayable(sorted, [...ops, ...regOps], { portals: P, wallet: empty })?.s.id).toBe('R');
+  });
+  it('badges affichés sans appli tierce', () => {
+    expect(badgeNames(P.yes55.roamingBadgesAccepted)).toEqual(['Alizé Pro', 'Chargemap Pass', 'Freshmile', 'Ionity', 'Zunder', 'Ze-Watt']);
+    expect(badgeNames(P['electric-55-charging'].roamingBadgesAccepted)).not.toContain('Plugsurfing (appli)');
+  });
+});
+
+describe('rangs : acte seul après un lecteur CB déclaré', () => {
+  it('acte + cb : lecteur d’abord, puis QR', () => {
+    const s = { ...base, pay: ['acte', 'cb'] as Station['pay'] };
+    expect(ids(s)).toEqual(['reader', 'scan']);
+  });
+  it('qr_dynamique + cb : paiement ponctuel web d’abord', () => {
+    const s = { ...base, pay: ['qr_dynamique', 'cb'] as Station['pay'] };
+    expect(ids(s)).toEqual(['scan', 'reader']);
+  });
+  it('acte + cb + adhocWeb sourcé : paiement ponctuel d’abord', () => {
+    const s = { ...base, pay: ['acte', 'cb'] as Station['pay'] };
+    expect(ids(s, { portals: { test: { name: 'Opérateur Test', adhocWeb: 'QR code -> page CB' } } })).toEqual(['scan', 'reader']);
+  });
+  it('aucun texte ne promet Apple Pay / Google Pay', () => {
+    const s = { ...base, kw: 150, c: ['ccs'] as Station['c'], pay: ['qr_dynamique'] as Station['pay'], pdc: [['FRTSTE0002', 150, ['ccs']]] as Station['pdc'] };
+    for (const o of payOptions(s, pt(s), ops)) expect(JSON.stringify(o)).not.toMatch(/Apple Pay|Google Pay/);
+  });
+});
+
+describe('lecteur CB obligatoire en 2027', () => {
+  it('mention seulement à partir de 50 kW', async () => {
+    const { reader2027Applies } = await import('./methods');
+    expect(reader2027Applies(22)).toBe(false);
+    expect(reader2027Applies(49.9)).toBe(false);
+    expect(reader2027Applies(50)).toBe(true);
+    expect(reader2027Applies(150)).toBe(true);
+  });
+});
+
+describe('pré-autorisation publiée (preauthMax)', () => {
+  it('seulement quand sourcée (alizé, Révéo : 75 €), sinon texte générique', async () => {
+    const { preauthMaxOf } = await import('./portals');
+    const P = (realPortals as { operators: Portals }).operators;
+    expect(preauthMaxOf(P['bouygues-energies-services'])).toBe(75);
+    expect(preauthMaxOf(P['reveo-syaden'])).toBe(75);
+    expect(preauthMaxOf(P.izivia)).toBeNull();
+    expect(preauthMaxOf(undefined)).toBeNull();
   });
 });

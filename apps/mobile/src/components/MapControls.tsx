@@ -81,14 +81,64 @@ export function useMapControls(map: React.RefObject<MapHandle | null>, loc: User
 
 export type MapControlsApi = ReturnType<typeof useMapControls>;
 
-export function MapControls({ api, bottom, onLocate, status }: { api: MapControlsApi; bottom: number; onLocate: () => void; status: UserLocation['status'] }) {
+/** Hauteurs (px) : boussole 52 + zoom 105 + « Ma position » 52 + 2 écarts de 10. */
+const FULL_STACK = 52 + 10 + 105 + 10 + 52;
+const SINGLE = 52;
+
+/**
+ * Commandes de carte posées entre `top` (bas des filtres) et `bottom` (haut de la fiche) : jamais de chevauchement.
+ * Place suffisante : colonne complète ; sinon « Ma position » seule (et la boussole à côté si la carte est tournée) ; sinon rien.
+ * Le message (refus, attente) s'affiche sous les filtres, à gauche de la colonne.
+ */
+export function MapControls({ api, bottom, top, left = 12, height, onLocate, status }: { api: MapControlsApi; bottom: number; top: number; left?: number; height: number; onLocate: () => void; status: UserLocation['status'] }) {
   const MAP_T = useT().mapCtl;
   const { mode, bearing } = api;
   const label = mode === 'follow' ? MAP_T.locateFollow : mode === 'heading' ? MAP_T.locateHeading : MAP_T.locate;
+  const room = height - bottom - top;
+  const layout: 'full' | 'compact' | 'none' = room >= FULL_STACK ? 'full' : room >= SINGLE ? 'compact' : 'none';
+  const rotated = Math.abs(bearing) > 1;
+  const color = mode === 'none' ? colors.position : colors.onAccent;
+
+  const compass = (
+    <Pressable accessibilityRole="button" accessibilityLabel={MAP_T.north} onPress={api.north} style={[styles.btn, styles.single]}>
+      <View style={{ transform: [{ rotate: `${-bearing}deg` }] }}>
+        <Svg width={30} height={30} viewBox="0 0 24 24">
+          <Path d="M12 2l4 10h-8z" fill={colors.danger} />
+          <Path d="M12 22l-4-10h8z" fill={colors.offline} />
+          <Circle cx={12} cy={12} r={1.6} fill={colors.surface} />
+        </Svg>
+      </View>
+    </Pressable>
+  );
+  const locate = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: mode !== 'none' }}
+      testID="locate"
+      onPress={async () => {
+        if (await api.locate()) onLocate();
+      }}
+      style={[styles.btn, styles.single, mode !== 'none' && styles.on]}
+    >
+      <Svg width={28} height={28} viewBox="0 0 24 24">
+        {mode === 'heading' ? (
+          <Path d="M12 2l7 19-7-4-7 4z" fill={colors.onAccent} />
+        ) : (
+          <>
+            <Circle cx={12} cy={12} r={7} stroke={color} strokeWidth={2.2} fill="none" />
+            <Circle cx={12} cy={12} r={3} fill={color} />
+            <Path d="M12 1.5v3.5M12 19v3.5M1.5 12H5M19 12h3.5" stroke={color} strokeWidth={2.2} strokeLinecap="round" />
+          </>
+        )}
+      </Svg>
+    </Pressable>
+  );
+
   return (
-    <View style={[styles.col, { bottom }]} pointerEvents="box-none">
+    <>
       {api.note ? (
-        <View style={styles.note} accessibilityLiveRegion="polite">
+        <View style={[styles.note, { top, left, maxHeight: Math.max(120, height - top - bottom) }]} accessibilityLiveRegion="polite" testID="map-note">
           <Text style={styles.noteText}>{MAP_T[api.note]}</Text>
           {status === 'denied' || status === 'unavailable' ? (
             <Pressable accessibilityRole="button" accessibilityLabel={MAP_T.retry} onPress={() => api.locate()} style={styles.noteBtn}>
@@ -97,64 +147,47 @@ export function MapControls({ api, bottom, onLocate, status }: { api: MapControl
           ) : null}
         </View>
       ) : null}
-      <View style={styles.stack} pointerEvents="box-none">
-        <Pressable accessibilityRole="button" accessibilityLabel={MAP_T.north} onPress={api.north} style={[styles.btn, styles.single]}>
-          <View style={{ transform: [{ rotate: `${-bearing}deg` }] }}>
-            <Svg width={30} height={30} viewBox="0 0 24 24">
-              <Path d="M12 2l4 10h-8z" fill={colors.danger} />
-              <Path d="M12 22l-4-10h8z" fill="#A9B8B3" />
-              <Circle cx={12} cy={12} r={1.6} fill={colors.surface} />
-            </Svg>
-          </View>
-        </Pressable>
-        <View style={styles.group}>
-          <Pressable accessibilityRole="button" accessibilityLabel={MAP_T.zoomIn} onPress={() => api.zoom(1)} style={styles.btn}>
-            <Text style={styles.pm}>+</Text>
-          </Pressable>
-          <View style={styles.sep} />
-          <Pressable accessibilityRole="button" accessibilityLabel={MAP_T.zoomOut} onPress={() => api.zoom(-1)} style={styles.btn}>
-            <Text style={styles.pm}>−</Text>
-          </Pressable>
+      {layout === 'none' ? null : (
+        <View style={[styles.col, { bottom }]} pointerEvents="box-none" testID={`map-controls-${layout}`}>
+          {layout === 'full' ? (
+            <View style={styles.stack} pointerEvents="box-none">
+              {compass}
+              <View style={styles.group}>
+                <Pressable accessibilityRole="button" accessibilityLabel={MAP_T.zoomIn} onPress={() => api.zoom(1)} style={styles.btn}>
+                  <Text style={styles.pm}>+</Text>
+                </Pressable>
+                <View style={styles.sep} />
+                <Pressable accessibilityRole="button" accessibilityLabel={MAP_T.zoomOut} onPress={() => api.zoom(-1)} style={styles.btn}>
+                  <Text style={styles.pm}>−</Text>
+                </Pressable>
+              </View>
+              {locate}
+            </View>
+          ) : (
+            <View style={styles.row} pointerEvents="box-none">
+              {rotated ? compass : null}
+              {locate}
+            </View>
+          )}
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={label}
-          accessibilityState={{ selected: mode !== 'none' }}
-          testID="locate"
-          onPress={async () => {
-            if (await api.locate()) onLocate();
-          }}
-          style={[styles.btn, styles.single, mode !== 'none' && styles.on]}
-        >
-          <Svg width={28} height={28} viewBox="0 0 24 24">
-            {mode === 'heading' ? (
-              <Path d="M12 2l7 19-7-4-7 4z" fill="#FFFFFF" />
-            ) : (
-              <>
-                <Circle cx={12} cy={12} r={7} stroke={mode === 'follow' ? '#FFFFFF' : '#1D4ED8'} strokeWidth={2.2} fill="none" />
-                <Circle cx={12} cy={12} r={3} fill={mode === 'follow' ? '#FFFFFF' : '#1D4ED8'} />
-                <Path d="M12 1.5v3.5M12 19v3.5M1.5 12H5M19 12h3.5" stroke={mode === 'follow' ? '#FFFFFF' : '#1D4ED8'} strokeWidth={2.2} strokeLinecap="round" />
-              </>
-            )}
-          </Svg>
-        </Pressable>
-      </View>
-    </View>
+      )}
+    </>
   );
 }
 
-const shadow = { shadowColor: '#0F1A17', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 };
+const shadow = { shadowColor: colors.ink, shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 };
 const styles = StyleSheet.create({
-  col: { position: 'absolute', right: 12, left: 12, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-end', gap: 10 },
+  col: { position: 'absolute', right: 12 },
   stack: { alignItems: 'center', gap: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   btn: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
   single: { borderRadius: 26, ...shadow },
   group: { borderRadius: 26, overflow: 'hidden', backgroundColor: colors.surface, ...shadow },
   sep: { height: 1, backgroundColor: colors.border, marginHorizontal: 10 },
   pm: { fontFamily: fonts.display, fontSize: 26, lineHeight: 30, color: colors.ink },
-  on: { backgroundColor: '#1D4ED8' },
-  note: { flex: 1, maxWidth: 360, backgroundColor: colors.surface, borderRadius: radius.md, padding: 12, gap: 8, borderWidth: 2, borderColor: colors.busy, ...shadow },
+  on: { backgroundColor: colors.position },
+  note: { position: 'absolute', left: 12, right: 12 + 52 + 10, maxWidth: 360, backgroundColor: colors.surface, borderRadius: radius.md, padding: 12, gap: 8, borderWidth: 2, borderColor: colors.busy, overflow: 'hidden', ...shadow },
   noteText: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20, color: colors.ink },
   noteBtn: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 22, backgroundColor: colors.ink },
-  noteBtnText: { fontFamily: fonts.bold, fontSize: 14, color: '#FFFFFF' },
+  noteBtnText: { fontFamily: fonts.bold, fontSize: 14, color: colors.onAccent },
 });

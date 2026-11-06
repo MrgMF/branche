@@ -10,6 +10,9 @@
         "url": "https://paynow.izivia.com/"
       },
       "adhocWeb": "https://paynow.izivia.com/",
+      "payDomains": [
+        "paynow.izivia.com"
+      ],
       "cardReader": null,
       "appOnly": false,
       "roamingBadgesAccepted": null,
@@ -30,6 +33,7 @@
         "url": null
       },
       "adhocWeb": "QR code sur la borne -> page de paiement sécurisée (non-abonné, caution jusqu’à 75 €)",
+      "preauthMax": 75,
       "cardReader": null,
       "appOnly": false,
       "roamingBadgesAccepted": null,
@@ -51,6 +55,10 @@
         "url": "https://charge.freshmile.com/map"
       },
       "adhocWeb": "https://xfm.fr/{code} (lien court imprimé sur l’autocollant de la borne) ou QR code -> autorisation CB",
+      "payDomains": [
+        "charge.freshmile.com",
+        "xfm.fr"
+      ],
       "cardReader": null,
       "appOnly": false,
       "roamingBadgesAccepted": null,
@@ -251,6 +259,9 @@
         "url": "https://chge.eu"
       },
       "adhocWeb": "https://chge.eu (saisie de l’ID du point de charge, 4–5 chiffres, puis CB)",
+      "payDomains": [
+        "chge.eu"
+      ],
       "cardReader": null,
       "appOnly": false,
       "roamingBadgesAccepted": null,
@@ -287,6 +298,9 @@
         "url": "https://app.metropolis-recharge.fr/"
       },
       "adhocWeb": "CB sur le site/appli après choix de la borne ou scan du QR code",
+      "payDomains": [
+        "app.metropolis-recharge.fr"
+      ],
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -367,6 +381,9 @@
         "url": "http://map.e55c.com"
       },
       "adhocWeb": "http://map.e55c.com (« Démarrer maintenant » -> choix station/point -> e-mail -> CB)",
+      "payDomains": [
+        "map.e55c.com"
+      ],
       "cardReader": null,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -408,6 +425,10 @@
         "url": "https://charge.engie-vianeo.com/"
       },
       "adhocWeb": "https://charge.engie-vianeo.com/ (ou QR code affiché sur l’écran de la borne) -> page de paiement CB",
+      "payDomains": [
+        "charge.engie-vianeo.com"
+      ],
+      "preauthMax": 50,
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -524,6 +545,7 @@
         "url": null
       },
       "adhocWeb": "QR code sur la trappe -> page de paiement CB (sans badge ni appli), caution jusqu’à 75 €",
+      "preauthMax": 75,
       "cardReader": null,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -596,6 +618,9 @@
         "url": "https://wa.qwello.eu/"
       },
       "adhocWeb": "https://wa.qwello.eu/ (scan du QR code du connecteur)",
+      "payDomains": [
+        "wa.qwello.eu"
+      ],
       "cardReader": null,
       "appOnly": false,
       "roamingBadgesAccepted": null,
@@ -794,6 +819,9 @@
         "url": "https://payment.ionity.eu"
       },
       "adhocWeb": "https://payment.ionity.eu (QR code ou sélection manuelle du point de charge)",
+      "payDomains": [
+        "payment.ionity.eu"
+      ],
       "cardReader": true,
       "appOnly": false,
       "roamingBadgesAccepted": [
@@ -1022,6 +1050,9 @@
         "url": "https://recharge.carrefour.fr/"
       },
       "adhocWeb": "https://recharge.carrefour.fr/ (« Scanner le QR Code »)",
+      "payDomains": [
+        "recharge.carrefour.fr"
+      ],
       "cardReader": null,
       "appOnly": false,
       "roamingBadgesAccepted": null,
@@ -1030,7 +1061,11 @@
         "https://www.mac4ever.com/auto/193183-attention-si-vous-chargez-votre-voiture-chez-carrefour-ce-qr-code-vide-votre-compte"
       ],
       "notes": "Webapp officielle recommandée par Carrefour (plutôt que les QR physiques, cibles de fraude). Stations exploitées par Allego / Driveco dans le registre.",
-      "inRegistry": false
+      "inRegistry": false,
+      "registryKeys": [
+        "allego",
+        "driveco"
+      ]
     },
     "mobive": {
       "name": "MObiVE (Citeos)",

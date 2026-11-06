@@ -1,6 +1,8 @@
-// Réglages : langue, voix de guidage, itinéraire par défaut, unités, présentation, données locales (persistés sur l'appareil).
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+// Réglages : langue, position (état et accès aux réglages), voix de guidage, itinéraire par défaut, unités, présentation, données locales (persistés sur l'appareil).
+import * as Location from 'expo-location';
+import { useCallback, useEffect, useState } from 'react';
+import { AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { ScreenHeader } from '../components/Screen';
@@ -48,12 +50,14 @@ export default function Reglages() {
                   </Text>
                   {l === 'auto' ? <Text style={styles.sub}>{S.autoHint}</Text> : null}
                 </View>
-                <View style={[styles.radio, on && styles.radioOn]}>{on ? <Icon name="check" size={16} color="#FFFFFF" /> : null}</View>
+                <View style={[styles.radio, on && styles.radioOn]}>{on ? <Icon name="check" size={16} color={colors.onAccent} /> : null}</View>
               </Pressable>
             );
           })}
         </View>
       </Section>
+
+      <PositionSection />
 
       <Section title={S.guidance}>
         <Toggle label={S.voice} sub={S.voiceHint} on={voice} onPress={() => setMuted(voice)} testID="set-voice" />
@@ -76,7 +80,7 @@ export default function Reglages() {
                 onPress={() => updateSettings({ units: u })}
                 style={[styles.segBtn, on && styles.segOn]}
               >
-                <Text style={[styles.segText, on && { color: '#FFFFFF' }]}>{u === 'km' ? S.km : S.mi}</Text>
+                <Text style={[styles.segText, on && { color: colors.onAccent }]}>{u === 'km' ? S.km : S.mi}</Text>
               </Pressable>
             );
           })}
@@ -117,6 +121,74 @@ export default function Reglages() {
   );
 }
 
+type PosState = 'granted' | 'denied' | 'ask';
+
+/** État de l'autorisation de position, avec la marche à suivre selon la plateforme. */
+function PositionSection() {
+  const t = useT();
+  const S = t.settings;
+  const [st, setSt] = useState<PosState | null>(null);
+  const [canAsk, setCanAsk] = useState(true);
+  const check = useCallback(async () => {
+    try {
+      const p = await Location.getForegroundPermissionsAsync();
+      setSt(p.granted ? 'granted' : p.status === 'denied' ? 'denied' : 'ask');
+      setCanAsk(p.canAskAgain);
+    } catch {
+      setSt('ask');
+    }
+  }, []);
+  useEffect(() => {
+    void check();
+    const sub = AppState.addEventListener('change', (a) => a === 'active' && void check());
+    return () => sub.remove();
+  }, [check]);
+
+  async function ask() {
+    try {
+      await Location.requestForegroundPermissionsAsync();
+    } catch {
+      /* refus ou indisponible */
+    }
+    void check();
+  }
+
+  if (!st) return null;
+  const web = Platform.OS === 'web';
+  const tone = st === 'granted' ? colors.accent : st === 'denied' ? colors.danger : colors.inkMuted;
+  return (
+    <Section title={S.posTitle}>
+      <View style={{ padding: 14, gap: 12 }} testID={`pos-${st}`}>
+        <View style={styles.posRow} accessibilityLiveRegion="polite">
+          <View style={[styles.posIcon, { borderColor: tone, backgroundColor: st === 'granted' ? tone : colors.surface }]}>
+            <Svg width={16} height={16} viewBox="0 0 24 24">
+              <Path
+                d={st === 'granted' ? 'M5 12.5l4.5 4.5L19 7.5' : st === 'denied' ? 'M6 6l12 12M18 6L6 18' : 'M12 7v6M12 17v.5'}
+                stroke={st === 'granted' ? colors.onAccent : tone}
+                strokeWidth={3}
+                strokeLinecap="round"
+                fill="none"
+              />
+            </Svg>
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[styles.label, { color: st === 'denied' ? colors.danger : colors.ink }]}>{st === 'granted' ? S.posGranted : st === 'denied' ? S.posDenied : S.posAsk}</Text>
+            <Text style={styles.sub}>{st === 'granted' ? S.posGrantedBody : st === 'denied' ? S.posDeniedBody : S.posAskBody}</Text>
+          </View>
+        </View>
+        {st === 'ask' || (st === 'denied' && !web && canAsk) ? <Button label={S.posAllow} onPress={ask} style={{ minHeight: 48 }} /> : null}
+        {st === 'denied' && !web ? <Button label={S.posOpenSettings} variant="secondary" onPress={() => void Linking.openSettings()} style={{ minHeight: 48 }} /> : null}
+        {st === 'denied' && web ? (
+          <>
+            <Text style={styles.help}>{S.posWebHelp}</Text>
+            <Button label={S.posReload} variant="secondary" onPress={() => window.location.reload()} style={{ minHeight: 48 }} />
+          </>
+        ) : null}
+      </View>
+    </Section>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={{ gap: 6 }}>
@@ -153,11 +225,14 @@ const styles = StyleSheet.create({
   pressed: { backgroundColor: colors.surfaceAlt },
   label: { fontFamily: fonts.semibold, fontSize: 16, color: colors.ink },
   sub: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, color: colors.inkMuted },
-  radio: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#8A9792', alignItems: 'center', justifyContent: 'center' },
+  posRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  posIcon: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  help: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 20, color: colors.ink, backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 12 },
+  radio: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: colors.switchOff, alignItems: 'center', justifyContent: 'center' },
   radioOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-  track: { width: 52, height: 32, borderRadius: 16, backgroundColor: '#8A9792', padding: 3, justifyContent: 'center' },
+  track: { width: 52, height: 32, borderRadius: 16, backgroundColor: colors.switchOff, padding: 3, justifyContent: 'center' },
   trackOn: { backgroundColor: colors.accent },
-  knob: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#FFFFFF' },
+  knob: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.surface },
   knobOn: { alignSelf: 'flex-end' },
   segment: { flexDirection: 'row', padding: 4, gap: 4 },
   segBtn: { flex: 1, minHeight: MIN_TOUCH + 4, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },

@@ -141,3 +141,23 @@ describe('aucune chaîne française en dur dans src/app et src/components', () =
     expect(hits).toEqual([]);
   });
 });
+
+describe('textes de paiement (critique paiement)', () => {
+  it('aucune langue ne promet Apple Pay / Google Pay', () => {
+    for (const l of LANGS) {
+      const hits = leaves(DICTS[l]).filter(([, v]) => /Apple Pay|Google Pay/i.test(JSON.stringify(v ?? '')));
+      expect(hits.map(([p]) => p), l).toEqual([]);
+    }
+  });
+  it('blockedBody : aucune appli tierce citée, seulement les badges fournis', () => {
+    for (const l of LANGS) {
+      const txt = DICTS[l].recharger.blockedBody('Lidl France', 'Chargemap Pass, Freshmile');
+      expect(txt, l).not.toMatch(/\b(app|appli|application|aplicación|applicazione|aplicação|App)\b/i);
+      expect(txt, l).toContain('Chargemap Pass');
+    }
+  });
+  it('pré-autorisation publiée : « jusqu’à 75 € bloqués puis libérés »', () => {
+    setLang('fr');
+    expect(tr().recharger.preauthMax('Révéo', eur(75, 0))).toMatch(/^Jusqu’à 75\s€ bloqués puis libérés/);
+  });
+});

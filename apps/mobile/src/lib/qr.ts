@@ -7,6 +7,8 @@ export interface Operator {
   domains: string[];
   payUrl: string | null;
   stations?: number;
+  /** Hôtes des pages de paiement/démarrage officielles (operator-portals.json, URL sourcées), publiés par le pipeline. */
+  payDomains?: string[];
 }
 
 export type Verdict = 'official' | 'known-operator' | 'other-operator' | 'payment-platform' | 'unknown' | 'dangerous';
@@ -19,6 +21,8 @@ export interface QrResult {
   domain?: string;
   host?: string;
   operatorKey?: string;
+  /** D'où vient la confiance : domaine déclaré dans l'IRVE, ou page de paiement officielle sourcée (payDomains). */
+  source?: 'irve' | 'portal';
   reasons: string[];
 }
 
@@ -126,8 +130,26 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
   if (SHORTENERS.has(domain) || SHORTENERS.has(host)) reasons.push(tr().qr.shortener);
   if (reasons.length) return { ...base, verdict: 'dangerous' };
 
-  const owner = isDevHost ? operators.find((o) => o.domains.includes(u.host.toLowerCase())) : operators.find((o) => o.domains.includes(domain));
   const stationOp = stationOperatorKey ? operators.find((o) => o.key === stationOperatorKey) : undefined;
+  const hostKey = isDevHost ? u.host.toLowerCase() : host;
+
+  // 1. Page de paiement officielle sourcée (payDomains) : celle de l'opérateur de la borne d'abord
+  const onPay = (o: Operator) => (o.payDomains ?? []).some((d) => hostKey === d || hostKey.endsWith(`.${d}`));
+  const payOwner = stationOp && onPay(stationOp) ? stationOp : operators.find(onPay);
+  if (payOwner) {
+    const mine = !!stationOp && payOwner.key === stationOp.key;
+    return {
+      ...base,
+      verdict: mine ? 'official' : 'known-operator',
+      operatorKey: payOwner.key,
+      source: 'portal',
+      reasons: [mine || !stationOp ? tr().qr.officialPay(payOwner.names[0]) : tr().qr.otherPay(payOwner.names[0], stationOp.names[0])],
+    };
+  }
+
+  // 2. Domaine déclaré dans la base IRVE (celui de l'opérateur de la borne d'abord : réseaux partageant un domaine)
+  const owns = (o: Operator) => (isDevHost ? o.domains.includes(u.host.toLowerCase()) : o.domains.includes(domain));
+  const owner = stationOp && owns(stationOp) ? stationOp : operators.find(owns);
 
   if (owner) {
     if (!stationOperatorKey || owner.key === stationOperatorKey) {
@@ -135,6 +157,7 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
         ...base,
         verdict: stationOperatorKey ? 'official' : 'known-operator',
         operatorKey: owner.key,
+        source: 'irve',
         reasons: [tr().qr.official(owner.names[0])],
       };
     }
@@ -146,15 +169,20 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
     };
   }
 
+  // Domaines enregistrables des pages officielles (wa.qwello.eu → qwello.eu) : jamais traités comme des sosies
+  // (autre page du même site : « non vérifié », pas « bloqué »). Ils servent aussi de référence anti-sosie (qwe11o.eu, xfm.fr.evil.site…).
+  const trusted = operators.some((o) => (o.payDomains ?? []).some((d) => registrableDomain(d) === domain));
+  const known = (o: Operator) => [...o.domains, ...(o.payDomains ?? []).map(registrableDomain)];
+
   // Domaine connu caché dans le sous-domaine (izivia.com.evil.site) ou dans le chemin (evil.com/izivia.com)
   const sub = host.length > domain.length ? host.slice(0, host.length - domain.length - 1) : '';
   const subLabels = sub.split('.').filter(Boolean);
   const rest = safeDecode(`${u.pathname}${u.search}`).toLowerCase();
   for (const o of operators) {
-    for (const d of o.domains) {
+    for (const d of known(o)) {
       if (d.includes(':')) continue;
-      const known = label(d);
-      if (sub.includes(d) || (known.length >= 5 && subLabels.includes(known))) {
+      const lbl0 = label(d);
+      if (!trusted && (sub.includes(d) || (lbl0.length >= 5 && subLabels.includes(lbl0)))) {
         return { ...base, verdict: 'dangerous', reasons: [tr().qr.impersonate(o.names[0], d, domain)] };
       }
       if (rest.includes(d)) {
@@ -174,24 +202,24 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
 
   // Imitation d'un domaine connu : distance d'édition 1 (libellé court) ou 2 (≥ 6 caractères)
   const lbl = label(domain);
-  for (const o of operators) {
-    for (const d of o.domains) {
-      const known = label(d);
-      if (known.length < 4 || d.includes(':')) continue;
+  for (const o of trusted ? [] : operators) {
+    for (const d of known(o)) {
+      const ref = label(d);
+      if (ref.length < 4 || d.includes(':')) continue;
       if (domain.startsWith(`${d}.`)) {
         return { ...base, verdict: 'dangerous', reasons: [tr().qr.impersonate(o.names[0], d, domain)] };
       }
-      if (lbl === known) {
+      if (lbl === ref) {
         // Fraude documentée : même nom, autre extension (izivia.site). Les domaines secondaires réels sont déclarés dans le registre.
         return { ...base, verdict: 'dangerous', reasons: [tr().qr.nameNotDomain(o.names[0], d)] };
       }
-      const minLen = Math.min(known.length, lbl.length);
-      if (minLen === 5 && editDistance(lbl, known, 1) <= 1) {
+      const minLen = Math.min(ref.length, lbl.length);
+      if (minLen === 5 && editDistance(lbl, ref, 1) <= 1) {
         return { ...base, verdict: 'unknown', reasons: [tr().qr.lookalike(o.names[0], d)] };
       }
       // Libellés courts : seules les substitutions de caractères sosies comptent (0/o, 1/l, rn/m…)
-      const close = minLen >= 6 ? editDistance(lbl, known, 2) <= 2 : lbl !== known && lookalike(lbl) === lookalike(known);
-      const contains = known.length >= 5 && lbl.includes(known);
+      const close = minLen >= 6 ? editDistance(lbl, ref, 2) <= 2 : lbl !== ref && lookalike(lbl) === lookalike(ref);
+      const contains = ref.length >= 5 && lbl.includes(ref);
       if (close || contains) {
         return { ...base, verdict: 'dangerous', reasons: [tr().qr.imitates(o.names[0], d)] };
       }

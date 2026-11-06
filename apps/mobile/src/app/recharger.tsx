@@ -18,17 +18,18 @@ import { findStation, pointById, pointsOf, type ChargePoint } from '../lib/evse'
 import { euros, km, kw, plugLabel } from '../lib/format';
 import type { MethodId } from '../lib/history';
 import type { Operator } from '../lib/qr';
-import { displayName, distanceKm, loadOperators, nearest, type Station } from '../lib/stations';
+import { displayName, loadAround, loadOperators, nearest, type Station } from '../lib/stations';
 import { store } from '../lib/store';
 import { parseTariff } from '../lib/tariff';
 import { compatible, loadVehicle, saveVehicle, type Vehicle } from '../lib/vehicle';
 import { loadWallet, type Wallet } from '../lib/accounts';
-import { appOnly } from '../lib/methods';
-import { loadPortals, type Portals } from '../lib/portals';
+import { appOnly, badgeNames, nearestPayable } from '../lib/methods';
+import { loadPortals, preauthMaxOf, type Portals } from '../lib/portals';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { Icon } from '../components/Icon';
 import { ScreenHeader } from '../components/Screen';
 import { useLocale, useT } from '../i18n';
-import { kwhText } from '../i18n/format';
+import { eur, kwhText } from '../i18n/format';
 
 const SKIP_KEY = 'branche.vehicle.skipped.v1';
 const SOC_FRESH_MS = 3 * 3600_000;
@@ -54,6 +55,9 @@ export default function Recharger() {
   const [wallet, setWallet] = useState<Wallet>({ accounts: [], badges: [] });
   const [prepared, setPrepared] = useState<Prepared | null>(null);
   const [savedPrep, setSavedPrep] = useState(false);
+  // Stations voisines chargées ici quand l'écran est ouvert par lien profond (carte jamais chargée)
+  const [around, setAround] = useState<Station[] | null>(null);
+  const [preauthOpen, setPreauthOpen] = useState(false);
   const preparing = params.prepare === '1';
 
   // Station et point depuis le lien, la sélection courante ou l'index EVSE
@@ -129,13 +133,21 @@ export default function Recharger() {
   const options = useMemo(() => (station ? payOptions(station, point, ops, { portals, wallet }) : []), [station, point, ops, portals, wallet, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const portal = station?.ok ? portals[station.ok] : undefined;
   const accountConnected = !!station?.ok && wallet.accounts.some((a) => a.operatorKey === station.ok);
-  // Rien de payable ici depuis Branché : alternative la plus proche qui l'est
+  // Rien de payable ici depuis Branché : alternative la plus proche qui l'est (méthode déclarée, pas un QR « éventuel »)
   const blocked = appOnly(options);
+  useEffect(() => {
+    if (!blocked || !station || store.stations().length || around) return;
+    loadAround(station, 1)
+      .then(setAround)
+      .catch(() => setAround([]));
+  }, [blocked, station, around]);
+  const pool = store.stations().length ? store.stations() : (around ?? []);
   const alternative = useMemo(() => {
     if (!blocked || !station) return null;
-    const near = nearest(store.stations().filter((x) => x.id !== station.id && x.acc !== 'reserve' && compatible(x.c, vehicle)), station, 30);
-    return near.find(({ s: x }) => !appOnly(payOptions(x, null, ops, { portals, wallet }).filter((o) => o.id !== 'scan' || x.pay.some((p) => p === 'qr_dynamique' || p === 'site_web' || p === 'acte')))) ?? null;
-  }, [blocked, station, ops, portals, wallet, vehicle]);
+    const near = nearest(pool.filter((x) => x.id !== station.id && x.acc !== 'reserve' && compatible(x.c, vehicle)), station, 40);
+    return nearestPayable(near, ops, { portals, wallet });
+  }, [blocked, station, ops, portals, wallet, vehicle, pool]);
+  const searchingAlt = blocked && !store.stations().length && around === null;
   // QR code sans lien de paiement (identifiant seul) : on recommande la méthode suivante
   const fallback = params.noLink ? options.find((o) => o.available && o.id !== 'scan') : undefined;
   const chosen: PayOption | undefined = options.find((o) => o.id === method && o.available) ?? fallback ?? options[0];
@@ -241,8 +253,11 @@ export default function Recharger() {
 
   const vehiclePrompt = vehicle === null && !skipped && (step === 'point' || usable.length < 2);
 
+  // Étape 2 : l'action de la méthode choisie reste fixée en bas de l'écran (toujours à portée de pouce)
+  const sticky = step === 'pay' && !!point && !!est && !!chosen && !blocked;
   return (
-    <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 }]}>
+    <View style={styles.root}>
+    <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + (sticky ? 112 : 28) }]}>
       <ScreenHeader
         onBack={back}
         kicker={`${preparing ? R.prepKicker : ''}${step === 'point' ? R.step1 : points.length > 1 || autoPoint === null ? R.step2 : t.titles.recharger}`}
@@ -341,11 +356,29 @@ export default function Recharger() {
               ) : null}
             </View>
             <View style={styles.preauth}>
-              <Text style={styles.estLabel}>{R.preauth}</Text>
-              <Text style={styles.small}>
-                {R.preauthBody(opName)}
-              </Text>
-              {preauthText(community) ? <Text style={[styles.small, { color: colors.ink }]}>{preauthText(community)}</Text> : null}
+              {/* Repliable : l'essentiel (montant publié s'il existe) reste visible */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: preauthOpen }}
+                onPress={() => setPreauthOpen((x) => !x)}
+                style={styles.preauthHead}
+              >
+                <Text style={[styles.estLabel, { flex: 1 }]}>
+                  {R.preauth}
+                  {preauthMaxOf(portal) != null ? ` · ${eur(preauthMaxOf(portal)!, 0)}` : ''}
+                </Text>
+                <View style={{ transform: [{ rotate: preauthOpen ? '-90deg' : '90deg' }] }}>
+                  <Icon name="chevron" size={18} color={colors.accentPressed} />
+                </View>
+              </Pressable>
+              {preauthOpen ? (
+                <>
+                  <Text style={styles.small}>
+                    {preauthMaxOf(portal) != null ? R.preauthMax(opName, eur(preauthMaxOf(portal)!, 0)) : R.preauthBody(opName)}
+                  </Text>
+                  {preauthText(community) ? <Text style={[styles.small, { color: colors.ink }]}>{preauthText(community)}</Text> : null}
+                </>
+              ) : null}
             </View>
             {tariff.idle ? (
               <Notice tone="demo">
@@ -360,18 +393,25 @@ export default function Recharger() {
             <View style={[styles.card, { borderColor: colors.busy }]}>
               <Text style={styles.cardTitle} accessibilityRole="header">{R.blockedTitle}</Text>
               <Text style={styles.p}>
-                {R.blockedBody(opName, portal?.roamingBadgesAccepted?.length ? portal.roamingBadgesAccepted.join(', ') : null)}
+                {R.blockedBody(opName, badgeNames(portal?.roamingBadgesAccepted).join(', ') || null)}
               </Text>
               {alternative ? (
-                <Button
-                  label={R.nearestPayable(displayName(alternative.s), km(alternative.d))}
-                  variant="secondary"
-                  onPress={() => {
-                    store.setCurrent(alternative.s);
-                    router.replace({ pathname: '/recharger', params: { station: alternative.s.id } });
-                  }}
-                />
-              ) : null}
+                <>
+                  <Text style={[styles.p, { color: colors.ink }]}>{R.nearestPayable(displayName(alternative.s), km(alternative.d))}</Text>
+                  <Button
+                    label={R.goThere}
+                    hint={R.goThereHint(displayName(alternative.s))}
+                    onPress={() => {
+                      store.setCurrent(alternative.s);
+                      router.replace({ pathname: '/', params: { go: alternative.s.id } });
+                    }}
+                  />
+                </>
+              ) : searchingAlt ? (
+                <Text style={styles.small}>{R.searchingPayable}</Text>
+              ) : (
+                <Text style={styles.small}>{R.noPayableNear}</Text>
+              )}
               <Button label={R.myBadges} variant="ghost" onPress={() => router.push('/comptes')} />
             </View>
           ) : null}
@@ -397,7 +437,6 @@ export default function Recharger() {
               {chosen.copyId ? <CopyId id={chosen.copyId} /> : null}
               <Text style={styles.small}>{R.followStation}</Text>
               {preparing ? <Text style={styles.small}>{R.prepNote}</Text> : null}
-              <Button label={preparing ? R.saveForArrival : chosen.cta} onPress={() => go(chosen)} disabled={!chosen.available} hint={chosen.id === 'reader' ? R.hintReader : R.hintQr} />
             </View>
           ) : null}
 
@@ -432,6 +471,14 @@ export default function Recharger() {
         </>
       ) : null}
     </ScrollView>
+      {sticky && chosen ? (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
+          <View style={styles.footerIn}>
+            <Button label={preparing ? R.saveForArrival : chosen.cta} onPress={() => go(chosen)} disabled={!chosen.available} hint={chosen.id === 'reader' ? R.hintReader : R.hintQr} />
+          </View>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -447,9 +494,9 @@ function PointRow({ p, onPress, selected, disabled, status }: { p: ChargePoint; 
       onPress={onPress}
       style={({ pressed }) => [styles.point, selected && styles.pointOn, disabled && styles.altOff, pressed && { backgroundColor: colors.surfaceAlt }]}
     >
-      <View style={styles.label}>
-        <Text style={styles.labelSmall}>{p.id.length > 4 ? '…' : ''}</Text>
-        <Text style={styles.labelBig}>{p.short}</Text>
+      <View style={[styles.label, selected && styles.labelOn]}>
+        <Text style={[styles.labelSmall, selected && { color: '#FFFFFF' }]}>{p.id.length > 4 ? '…' : ''}</Text>
+        <Text style={[styles.labelBig, selected && { color: '#FFFFFF' }]}>{p.short}</Text>
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={styles.altTitle}>
@@ -503,16 +550,17 @@ const styles = StyleSheet.create({
   cardTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.ink },
   point: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, minHeight: 72, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   pointOn: { borderColor: colors.accent, borderWidth: 2 },
-  label: { minWidth: 82, paddingVertical: 6, paddingHorizontal: 8, borderRadius: radius.sm, backgroundColor: colors.ink, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
-  labelSmall: { fontFamily: fonts.medium, fontSize: 14, color: colors.nightMuted },
-  labelBig: { fontFamily: fonts.display, fontSize: 24, letterSpacing: 1, color: '#FFFFFF' },
+  label: { minWidth: 82, paddingVertical: 6, paddingHorizontal: 8, borderRadius: radius.sm, backgroundColor: colors.accentSoft, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
+  labelOn: { backgroundColor: colors.accent },
+  labelSmall: { fontFamily: fonts.medium, fontSize: 14, color: colors.accentPressed },
+  labelBig: { fontFamily: fonts.display, fontSize: 24, letterSpacing: 1, color: colors.accentPressed },
   pill: { borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 8 },
   pillFree: { backgroundColor: colors.accentSoft },
   pillBusy: { backgroundColor: colors.warnSoft },
   pillDown: { backgroundColor: '#FDECEC' },
   pillText: { fontFamily: fonts.bold, fontSize: 12 },
-  pointChip: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
-  pointShort: { fontFamily: fonts.display, fontSize: 20, color: colors.ink, letterSpacing: 1 },
+  pointChip: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: colors.accentSoft },
+  pointShort: { fontFamily: fonts.display, fontSize: 20, color: colors.accentPressed, letterSpacing: 1 },
   estimate: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 12, gap: 8 },
   estLabel: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink },
   estRow: { flexDirection: 'row', gap: 8 },
@@ -520,10 +568,13 @@ const styles = StyleSheet.create({
   bigLabel: { fontFamily: fonts.semibold, fontSize: 11, color: colors.inkMuted },
   bigValue: { fontFamily: fonts.display, fontSize: 17, color: colors.ink },
   socRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  step: { width: MIN_TOUCH, height: MIN_TOUCH, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-  stepText: { fontFamily: fonts.bold, fontSize: 22, color: colors.ink },
-  socValue: { fontFamily: fonts.display, fontSize: 18, color: colors.ink, minWidth: 54, textAlign: 'center' },
+  step: { width: MIN_TOUCH, height: MIN_TOUCH, borderRadius: 22, backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  stepText: { fontFamily: fonts.bold, fontSize: 22, color: colors.accentPressed },
+  socValue: { fontFamily: fonts.display, fontSize: 18, color: colors.accentPressed, minWidth: 54, textAlign: 'center' },
   preauth: { gap: 4 },
+  preauthHead: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: MIN_TOUCH },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 12, paddingHorizontal: 16, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+  footerIn: { maxWidth: 600, width: '100%', alignSelf: 'center' },
   orderText: { fontFamily: fonts.bold, fontSize: 14, color: colors.accentPressed },
   stepRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   num: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },

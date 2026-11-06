@@ -1,5 +1,6 @@
 // Historique des recharges et dépenses — stocké uniquement sur l'appareil (AsyncStorage), jamais envoyé.
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { removeTicket } from './ticket';
 import { tr } from '../i18n';
 import { decimalSep, monthYear } from '../i18n/format';
 
@@ -26,6 +27,8 @@ export interface ChargeRecord {
   vehicleName?: string;
   startSoc?: number;
   endSoc?: number;
+  /** Photo du ticket gardée sur l'appareil (ticket.ts). */
+  ticket?: boolean;
 }
 
 const KEY = 'branche.history.v1';
@@ -62,10 +65,20 @@ export async function addRecord(r: ChargeRecord): Promise<ChargeRecord[]> {
 export async function removeRecord(id: string): Promise<ChargeRecord[]> {
   const next = (await loadHistory()).filter((r) => r.id !== id);
   await save(next);
+  await removeTicket(id);
+  return next;
+}
+
+/** Met à jour une recharge (ex. photo du ticket ajoutée ou supprimée). */
+export async function updateRecord(id: string, patch: Partial<ChargeRecord>): Promise<ChargeRecord[]> {
+  const next = (await loadHistory()).map((r) => (r.id === id ? { ...r, ...patch, id } : r));
+  await save(next);
   return next;
 }
 
 export async function clearHistory(): Promise<void> {
+  const list = cache ?? (await loadHistory());
+  await Promise.all(list.filter((r) => r.ticket).map((r) => removeTicket(r.id)));
   cache = [];
   try {
     await AsyncStorage.removeItem(KEY);
@@ -98,9 +111,13 @@ export function totals(list: ChargeRecord[]) {
   };
 }
 
-const csvCell = (v: string | number | null | undefined, sep: string) => {
+/**
+ * Cellule CSV. Texte commençant par = + - @ (ou tabulation / retour) : préfixé d'une apostrophe, pour qu'un tableur
+ * ne l'exécute jamais comme formule (noms de stations IRVE, saisies). Les nombres restent des nombres.
+ */
+export const csvCell = (v: string | number | null | undefined, sep: string) => {
   if (v == null) return '';
-  const s = typeof v === 'number' ? String(Math.round(v * 1000) / 1000).replace('.', decimalSep()) : v;
+  const s = typeof v === 'number' ? String(Math.round(v * 1000) / 1000).replace('.', decimalSep()) : /^(\s*[=+\-@]|[\t\r])/.test(v) ? `'${v}` : v;
   return s.includes(sep) || /["\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 const two = (n: number) => String(n).padStart(2, '0');

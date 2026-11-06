@@ -25,6 +25,13 @@ Les opérateurs confirmés sont IZIVIA (PayNow), Bouygues E&S (alizé/Révéo), 
   - Le portail **Plugsurfing** renvoie explicitement vers l'appli pour démarrer une charge.
   - Le portail **Modulo** a été fermé.
 
+## Champs utilisés par l'app (v1, ajoutés le 2026-11-05)
+
+- `payDomains` : hôtes des pages de paiement ou de démarrage officielles, **tirés uniquement des URL sourcées de l'entrée** (le pipeline refuse tout hôte absent de `webPortal`, `webStart.url`, `adhocWeb` ou `sources`). Le pipeline les recopie dans `operators.json` ; le vérificateur de QR code les classe `official` sur une borne de cet opérateur, `known-operator` sur une autre, et l'anti-sosie ne les bloque plus. Valeurs : IZIVIA `paynow.izivia.com`, Freshmile `charge.freshmile.com` et `xfm.fr`, Virta `chge.eu`, Métropolis `app.metropolis-recharge.fr`, E55C `map.e55c.com`, ENGIE Vianeo `charge.engie-vianeo.com`, Qwello `wa.qwello.eu`, IONITY `payment.ionity.eu`, Carrefour Energies `recharge.carrefour.fr`.
+- `registryKeys` (Carrefour Energies seulement) : clés du registre IRVE qui exploitent ses stations (`allego`, `driveco`). Les `payDomains` de Carrefour Energies leur sont attachés.
+- `preauthMax` (€) : seulement quand la source publie le montant. alizé (Bouygues E&S) et Révéo : 75 € (« caution jusqu'à 75 € »), ENGIE Vianeo : 50 €. IONITY (« ~40 € ») n'est pas renseigné, car le montant est approximatif. Sans valeur, l'app garde le texte générique.
+- Publication sans retraiter l'IRVE : `npm run portals -w pipeline -- --out <dossier data>`.
+
 ## Opérateurs app-only / badge-only (confirmés)
 
 Lidl (Lidl Plus, 1 073 stations), Sorégies Mobilités + Sorégies (754), YES55 (applis tierces + badges, 395) et Seolis/AlterBase (331). e-Totem se démarre au badge ou à la CB (bornes rapides), sans flux web.
