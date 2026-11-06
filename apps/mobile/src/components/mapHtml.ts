@@ -34,6 +34,15 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
   function pad(m){var el=document.querySelector('.maplibregl-ctrl-bottom-left');if(el){if(m.top!=null){el.style.top=m.top+'px';el.style.bottom='auto'}else{el.style.top='auto';el.style.bottom=(m.bottom||0)+'px'}el.style.left=(m.left||0)+'px'}}
   var lastB=0;map.on('rotate',function(){var b=Math.round(map.getBearing());if(b!==lastB){lastB=b;send({type:'camera',bearing:b})}});
   var empty={type:'FeatureCollection',features:[]};var pending=[];var ready=false;var selected=null;
+  // Grand écran (>= 768 px, desktop/tablette) : labels kW et pictogrammes de statut dès un zoom plus bas — jamais de pastilles nues.
+  var WIDE=(window.innerWidth||0)>=768;var LBL_MINZ=WIDE?11:13.5;var ST_MINZ=WIDE?10:11;
+  // Zone réservée (bulle de vitesse) : rectangle en px depuis le coin bas-gauche de la carte, reprojeté en coordonnées à chaque mouvement.
+  var resRect=null;
+  function placeRes(){if(!ready||!map.getSource('res'))return;
+    if(!resRect){map.getSource('res').setData(empty);return}
+    var c=map.getCanvas();var cx=resRect.left+resRect.w/2;var cy=c.clientHeight-resRect.bottom-resRect.h/2;
+    var ll=map.unproject([cx,cy]);
+    map.getSource('res').setData({type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Point',coordinates:[ll.lng,ll.lat]},properties:{}}]})}
   // Bornes au même endroit (lib/colocated.ts) : pastille de groupe, éventail de boutons (>= 44 px) au toucher.
   var groups={};var openG=null;var spider=[];
   function colorOf(s){return s.r?'${M.stationReserved}':s.kw>=50?'${M.stationFast}':'${M.stationSlow}'}
@@ -70,6 +79,7 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
     map.addSource('traffic',{type:'geojson',data:empty});
     map.addSource('dest',{type:'geojson',data:empty});
     map.addSource('pins',{type:'geojson',data:empty});
+    map.addSource('res',{type:'geojson',data:empty});
     var lr={'line-cap':'round','line-join':'round'};
     // Trajets alternatifs (aperçu) et tronçon parcouru (guidage) : gris. Trajet proposé en guidage (id __offer) : style propre,
     // accent en pointillés sur liseré blanc, coupé à la position (useTrip) — jamais confondu avec le tronçon parcouru.
@@ -112,19 +122,19 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
       g.lineWidth=4;g.lineCap='round';g.lineJoin='round';g.strokeStyle=k==='free'?'${M.statusFree}':'#FFFFFF';g.beginPath();
       if(k==='free'){g.moveTo(12,21);g.lineTo(18,27);g.lineTo(28,14)}else if(k==='busy'){g.moveTo(20,11);g.lineTo(20,21);g.lineTo(27,25)}else{g.moveTo(13,13);g.lineTo(27,27);g.moveTo(27,13);g.lineTo(13,27)}
       g.stroke();map.addImage('st-'+k,g.getImageData(0,0,40,40),{pixelRatio:2})});
-      map.addLayer({id:'pt-st',type:'symbol',source:'st',filter:['all',['!',['has','point_count']],['in',['get','st'],['literal',['free','busy','down']]]],minzoom:11,
+      map.addLayer({id:'pt-st',type:'symbol',source:'st',filter:['all',['!',['has','point_count']],['in',['get','st'],['literal',['free','busy','down']]]],minzoom:ST_MINZ,
         // Pictogrammes de statut : ne se chevauchent pas (masqués en collision) ; bornes rapides prioritaires.
         layout:{'icon-image':['concat','st-',['get','st']],'icon-offset':[18,-18],'icon-allow-overlap':false,'icon-ignore-placement':false,'icon-padding':2,'symbol-sort-key':['case',FAST,0,1]}});
     }catch(e){}
     // Étiquettes : jamais superposées (collisions), placées sous le point ou à côté s'il manque la place ; priorité aux bornes rapides.
     var LBL={'text-size':12,'text-font':['Noto Sans Bold'],'text-allow-overlap':false,'text-ignore-placement':false,'text-padding':3,'text-variable-anchor':['top','bottom','right','left']};
-    map.addLayer({id:'pt-l',type:'symbol',source:'st',filter:['all',['!',['has','point_count']],['!=',['get','grp'],1]],minzoom:13.5,layout:Object.assign({},LBL,{'text-field':['get','label'],'text-radial-offset':1.4,'symbol-sort-key':['case',FAST,1,2]}),paint:{'text-color':'${C.ink}','text-halo-color':'#fff','text-halo-width':2}});
+    map.addLayer({id:'pt-l',type:'symbol',source:'st',filter:['all',['!',['has','point_count']],['!=',['get','grp'],1]],minzoom:LBL_MINZ,layout:Object.assign({},LBL,{'text-field':['get','label'],'text-radial-offset':1.4,'symbol-sort-key':['case',FAST,1,2]}),paint:{'text-color':'${C.ink}','text-halo-color':'#fff','text-halo-width':2}});
     // Sélection : anneau d'accent autour d'un liseré blanc.
     map.addLayer({id:'sel-halo',type:'circle',source:'st',filter:['==',['get','id'],'__none__'],paint:{'circle-color':'rgba(0,0,0,0)','circle-radius':19,'circle-stroke-width':3.5,'circle-stroke-color':'${M.selectionRing}'}});
     map.addLayer({id:'sel',type:'circle',source:'st',filter:['==',['get','id'],'__none__'],paint:{'circle-color':fill,'circle-radius':15,'circle-stroke-width':3,'circle-stroke-color':'#FFFFFF'}});
     // Étiquettes au-dessus de l'anneau : borne sélectionnée (décalée sous l'anneau de 25 px) et groupes.
     map.addLayer({id:'sel-l',type:'symbol',source:'st',filter:['==',['get','id'],'__none__'],layout:{'text-field':['get','label'],'text-size':12,'text-offset':[0,2.4],'text-anchor':'top','text-font':['Noto Sans Bold'],'text-allow-overlap':true,'text-ignore-placement':true},paint:{'text-color':'${C.ink}','text-halo-color':'#fff','text-halo-width':2}});
-    map.addLayer({id:'grp-l',type:'symbol',source:'st',filter:['==',['get','grp'],1],minzoom:13.5,layout:Object.assign({},LBL,{'text-field':['get','label'],'text-radial-offset':1.9,'text-max-width':9,'symbol-sort-key':0}),paint:{'text-color':'${C.ink}','text-halo-color':'#fff','text-halo-width':2}});
+    map.addLayer({id:'grp-l',type:'symbol',source:'st',filter:['==',['get','grp'],1],minzoom:LBL_MINZ,layout:Object.assign({},LBL,{'text-field':['get','label'],'text-radial-offset':1.9,'text-max-width':9,'symbol-sort-key':0}),paint:{'text-color':'${C.ink}','text-halo-color':'#fff','text-halo-width':2}});
     map.on('click',function(e){var fs=map.queryRenderedFeatures(e.point,{layers:['hit','cl-hit']});if(!fs.length){if(openG)collapse();return}
       var f=nearestF(e,fs);var p=f.properties;
       if(p.cluster){map.getSource('st').getClusterExpansionZoom(p.cluster_id).then(function(z){map.easeTo({center:f.geometry.coordinates,zoom:z})});return}
@@ -149,6 +159,12 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
     try{var rc=document.createElement('canvas');rc.width=rc.height=56;map.addImage('me-res',rc.getContext('2d').getImageData(0,0,56,56),{pixelRatio:2});
       map.addLayer({id:'me-res',type:'symbol',source:'me',filter:['!=',['get','nav'],1],layout:{'icon-image':'me-res','icon-allow-overlap':false,'icon-ignore-placement':false,'symbol-sort-key':-100}});
     }catch(e){}
+    // Réservation de collision pour la bulle de vitesse (overlay bas-gauche) : icône transparente ancrée au coin de l'écran,
+    // priorité maximale (symbol-sort-key très négatif) → aucune étiquette de borne ne se place dessous.
+    try{var sc=document.createElement('canvas');sc.width=168;sc.height=96;map.addImage('speedo-res',sc.getContext('2d').getImageData(0,0,168,96),{pixelRatio:1});
+      map.addLayer({id:'speedo-res',type:'symbol',source:'res',layout:{'icon-image':'speedo-res','icon-allow-overlap':false,'icon-ignore-placement':false,'symbol-sort-key':-200}});
+    }catch(e){}
+    map.on('move',placeRes);
     try{var c=document.createElement('canvas');c.width=c.height=72;var g=c.getContext('2d');
       g.beginPath();g.moveTo(36,6);g.lineTo(62,64);g.lineTo(36,52);g.lineTo(10,64);g.closePath();g.lineJoin='round';
       g.lineWidth=7;g.strokeStyle='#FFFFFF';g.stroke();g.fillStyle='${C.position}';g.fill();
@@ -203,6 +219,7 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
       try{map.fitBounds([[m.bounds[0],m.bounds[1]],[m.bounds[2],m.bounds[3]]],{padding:pd,duration:m.duration==null?800:m.duration,maxZoom:m.maxZoom||16,bearing:m.bearing==null?map.getBearing():m.bearing,pitch:0})}catch(e){}}
     else if(m.type==='follow'){map.easeTo({center:[m.lon,m.lat],zoom:m.zoom||map.getZoom(),bearing:m.bearing==null?map.getBearing():m.bearing,pitch:m.pitch==null?50:m.pitch,offset:[m.offsetX||0,m.offsetY||0],duration:m.duration||900,easing:function(t){return t}})}
     else if(m.type==='unfollow'){map.easeTo({pitch:0,bearing:0,duration:600})}
+    else if(m.type==='reserve'){resRect=m.on?{left:m.left||0,bottom:m.bottom||0,w:m.w||0,h:m.h||0}:null;placeRes()}
     else if(m.type==='pad'){pad(m)}
     else if(m.type==='select'){selected=m.id||null;selectGroup();applySel()}
   }
@@ -222,6 +239,8 @@ export type MapIn =
       groups?: { g: string; lat: number; lon: number; label: string }[];
     }
   | { type: 'pad'; bottom: number; left: number; top?: number }
+  /** Zone réservée pour un overlay (bulle de vitesse) : rectangle en px depuis le coin bas-gauche, aucune étiquette de borne dessous. */
+  | { type: 'reserve'; on: boolean; left?: number; bottom?: number; w?: number; h?: number }
   | { type: 'user'; lat: number; lon: number; bearing?: number; nav?: boolean; accuracy?: number | null; heading?: number | null }
   | { type: 'zoom'; by: number }
   | { type: 'north' }

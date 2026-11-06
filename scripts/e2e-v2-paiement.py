@@ -559,6 +559,8 @@ try:
         page.goto(f'{BASE}/app/recharger?evse=FRTSLE0004FJ', wait_until='load')  # Superchargeur Thiais (réel, acte + badge IRVE)
         page.wait_for_selector('text=Pas de paiement possible dans Branché ici', timeout=20000)
         page.wait_for_selector('text=Borne payable la plus proche', timeout=20000)
+        # Les moyens indisponibles (lecteur CB « certains sites », QR, badge) sont repliés derrière « Voir les autres moyens ».
+        page.get_by_role('button', name='Voir les autres moyens').click()
         body = page.inner_text('body')
         assert 'Recommandé' not in body, 'rien de recommandé chez Tesla'
         assert 'Paiement ponctuel sans compte déclaré' not in body, 'pas de QR « déclaré » sur la foi de acte'

@@ -142,7 +142,7 @@ with sync_playwright() as p:
     page.reload(wait_until='load')
     page.get_by_text('Nearest chargers').wait_for(timeout=20000)
     stored = json.loads(page.evaluate("localStorage.getItem('branche.settings.v1')"))
-    assert stored == {'lang': 'en', 'units': 'mi', 'avoidTolls': True, 'avoidMotorways': False}, stored
+    assert stored == {'lang': 'en', 'units': 'mi', 'avoidTolls': True, 'avoidMotorways': False, 'showSpeed': True, 'speedAlert': True}, stored
     ok(f'réglages persistés après rechargement : {stored}')
 
     page.goto(f'{BASE}/app/reglages', wait_until='load')

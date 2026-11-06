@@ -64,6 +64,7 @@ export default function Recharger() {
   // Stations voisines chargées ici quand l'écran est ouvert par lien profond (carte jamais chargée)
   const [around, setAround] = useState<Station[] | null>(null);
   const [preauthOpen, setPreauthOpen] = useState(false);
+  const [showUnavailable, setShowUnavailable] = useState(false);
   const [offline, setOffline] = useState(false);
   const preparing = params.prepare === '1';
 
@@ -428,7 +429,8 @@ export default function Recharger() {
             <View style={[styles.card, styles.methodCard]}>
               <View style={styles.rowWrap}>
                 <Text style={[styles.cardTitle, { flexShrink: 1 }]} accessibilityRole="header">{appChoice.label}</Text>
-                {blocked ? <Tag>{t.common.recommended}</Tag> : null}
+                {/* Appli de l'opérateur seule voie ici : « Seule option ici » (honnête), pas « Recommandé ». */}
+                {blocked ? <Tag>{appOnly(options) ? t.common.onlyOption : t.common.recommended}</Tag> : null}
               </View>
               <Text style={styles.p}>{appChoice.why}</Text>
               <Text style={styles.orderText}>{appChoice.order === 'plug-first' ? R.plugFirst : R.payFirst}</Text>
@@ -502,9 +504,12 @@ export default function Recharger() {
           ) : null}
 
           <Text style={styles.h3}>{R.otherMethods}</Text>
-          {options
-            .filter((o) => o.id !== chosen?.id && o.id !== 'operator-app')
-            .map((o) => (
+          {(() => {
+            const others = options.filter((o) => o.id !== chosen?.id && o.id !== 'operator-app');
+            const availableOthers = others.filter((o) => o.available);
+            const unavailableOthers = others.filter((o) => !o.available);
+            // Les moyens indisponibles sont repliés derrière « Voir les autres moyens » : une seule action principale visible.
+            const row = (o: PayOption) => (
               <Pressable
                 key={o.id}
                 accessibilityRole="button"
@@ -528,7 +533,26 @@ export default function Recharger() {
                   </View>
                 )}
               </Pressable>
-            ))}
+            );
+            return (
+              <>
+                {availableOthers.map(row)}
+                {unavailableOthers.length ? (
+                  <>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: showUnavailable }}
+                      onPress={() => setShowUnavailable((x) => !x)}
+                      style={styles.link}
+                    >
+                      <Text style={styles.linkText}>{R.showUnavailable(showUnavailable)}</Text>
+                    </Pressable>
+                    {showUnavailable ? unavailableOthers.map(row) : null}
+                  </>
+                ) : null}
+              </>
+            );
+          })()}
           {station.tel ? (
             <Pressable accessibilityRole="link" onPress={() => Linking.openURL(`tel:${station.tel!.replace(/[^+\d]/g, '')}`)} style={styles.link}>
               <Text style={styles.linkText}>{R.callDoubt(opName)}</Text>

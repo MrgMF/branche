@@ -6,7 +6,6 @@ import { useEffect, useState } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getAvailability, stationSummary } from '../lib/availability';
 import { runPlan } from '../lib/connectors';
-import { shortId } from '../lib/evse';
 import { euros, km, kw, plugLabel, withUnit } from '../lib/format';
 import { methodLabel } from '../lib/history';
 import { clearPrepared, loadPrepared, type Prepared } from '../lib/prepared';
@@ -141,8 +140,8 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
         <Text style={styles.title} numberOfLines={4}>
           {displayName(hit.station)}
         </Text>
+        {/* Pas d'identifiant de point brut dans le sous-titre du CTA : méthode de paiement et coût estimé suffisent (l'opérateur est rappelé ci-dessous). */}
         <Text style={styles.sub}>
-          {p.plan.pdcId ? `${t.common.point(shortId(p.plan.pdcId))} · ` : ''}
           {methodLabel(p.plan.method)}
           {cost}
         </Text>

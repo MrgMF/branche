@@ -199,9 +199,11 @@ export default function MapScreen() {
   const nav = useTrip(map, geo.fix ?? user, Math.round(height * 0.55));
   const { trip, plan } = nav;
   // Compteur hors guidage (dès 5 km/h) : limitation de la dernière route calculée, si l'on roule dessus.
+  // Purge à l'arrivée et à l'annulation du trajet : aucune limitation d'un trajet terminé/abandonné ne doit subsister.
   const lastRoute = useRef<RouteOption | null>(null);
-  if (trip?.route) lastRoute.current = trip.route;
-  const freeLimit = useMemo(() => (trip?.guiding ? null : limitNear(lastRoute.current, geo.fix)), [geo.fix, trip?.route, trip?.guiding]);
+  if (trip?.route && !trip.arrived) lastRoute.current = trip.route;
+  else if (!trip || trip.arrived) lastRoute.current = null;
+  const freeLimit = useMemo(() => (trip?.guiding ? null : limitNear(lastRoute.current, geo.fix)), [geo.fix, trip?.route, trip?.guiding, trip?.arrived]);
   const freeSpeedo = useSpeedo({ kmh: geo.speedKmh, sampleT: geo.fix?.t ?? null, limitKmh: freeLimit, guiding: false });
   const freeSpeedOn = !trip?.guiding && freeSpeedo.show;
   // « Y aller » depuis une borne non payable (/?go=<station>) : itinéraire vers la borne payable la plus proche
@@ -273,6 +275,16 @@ export default function MapScreen() {
           ? { type: 'pad', bottom: 0, left: 4, top: topH }
           : { type: 'pad', bottom: sheetH, left: 0 });
   }, [mapReady, wide, topH, sheetH, height, trip?.guiding, guideSide, insets.bottom]);
+
+  // Bulle de vitesse (hors guidage, bas-gauche) : réserve sa place dans la carte pour qu'aucune étiquette de borne ne passe dessous.
+  useEffect(() => {
+    if (!mapReady) return;
+    const on = freeSpeedOn && !searching;
+    const w = freeLimit ? 150 : 86;
+    const left = wide ? 16 + PANEL + 12 : 12;
+    const bottom = wide ? 44 : sheetH + 12 + (height - topH - sheetH > 220 ? 0 : 22);
+    map.current?.post({ type: 'reserve', on, left, bottom, w, h: 80 });
+  }, [mapReady, freeSpeedOn, searching, freeLimit, wide, sheetH, topH, height]);
 
   // Premier centrage sur la position ; ensuite, recentrage/suivi via « Ma position » (MapControls).
   const flown = useRef(false);

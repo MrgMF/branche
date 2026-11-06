@@ -149,8 +149,9 @@ export function StationDetail(props: {
       </View>
 
       {/* Temps réel : rien pendant le chargement ou si la requête échoue ; « État inconnu » seulement si l'API le renvoie. */}
+      {/* « Occupé/In use » : warnText (#7A3E06), contraste renforcé (>= 7:1) plutôt que busy (#B45309, ~4,58:1). */}
       {live.known && !down ? (
-        <Text style={[styles.live, { color: live.free ? colors.accentPressed : colors.busy }]}>
+        <Text style={[styles.live, { color: live.free ? colors.accentPressed : colors.warnText }]}>
           {live.free ? t.station.liveFree(live.free, live.total) : t.station.liveNone}{t.station.liveSuffix}{live.down ? t.station.liveDown(live.down) : ''}
         </Text>
       ) : !live.known && live.reported ? (

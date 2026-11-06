@@ -382,6 +382,7 @@ export function parseTomTomRoute(r: unknown): RouteOption | null {
   let hasMotorways = false;
   for (const s of Array.isArray(r.sections) ? r.sections.filter(isObj) : []) {
     const type = s.sectionType;
+    // Péages : la réponse renvoie le type `TOLL_ROAD` (sectionType de requête `tollRoad`). Voir doc TomTom Routing API.
     if (type === 'TOLL' || type === 'TOLL_ROAD') hasTolls = true;
     if (type === 'MOTORWAY') hasMotorways = true;
     const idx = sectionIdx(s, n);
@@ -482,7 +483,8 @@ export class TomTomRouteProvider implements RouteProvider {
       language: 'fr-FR',
       computeTravelTimeFor: 'all',
     });
-    for (const s of ['traffic', 'toll', 'motorway', 'speedLimit', 'lanes']) qs.append('sectionType', s);
+    // Valeurs sectionType de l'API TomTom Routing : les péages se demandent avec `tollRoad` (réponse : sections `TOLL_ROAD`).
+    for (const s of ['traffic', 'tollRoad', 'motorway', 'speedLimit', 'lanes']) qs.append('sectionType', s);
     if (req.options.avoidTolls) qs.append('avoid', 'tollRoads');
     if (req.options.avoidMotorways) qs.append('avoid', 'motorways');
     return `${this.baseUrl}/routing/1/calculateRoute/${pts}/json?${qs}`;

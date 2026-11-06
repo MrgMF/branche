@@ -57,7 +57,8 @@ describe('POST /v1/route — TomTom', () => {
       computeTravelTimeFor: 'all',
       sectionType: 'lanes',
     });
-    expect(url.searchParams.getAll('sectionType')).toEqual(['traffic', 'toll', 'motorway', 'speedLimit', 'lanes']);
+    // Péages : sectionType `tollRoad` dans la requête (réponse : sections `TOLL_ROAD`), conforme à l'API TomTom Routing.
+    expect(url.searchParams.getAll('sectionType')).toEqual(['traffic', 'tollRoad', 'motorway', 'speedLimit', 'lanes']);
     expect(url.searchParams.getAll('avoid')).toEqual([]);
     const r = res.json();
     // Route 2 de la fixture : 1720 s (la première, « principale », fait 1900 s).

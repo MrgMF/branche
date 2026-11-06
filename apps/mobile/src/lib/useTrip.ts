@@ -215,9 +215,12 @@ const followOffset = () => {
   return followOffsetFor(width, height);
 };
 
-/** Marges du cadrage d'aperçu : sous la recherche et au-dessus de la feuille (mobile), à droite du panneau (large). */
+/**
+ * Marges du cadrage d'aperçu : sous la recherche et au-dessus de la feuille (mobile), à droite du panneau (large).
+ * Marge haute généreuse (barre de recherche + filtres, encoche comprise) : les pins du haut ne passent jamais dessous.
+ */
 const previewPad = (sheetH: number) =>
-  Dimensions.get('window').width >= 768 ? { top: 90, bottom: 60, left: 16 + 440 + 40, right: 100 } : { top: 150, bottom: sheetH + 30 };
+  Dimensions.get('window').width >= 768 ? { top: 112, bottom: 60, left: 16 + 440 + 40, right: 100 } : { top: 178, bottom: sheetH + 30 };
 
 export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null, sheetH: number) {
   const [trip, setTrip] = useState<Trip | null>(null);
