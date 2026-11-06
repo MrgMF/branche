@@ -184,3 +184,73 @@ describe('safeTariffUrl — lien de tarif IRVE passé par le vérificateur', () 
     expect(safeTariffUrl(u, 'izivia', OPS)).toBeNull();
   });
 });
+
+// Prix publiés probablement HT sans le dire : textes RÉELS Citeos / EasyCharge (site/data/tiles, novembre 2026)
+describe('prix publiés probablement HT (prix rond / 1,2)', () => {
+  const CITEOS_033334 =
+    "par défaut : 0.33334€ par kwh de charge, par défaut : 0.33334€ par kwh de charge, 2.5€ par heure d'occupation hors charge, 2.5€ par heure de charge, par défaut : 0.33334€ par kwh de charge"; // FRS84PVFLTV
+  const CITEOS_04583 =
+    "par défaut : 0.4583€ par kwh de charge, par défaut : 0.4583€ par kwh de charge, 6.0€ par heure de charge, 6.0€ par heure d'occupation hors charge, par défaut : 0.4583€ par kwh de charge"; // FRMBIPVCDQW
+  const EASY_66667 =
+    "par défaut : 0.4667€ par kwh de charge, par défaut : 6.6667€ par heure d'occupation hors charge, 0.4667€ par kwh de charge, 6.6667€ par heure de charge, par défaut : 0.4667€ par kwh de charge"; // FRECHPCHYFC
+  const EASY_030916667 =
+    "entre 08:00 et 20:00 : 0.30916667€ par kwh de charge, 3.75€ par heure d'occupation hors charge, entre 20:00 et 08:00 : 0.30916667€ par kwh de charge, par défaut : 0.30916667€ par kwh de charge"; // FREBNPBATNZ
+
+  it.each([
+    [CITEOS_033334, 0.33334, '≈ 0,40 €/kWh'],
+    [CITEOS_04583, 0.4583, '≈ 0,55 €/kWh'],
+    [EASY_66667, 0.4667, '≈ 0,56 €/kWh'],
+  ])('détecté, affiché ≈ ×1,2 avec la mention : %s', (raw, perKwh, shown) => {
+    const t = parseTariff(raw);
+    expect(t).toMatchObject({ kind: 'priced', perKwh, ht: false, htLikely: true });
+    expect(ttcFactor(t)).toBe(1.2);
+    const lines = describeTariff(t);
+    expect(lines[0]).toBe(`Énergie : ${shown}`);
+    expect(lines.some((l) => l.startsWith('Publié probablement HT ('))).toBe(true);
+    expect(lines).not.toContain('Prix annoncés hors taxes : TVA de 20 % en plus (incluse dans l’estimation).');
+  });
+  it('montants à l’heure aussi : 6,6667 €/h publiés → ≈ 8 €/h affichés', () => {
+    const lines = describeTariff(parseTariff(EASY_66667));
+    expect(lines.find((l) => l.startsWith('Temps de charge'))).toContain('(8,00 €/h)');
+    expect(lines.find((l) => l.startsWith('Occupation'))).toContain('≈ ');
+  });
+  it('mention : valeur publiée et équivalent TTC', () => {
+    expect(describeTariff(parseTariff(CITEOS_033334)).at(-1)).toBe(
+      'Publié probablement HT (0,33334 €/kWh, soit ≈ 0,40 €/kWh TTC) : TVA de 20 % ajoutée ici et dans l’estimation.',
+    );
+  });
+  it('utilisé dans l’estimation (coût TTC = HT × 1,2)', async () => {
+    const { costOf } = await import('./estimate');
+    const ht = parseTariff(CITEOS_04583);
+    const c = costOf(ht, 10, 0)!;
+    expect(c.energy).toBeCloseTo(0.4583 * 10 * 1.2, 6);
+    expect(c.energy).toBeCloseTo(5.5, 2);
+  });
+  it('0,30916667 × 1,2 = 0,371 : pas un prix rond au centime → inchangé', () => {
+    const t = parseTariff(EASY_030916667);
+    expect(t.htLikely).toBeUndefined();
+    expect(ttcFactor(t)).toBe(1);
+    expect(describeTariff(t)[0]).toBe('Énergie : 0,31 €/kWh');
+  });
+  it('jamais si le texte dit TTC ou HT, ni sur un prix rond (0,325 ; 0,45)', () => {
+    expect(parseTariff('0.4583€ TTC par kwh de charge').htLikely).toBeUndefined();
+    expect(parseTariff('0,4583 € HT / kWh')).toMatchObject({ ht: true });
+    expect(parseTariff('0,4583 € HT / kWh').htLikely).toBeUndefined();
+    expect(parseTariff("entre 08:00 et 22:00 : 0.325€ par kwh de charge, par défaut : 0.325€ par kwh de charge").htLikely).toBeUndefined();
+    expect(parseTariff('0.45€ / kwh').htLikely).toBeUndefined();
+  });
+  it('tous les montants longs doivent correspondre (0,0417 oui, 0,0208 non → inchangé)', () => {
+    expect(parseTariff('0,0417€/kWh entre 6h et 21h, 0,0208€/kWh entre 21h et 6h').htLikely).toBeUndefined();
+  });
+  it('planTariff (suivi) garde la détection : estimation du suivi en TTC', () => {
+    expect(ttcFactor(planTariff({ tariffRaw: CITEOS_033334 }))).toBe(1.2);
+  });
+});
+
+describe('gratuité déclarée chez un réseau payant (sources du portail)', () => {
+  it('« Tarif non publié dans la base nationale » au lieu de « gratuit, à vérifier »', () => {
+    const t = stationTariff({ prix: '', free: true, kw: 300, pay: ['badge'] });
+    expect(describeTariff(t)).toEqual(['Gratuit selon la base nationale, à confirmer sur la borne.']);
+    expect(describeTariff(t, { paidNetwork: true })[0]).toMatch(/^Tarif non publié dans la base nationale/);
+  });
+});

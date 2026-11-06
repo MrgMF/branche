@@ -51,7 +51,13 @@ describe('hors ligne : réseau vérifié avant d’ouvrir la page de l’opérat
   });
   it('message affiché (toutes langues)', async () => {
     const { DICTS } = await import('../i18n');
-    expect(DICTS.fr.common.noNetwork).toBe('Pas de réseau : payez au lecteur CB ou réessayez');
-    for (const d of Object.values(DICTS)) expect(d.common.noNetwork.length).toBeGreaterThan(10);
+    // Neutre par défaut ; « payez au lecteur CB » seulement là où la borne en déclare un (payer.tsx readerConfirmed)
+    expect(DICTS.fr.common.noNetwork).toBe('Pas de réseau : réessayez dès que la connexion revient');
+    expect(DICTS.fr.common.noNetworkReader).toBe('Pas de réseau : payez au lecteur CB ou réessayez');
+    for (const d of Object.values(DICTS)) {
+      expect(d.common.noNetwork.length).toBeGreaterThan(10);
+      expect(d.common.noNetwork).not.toMatch(/\bCB\b|card|Karte|tarjeta|carta|cartõ|kaart|lecteur/i);
+      expect(d.common.noNetworkReader.length).toBeGreaterThan(10);
+    }
   });
 });

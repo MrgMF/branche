@@ -245,10 +245,49 @@ describe('verifyQr — liens de paiement entre particuliers et liens Stripe/SumU
     ['https://revolut.me/jdupont', 'Revolut'],
     ['https://checkout.revolut.com/pay/abc', 'Revolut'],
     ['https://sumup.me/borne', 'SumUp (lien personnel)'],
-  ])('%s → bloqué (%s)', (raw, name) => {
+    ['https://pay.lydia.me/l?t=borne', 'Lydia'],
+    ['https://lien.lydia.me/r/abc', 'Lydia'],
+    ['https://sumup.link/borne-12', 'SumUp (lien de paiement)'],
+    ['https://mollie.me/jdupont/12', 'Mollie (lien de paiement)'],
+  ])('%s → bloqué (%s), borne payable la plus proche proposée faute de voie officielle', (raw, name) => {
+    const r = verifyQr(raw, 'izivia', OPS);
+    expect(r).toMatchObject({ verdict: 'dangerous', alternative: 'nearest' });
+    expect(r.reasons[0]).toBe(
+      `Lien de paiement entre particuliers (${name}) : l’argent irait à une personne, pas à l’opérateur de la borne. Aucune voie officielle connue ici : allez plutôt à la borne payable la plus proche.`,
+    );
+    expect(r.reasons[0]).not.toContain('lecteur');
+  });
+  it('entre particuliers : voie officielle de la borne proposée, conseil selon ses voies réelles (comme Stripe)', () => {
+    const page = verifyQr('https://paypal.me/x', 'metropolis', OPS);
+    expect(page.alternative).toBe('page');
+    expect(page.reasons[0]).toContain('Utilisez plutôt la page officielle de Metropolis.');
+    const reader = verifyQr('https://paypal.me/x', 'izivia', OPS, { official: { reader: true } });
+    expect(reader.alternative).toBe('reader');
+    expect(reader.reasons[0]).toContain('Payez plutôt par carte sur le lecteur de la borne.');
+    expect(verifyQr('https://paypal.me/x', 'izivia', OPS, { official: { page: true, reader: true } }).alternative).toBe('page');
+    // Élision : « la page officielle d’Izivia »
+    expect(verifyQr('https://revolut.me/x', 'izivia', OPS, { official: { page: true } }).reasons[0]).toContain('page officielle d’Izivia');
+    // Borne inconnue : jamais de lecteur supposé
+    expect(verifyQr('https://paypal.me/x', null, OPS)).toMatchObject({ verdict: 'dangerous', alternative: 'nearest' });
+  });
+  it.each([
+    'https://www.google.com/url?q=https://izivia.com',
+    'https://google.fr/url?sa=t&url=https://pay.izivia.com',
+    'https://l.facebook.com/l.php?u=https%3A%2F%2Fpay.izivia.com',
+    'https://lm.facebook.com/l.php?u=x',
+    'https://l.instagram.com/?u=x',
+    'https://t.me/borne_paiement',
+    'https://lnkd.in/abc',
+    'https://eur01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fpay.izivia.com',
+    'https://www.youtube.com/redirect?q=https://pay.izivia.com',
+  ])('redirecteur traité comme raccourcisseur : %s → bloqué', (raw) => {
     const r = verifyQr(raw, 'izivia', OPS);
     expect(r.verdict).toBe('dangerous');
-    expect(r.reasons[0]).toBe(`Lien de paiement entre particuliers (${name}) : l’argent irait à une personne, pas à l’opérateur de la borne.`);
+    expect(r.reasons).toContain('Lien raccourci : la destination réelle est masquée.');
+  });
+  it('google.com hors /url, facebook.com : pas des redirecteurs', () => {
+    expect(verifyQr('https://www.google.com/maps/place/x', 'izivia', OPS).reasons).not.toContain('Lien raccourci : la destination réelle est masquée.');
+    expect(verifyQr('https://www.facebook.com/izivia', 'izivia', OPS).reasons).not.toContain('Lien raccourci : la destination réelle est masquée.');
   });
   it('paypal.com hors PayPal.me : plateforme, bénéficiaire à vérifier', () => {
     expect(verifyQr('https://www.paypal.com/checkoutnow?token=x', 'izivia', OPS).verdict).toBe('payment-platform');

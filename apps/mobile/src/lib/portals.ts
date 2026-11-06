@@ -65,3 +65,13 @@ export function idEntryOf(portal: Portal | undefined): IdEntryInfo {
   const digits = entry === 'printed' && Array.isArray(d) && d.length === 2 && d.every((n) => Number.isInteger(n) && n > 0) && d[0] <= d[1] ? ([d[0], d[1]] as [number, number]) : null;
   return { entry, digits };
 }
+
+/**
+ * Réseau payant selon ses sources : le portail est sourcé (`sources`) et documente un paiement (lecteur de carte,
+ * paiement ponctuel, page de paiement, pré-autorisation). Sert à ne pas présenter comme « gratuite, à vérifier » une
+ * borne déclarée gratuite d'un réseau payant (Electra, Ionity…) : « tarif non publié dans la base nationale ».
+ */
+export function portalPaid(portal: Portal | undefined): boolean {
+  if (!portal || !portal.sources?.some((u) => /^https:\/\//.test(u))) return false;
+  return portal.cardReader === true || !!portal.adhocWeb || !!portal.payDomains?.length || preauthMaxOf(portal) != null;
+}

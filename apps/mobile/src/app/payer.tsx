@@ -10,14 +10,14 @@ import { getCommunity, type Community } from '../lib/community';
 import { DEV_HOSTS } from '../lib/config';
 import { postReport } from '../lib/navigation';
 import { directPayUrl, openOperatorPayment, operatorLabel, operatorOf, startReaderCharge } from '../lib/connectors';
-import { payLabel } from '../lib/format';
+import { km, payLabel } from '../lib/format';
 import type { MethodId } from '../lib/history';
 import { verifyQr, type Operator, type QrResult } from '../lib/qr';
 import { findStation, pointById, pointsOf, type ChargePoint } from '../lib/evse';
-import { payOptions, reader2027Applies } from '../lib/methods';
+import { nearestPayable, payOptions, reader2027Applies } from '../lib/methods';
 import { loadPortals, preauthMaxOf, type Portals } from '../lib/portals';
 import { evseInText, qrTarget, type QrTarget } from '../lib/qrTarget';
-import { displayName, loadOperators, type Station } from '../lib/stations';
+import { displayName, loadAround, loadOperators, nearest, type Station } from '../lib/stations';
 import { loadVehicle, type Vehicle } from '../lib/vehicle';
 import { store } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
@@ -59,6 +59,25 @@ export default function Payer() {
   const [offline, setOffline] = useState(false);
   const params = useLocalSearchParams<{ from?: string }>();
   const [plan, setPlanState] = useState(store.plan());
+  // Ouvert depuis le parcours « Recharger » (?from=recharger, conservé par un rechargement de la page) mais mémoire vide :
+  // plan relu sur l'appareil avant toute vérification de QR code. Un plan existait → retour au parcours « Recharger » de
+  // sa borne (point repris), jamais de vérification sans contexte. Sans plan : scan comme depuis l'accueil.
+  const [ready, setReady] = useState(params.from !== 'recharger' || !!store.current() || !!store.plan());
+  useEffect(() => {
+    if (ready) return;
+    let alive = true;
+    store.hydrate().then(({ plan: p }) => {
+      if (!alive) return;
+      if (p) {
+        router.replace({ pathname: '/recharger', params: { station: p.stationId } });
+        return;
+      }
+      setReady(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const planPoint = station && plan?.stationId === station.id ? pointById(station, plan.pdcId) : undefined;
   // Pas de parcours « Recharger » avant (scan depuis l'accueil) : résumé prix + estimation avant « Payer »
   const fromHome = !planPoint;
@@ -67,8 +86,8 @@ export default function Payer() {
 
   // Depuis le parcours « Recharger » sur téléphone : appareil photo ouvert d'office (un geste de moins)
   useEffect(() => {
-    if (params.from === 'recharger' && Platform.OS !== 'web') startScan();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (ready && params.from === 'recharger' && Platform.OS !== 'web') startScan();
+  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function reportQr() {
     const at = station ?? store.current();
@@ -105,6 +124,7 @@ export default function Payer() {
   }
 
   async function check(raw: string, override?: Station) {
+    if (!ready) return;
     let at = override ?? station;
     setLastRaw(raw);
     setOffline(false);
@@ -199,11 +219,14 @@ export default function Payer() {
     }
   }
 
-  /** Sans réseau, rien n'est ouvert : « Pas de réseau : payez au lecteur CB ou réessayez ». */
+  /**
+   * Sans réseau, rien n'est ouvert : « Pas de réseau : réessayez » (« payez au lecteur CB » seulement si la borne en
+   * déclare un). La méthode réellement utilisée est reprise par le reçu (lien non vérifié confirmé : `unverified`).
+   */
   function pay(url: string, name: string, method: MethodId = 'scan') {
     planFromHome(method);
     setOffline(false);
-    openOperatorPayment(url, station, name).then((r) => setOffline(r === 'offline'));
+    openOperatorPayment(url, station, name, { method }).then((r) => setOffline(r === 'offline'));
   }
 
   /** Voie officielle proposée à la place d'un lien bloqué (page connue de l'opérateur ou lecteur CB de la borne). */
@@ -262,6 +285,23 @@ export default function Payer() {
   const canConfirm = !!result && !mismatch && result.kind === 'url' && (result.verdict === 'unknown' || result.verdict === 'other-operator' || result.verdict === 'payment-platform') && !!result.url;
   // Lien bloqué alors qu'une voie officielle existe : cette voie, proposée en un geste
   const officialLink = station ? payOptions(station, planPoint ?? summaryPoint ?? null, ops, { portals }).find((o) => o.id === 'operator-link' && o.available)?.url : undefined;
+  // Lien entre particuliers sans voie officielle connue ici (ou page connue mais sans lien pour ce point, sans lecteur) :
+  // borne payable la plus proche, comme dans le parcours « Recharger »
+  const wantNearest = !!result && !mismatch && (result.alternative === 'nearest' || (result.alternative === 'page' && !officialLink && !readerConfirmed));
+  const [nearAlt, setNearAlt] = useState<{ s: Station; d: number } | null | undefined>(undefined);
+  useEffect(() => {
+    if (!wantNearest || !station) return;
+    let alive = true;
+    setNearAlt(undefined);
+    (async () => {
+      const pool = store.stations().length ? store.stations() : await loadAround(station, 1).catch(() => [] as Station[]);
+      const near = nearest(pool.filter((x) => x.id !== station.id && x.acc !== 'reserve'), station, 40);
+      if (alive) setNearAlt(nearestPayable(near, ops, { portals }));
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [wantNearest, station, ops, portals]);
   const summary = fromHome && station && summaryPoint && (canPay || canConfirm) ? <PriceSummary station={station} point={summaryPoint} vehicle={vehicle} community={community} preauthMax={preauthMaxOf(portal)} /> : null;
 
   return (
@@ -311,7 +351,7 @@ export default function Payer() {
             onSubmitEditing={() => manual.trim() && check(manual)}
             returnKeyType="go"
           />
-          <Button label={P.verify} variant="ghost" onPress={() => check(manual)} disabled={!manual.trim()} style={styles.verify} />
+          <Button label={P.verify} variant="ghost" onPress={() => check(manual)} disabled={!manual.trim() || !ready} style={styles.verify} />
         </View>
       </View>
 
@@ -359,7 +399,7 @@ export default function Payer() {
                 <View style={[styles.box, confirmUnknown && styles.boxOn]} />
                 <Text style={styles.checkText}>{P.confirm}</Text>
               </Pressable>
-              <Button label={P.continue} variant="secondary" disabled={!confirmUnknown} onPress={() => pay(result.url!, result.host ?? P.unknownSite)} />
+              <Button label={P.continue} variant="secondary" disabled={!confirmUnknown} onPress={() => pay(result.url!, result.host ?? P.unknownSite, 'unverified')} />
             </>
           ) : null}
 
@@ -371,12 +411,34 @@ export default function Payer() {
           {/* Sans réseau : message à côté du bouton qui vient d'échouer */}
           {offline ? (
             <View role="alert" accessibilityLiveRegion="assertive">
-              <Notice tone="error">{t.common.noNetwork}</Notice>
+              <Notice tone="error">{readerConfirmed ? t.common.noNetworkReader : t.common.noNetwork}</Notice>
             </View>
           ) : null}
           {result.alternative === 'page' && officialLink ? <Button label={P.useOfficialPage(opName)} onPress={() => pay(officialLink, opName, 'operator-link')} /> : null}
           {result.alternative === 'reader' || (result.alternative === 'page' && !officialLink && readerConfirmed) ? (
             <Button label={P.useReader} variant={result.alternative === 'reader' ? 'primary' : 'secondary'} onPress={payAtReader} hint={t.recharger.hintReader} />
+          ) : null}
+
+          {wantNearest ? (
+            station ? (
+              nearAlt ? (
+                <>
+                  <Text style={[styles.reason, { color: tone.fg }]}>{t.recharger.nearestPayable(displayName(nearAlt.s), km(nearAlt.d))}</Text>
+                  <Button
+                    label={t.recharger.goThere}
+                    hint={t.recharger.goThereHint(displayName(nearAlt.s))}
+                    onPress={() => {
+                      store.setCurrent(nearAlt.s);
+                      router.replace({ pathname: '/', params: { go: nearAlt.s.id } });
+                    }}
+                  />
+                </>
+              ) : (
+                <Text style={[styles.reason, { color: tone.fg }]}>{nearAlt === null ? t.recharger.noPayableNear : t.recharger.searchingPayable}</Text>
+              )
+            ) : (
+              <Button label={t.common.backToMap} variant="secondary" onPress={() => router.replace('/')} />
+            )
           ) : null}
 
           {result.kind === 'evse' && !mismatch ? (

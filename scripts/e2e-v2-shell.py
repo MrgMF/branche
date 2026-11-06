@@ -197,7 +197,8 @@ with sync_playwright() as p:
         page.on('pageerror', lambda e: errors.append(str(e)))
         page.goto(f'{BASE}/app/', wait_until='load')
         page.get_by_text('Nearest chargers').wait_for(timeout=20000)
-        page.get_by_placeholder('Where to? Address, place…').wait_for()
+        # Écran étroit (< 360 px) : invite courte, jamais coupée
+        page.get_by_placeholder('Where to?' if w < 360 else 'Where to? Address, place…', exact=True).wait_for()
         no_overflow(page, f'carte en {w}')
         shot(page, f'c1-carte-en-{w}')
         open_menu(page)

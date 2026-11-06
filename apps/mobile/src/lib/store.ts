@@ -41,6 +41,8 @@ export interface DirectCharge {
   autoEnded?: boolean;
   /** Origine de la fin automatique : départ constaté, ou recharge restée ouverte plus de 24 h (fin estimée). */
   autoReason?: 'departed' | 'stale';
+  /** Heure à laquelle la fin automatique a été constatée (≥ endedAt) : délai de 24 h avant retrait compté d'ici. */
+  autoEndedAt?: number;
   /** Méthode réellement utilisée au moment du paiement (reprise par le reçu, prioritaire sur celle du plan). */
   method?: MethodId;
   /** Compte opérateur ouvert pour démarrer : à confirmer par l'utilisateur au retour (jamais supposé connecté). */

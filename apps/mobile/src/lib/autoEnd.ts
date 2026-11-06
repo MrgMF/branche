@@ -86,7 +86,7 @@ export async function autoFinish(d: DirectCharge, now = Date.now(), opts: { endA
     () => false,
   );
   if (!opts.stale) await scheduleAlerts([{ at: now + 1500, title: tr().recharge.autoEndTitle, body: tr().recharge.autoEndBody(d.station.name) }]);
-  return { ...d, endedAt, autoEnded: true, autoReason: opts.stale ? 'stale' : 'departed', alertIds: [], ...(saved ? {} : { saveFailed: true }) };
+  return { ...d, endedAt, autoEnded: true, autoReason: opts.stale ? 'stale' : 'departed', autoEndedAt: now, alertIds: [], ...(saved ? {} : { saveFailed: true }) };
 }
 
 /** Au-delà, une recharge démarrée et jamais terminée (ou terminée sans reçu enregistré) est réglée à l'ouverture. */
@@ -102,7 +102,7 @@ export function estimatedEndAt(d: DirectCharge): number {
  * Recharge oubliée, jamais effacée en silence :
  * - démarrée, jamais terminée depuis plus de 24 h → terminée à la fin estimée et archivée avec son reçu (affichée
  *   « terminée automatiquement », prix à noter) ;
- * - terminée depuis plus de 24 h → reçu archivé s'il ne l'est pas déjà, puis retirée (null) ; échec d'écriture →
+ * - terminée depuis plus de 24 h (fin, ou fin automatique constatée) → reçu archivé s'il ne l'est pas déjà, puis retirée (null) ; échec d'écriture →
  *   gardée (saveFailed), affichée.
  * Sinon renvoyée telle quelle (même objet).
  */
@@ -110,7 +110,8 @@ export async function settleStale(d: DirectCharge, now = Date.now()): Promise<Di
   if (d.chargeStartedAt && !d.endedAt && now - d.chargeStartedAt > STALE_STARTED_MS) {
     return autoFinish(d, now, { endAt: estimatedEndAt(d), stale: true });
   }
-  if (d.chargeStartedAt && d.endedAt && now - d.endedAt > STALE_STARTED_MS) {
+  // Retrait 24 h après la fin, ou après la fin automatique constatée (une recharge close d'office reste affichée un jour)
+  if (d.chargeStartedAt && d.endedAt && now - Math.max(d.endedAt, d.autoEndedAt ?? 0) > STALE_STARTED_MS) {
     const r = recordOf(d, d.endedAt);
     const archived = (await hasRecord(r.id)) || (await addRecord(r).then(() => true, () => false));
     return archived ? null : d.saveFailed ? d : { ...d, saveFailed: true };
