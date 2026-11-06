@@ -1,15 +1,15 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ApiConfig } from '../lib/api';
 import { navigationLinks, startCharge } from '../lib/charge';
 import { euros, km, kw, minutes, payLabel, plugLabel } from '../lib/format';
 import { availabilityDown, getAvailability, stationSummary, type AvailItem } from '../lib/availability';
 import { getCommunity, type Community } from '../lib/community';
 import { loadWallet, type Wallet } from '../lib/accounts';
-import { appOnly, badgeMentioned, badgeNames, confirmedChannels, payOptions, surelyPayable } from '../lib/methods';
+import { appLaunchOption, appOnly, badgeMentioned, badgeNames, confirmedChannels, payOptions, surelyPayable } from '../lib/methods';
 import { AcceptedMethods } from './AcceptedMethods';
-import { loadPortals, type Portals } from '../lib/portals';
+import { loadPortals, type AppOS, type Portals } from '../lib/portals';
 import type { Operator } from '../lib/qr';
 import { displayName, loadOperators, type Station } from '../lib/stations';
 import { store } from '../lib/store';
@@ -205,8 +205,11 @@ export function StationDetail(props: {
  */
 function payTextFor(s: Station, op: string, ctx: { ops: Operator[]; portals: Portals; wallet: Wallet }): string {
   const t = tr();
-  const options = payOptions(s, null, ctx.ops, { portals: ctx.portals, wallet: ctx.wallet });
+  const os: AppOS = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
+  const options = payOptions(s, null, ctx.ops, { portals: ctx.portals, wallet: ctx.wallet, os });
   if (surelyPayable(options)) return t.station.payText(op);
+  // Réseau « appli seule » avec passerelle sourcée : Branché amène à l'appli officielle (il n'y paie pas).
+  if (appLaunchOption(options)) return t.station.payApp(op);
   if (!appOnly(options)) return t.recharger.unconfirmedBody(op);
   const portal = s.ok ? ctx.portals[s.ok] : undefined;
   return t.recharger.blockedBody(op, badgeNames(portal?.roamingBadgesAccepted).join(', ') || null, badgeMentioned(s));

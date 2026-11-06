@@ -68,6 +68,7 @@ export const nl: Dict = {
     reader: 'Bankpas bij de lezer',
     scan: 'Pagina van de exploitant (gecontroleerde QR)',
     'operator-link': 'Pagina van de exploitant (bekende link)',
+    'operator-app': 'App van de exploitant',
     account: 'Gekoppeld exploitantaccount',
     badge: 'Laadpas',
     unverified: 'Niet-gecontroleerde link, door jou bevestigd',
@@ -208,6 +209,7 @@ export const nl: Dict = {
     closeA11y: 'Details sluiten',
     maxPower: 'Max. vermogen',
     points: 'Laadpunten',
+    pointsUnverified: 'Niet geverifieerd',
     access: 'Toegang',
     reserved: 'Beperkt',
     open: 'Openbaar',
@@ -225,6 +227,7 @@ export const nl: Dict = {
     nearestFreeHint: 'Opent de dichtstbijzijnde beschikbare laadpaal',
     noFreeNearby: 'Geen vrije laadpaal in de buurt gemeld.',
     payText: (op: string) => `Zonder account of app: kies het laadpunt, zie de prijs voor jouw auto en betaal ${op} rechtstreeks (pas bij de paal of gecontroleerde officiële pagina).`,
+    payApp: (op: string) => `${op} accepteert alleen de eigen app. Branché brengt je er met één tik naartoe en volgt daarna de laadbeurt; de betaling doet Branché niet.`,
     prepare: 'Laadsessie voorbereiden',
     hintHere: 'Laadpunt kiezen, prijs vóór het betalen en handleiding',
     hintPrepare: 'Laadpunt, methode en prijs nu kiezen; bij aankomst één tik om te betalen',
@@ -548,6 +551,7 @@ export const nl: Dict = {
     saveForArrival: 'Bewaren voor mijn aankomst',
     hintReader: 'Opent het volgen van de laadsessie',
     hintQr: 'Branché controleert de QR-code voordat de pagina van de exploitant opent',
+    hintApp: 'Opent de app van de exploitant (of de storepagina) en daarna het volgen',
     otherMethods: 'Andere methoden',
     unavailableSuffix: ', niet beschikbaar',
     callDoubt: (op: string) => `Twijfel? Bel ${op}`,
@@ -560,6 +564,18 @@ export const nl: Dict = {
     stationPlugs: ' (stekkers van het station)',
   },
   methods: {
+    app: (c: MethodCtx, targeted: boolean): MethodTexts => {
+      const pt = ptOf(c);
+      const cable = cableOf(c);
+      return {
+        label: `Starten in de ${c.op}-app`,
+        why: `${c.op} accepteert alleen de eigen app. Branché brengt je er met één tik naartoe: je start de laadbeurt in de officiële app, waar je account en kaart blijven. Branché doet de betaling niet.`,
+        steps: c.dc
+          ? [`Sluit ${cable} aan op je auto.`, `Open de ${c.op}-app (of installeer die) en start de laadbeurt op ${pt}${targeted ? '' : ' (kies het in de app)'}.`, 'Kom terug in Branché: het volgen begint.']
+          : [`Open de ${c.op}-app (of installeer die) en start de laadbeurt op ${pt}${targeted ? '' : ' (kies het in de app)'}.`, `Sluit ${cable} aan.`, 'Kom terug in Branché: het volgen begint.'],
+        cta: `Open de ${c.op}-app`,
+      };
+    },
     account: (c: MethodCtx, connected: string | null): MethodTexts => {
       const ptx = ptOf(c);
       const cable = cableOf(c);
@@ -752,6 +768,9 @@ export const nl: Dict = {
     stateAccount: (op: string) => `Starten met je ${op}-account`,
     stateReader: 'Betaal bij de lezer van de paal',
     statePage: (op: string) => `Betalen bij ${op}`,
+    stateApp: (op: string) => `Starten in de ${op}-app`,
+    bodyApp: (op: string) => `Start de laadbeurt in de ${op}-app en kom dan hier terug. Branché doet de betaling niet: je account en kaart blijven in de app.`,
+    reopenApp: (op: string) => `${op}-app opnieuw openen`,
     bodyBadge: 'Houd je pas tegen de lezer, volg het scherm als er een is en sluit daarna aan. Branché volgt de laadsessie hier.',
     bodyAccount: (op: string) => `Start het laden op de pagina van ${op}, sluit aan als dat nog niet is gebeurd en kom dan terug.`,
     bodyReader: (short: string | null) => `Betaal met je pas bij de lezer${short ? ` (laadpunt …${short}, op het label of het scherm)` : ''} en sluit daarna aan. Branché volgt de laadsessie hier.`,

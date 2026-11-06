@@ -6,7 +6,7 @@ import type { MethodId } from './history';
 import { operatorPayUrl, type Operator } from './qr';
 import type { Station } from './stations';
 import { acceptedBadges, type Wallet } from './accounts';
-import { idEntryOf, webStartUrl, type Portals } from './portals';
+import { appLaunchTargets, idEntryOf, webStartUrl, type AppOS, type Portals } from './portals';
 import { tr } from '../i18n';
 import type { IdEntryInfo, MethodCtx } from '../i18n/types';
 
@@ -33,6 +33,8 @@ export interface PayOption {
   steps: [string, string, string];
   cta: string;
   url?: string;
+  /** Fiche de store de l'appli de l'opérateur (repli de « Démarrer avec l'appli » si l'appli n'est pas installée). */
+  store?: string;
   /** Identifiant du point à saisir sur la page de l'opérateur (aucun gabarit {evse} publié). */
   copyId?: string;
   /**
@@ -54,6 +56,8 @@ export function sourceHosts(sources: string[] | null | undefined): string | null
 export interface PayContext {
   portals?: Portals;
   wallet?: Wallet;
+  /** Système de l'appareil : décide quelle fiche de store proposer pour « Démarrer avec l'appli » (défaut : web). */
+  os?: AppOS;
 }
 
 /**
@@ -108,6 +112,25 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
   // Compte seulement si son site permet de démarrer une charge (un simple portail de connexion ne sert à rien à la borne)
   const accountUrl = startUrl;
   const ranked: { rank: number; o: PayOption }[] = [];
+  // Passerelle « Démarrer avec l'appli » (réseaux « appli seule » : Lidl, Sorégies, Tesla…) : Branché n'ouvre qu'un lien
+  // PUBLIC de l'appli de l'opérateur (ou sa fiche de store), sans imiter ni transmettre d'identifiant. Branché ne paie
+  // pas (exclu de surelyPayable) : la borne payable la plus proche reste proposée à côté.
+  const appTargets = appOnlyPortal ? appLaunchTargets(portal?.appLaunch, ctx.os ?? 'web', pointId) : null;
+  if (appTargets && (appTargets.open || appTargets.store)) {
+    // Après les moyens réellement payables dans Branché (badge accepté, lecteur, page sans compte), avant le spéculatif :
+    // s'il existe un vrai moyen, il reste recommandé ; sinon la passerelle « appli » est la première action disponible.
+    ranked.push({
+      rank: 3.2,
+      o: {
+        id: 'operator-app',
+        ...M.app(mc, appTargets.open != null),
+        available: true,
+        order,
+        url: appTargets.open ?? appTargets.store ?? undefined,
+        store: appTargets.store ?? undefined,
+      },
+    });
+  }
   if (!noAccountWay && accountUrl) {
     ranked.push({
       rank: account ? 2.5 : 3.5,
@@ -204,30 +227,42 @@ export function methodChannel(id: MethodId): 'web' | 'reader' | null {
 }
 
 /**
- * Moyens acceptés affichés seulement pour une méthode disponible ET déclarée pour cette borne (jamais pour un QR
- * « éventuel » ni un lecteur « sur certains sites ») : sinon, « Accepté : … » laisserait croire à une voie certaine.
+ * Carte d'une méthode (écran Recharger) : moyens acceptés de son canal, seulement si la méthode est disponible. Une
+ * méthode non confirmée (« Si un QR code est collé… », « sur certains sites ») garde sa réserve dans son propre texte :
+ * la ligne décrit ce que la page ou le lecteur accepte, pas la présence du QR code ou du lecteur.
  */
-export function showsAccepted(o: Pick<PayOption, 'id' | 'available' | 'speculative'>): 'web' | 'reader' | null {
-  return o.available && !o.speculative ? methodChannel(o.id) : null;
+export function showsAccepted(o: Pick<PayOption, 'id' | 'available'>): 'web' | 'reader' | null {
+  return o.available ? methodChannel(o.id) : null;
 }
 
-/** Canaux confirmés pour la borne (fiche station) : page de paiement, lecteur. */
+/**
+ * Fiche station (sans le contexte d'une méthode) : canaux disponibles ET déclarés pour la borne. Jamais pour un QR
+ * « éventuel » ni un lecteur « sur certains sites » : « Accepté sur la page de paiement : … » y paraîtrait certain.
+ */
 export function confirmedChannels(options: PayOption[]): { web: boolean; reader: boolean } {
-  const ch = options.map(showsAccepted);
+  const ch = options.map((o) => (o.speculative ? null : showsAccepted(o)));
   return { web: ch.includes('web'), reader: ch.includes('reader') };
 }
 
 /** L'IRVE déclare un badge pour cette borne : seule condition pour en parler (textes, « Mes badges »). */
 export const badgeMentioned = (s: Pick<Station, 'pay'>) => s.pay.includes('badge');
 
-/** Aucun moyen de payer depuis Branché ici (seulement l'appli de l'opérateur ou un badge qu'on n'a pas). */
+/**
+ * Aucun moyen de payer depuis Branché ici (seulement l'appli de l'opérateur ou un badge qu'on n'a pas). La passerelle
+ * « Démarrer avec l'appli » ne compte pas : Branché n'y paie rien, il amène seulement à l'appli officielle.
+ */
 export function appOnly(options: PayOption[]): boolean {
-  return !options.some((o) => o.available);
+  return !options.some((o) => o.available && o.id !== 'operator-app');
 }
 
-/** Payable depuis Branché sur la foi d'une déclaration (pas seulement « si un QR code est collé »). */
+/** Payable depuis Branché sur la foi d'une déclaration (pas seulement « si un QR code est collé », ni via l'appli de l'opérateur). */
 export function surelyPayable(options: PayOption[]): boolean {
-  return options.some((o) => o.available && !o.speculative);
+  return options.some((o) => o.available && !o.speculative && o.id !== 'operator-app');
+}
+
+/** Passerelle « Démarrer avec l'appli » disponible pour cette borne (réseau « appli seule » avec lien/fiche sourcés). */
+export function appLaunchOption(options: PayOption[]): PayOption | undefined {
+  return options.find((o) => o.id === 'operator-app' && o.available);
 }
 
 /** Borne payable la plus proche (stations triées par distance) : la première dont une méthode déclarée est disponible. */

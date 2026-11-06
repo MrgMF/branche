@@ -47,6 +47,8 @@ export interface DirectCharge {
   method?: MethodId;
   /** Compte opérateur ouvert pour démarrer : à confirmer par l'utilisateur au retour (jamais supposé connecté). */
   accountAsk?: { key: string; name: string };
+  /** Passerelle « Démarrer avec l'appli » : lien d'ouverture de l'appli et fiche de store (repli), pour rouvrir au besoin. */
+  appLaunch?: { open: string | null; store: string | null };
   /** Le reçu (fin automatique) n'a pas pu être écrit dans l'historique : affiché, « Enregistrer » réessaie. */
   saveFailed?: boolean;
   /** « Toujours en cours » répondu à « Abandonner ce paiement ? » : question reposée 6 h plus tard. */

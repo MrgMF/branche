@@ -5,8 +5,7 @@ import { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Notice, Stat } from '../components/ui';
-import { durationLabel } from '../lib/estimate';
-import { euros } from '../lib/format';
+import { durationShort, euros } from '../lib/format';
 import { clearHistory, loadHistory, methodLabel, monthStats, removeRecord, totals, updateRecord, type ChargeRecord } from '../lib/history';
 import { exportHistoryCsv } from '../lib/historyExport';
 import { SaveFailed } from '../components/SaveFailed';
@@ -83,7 +82,7 @@ export default function Historique() {
                 {r.stationName}
               </Text>
               <Text style={styles.small}>
-                {dateFr(r.startedAt)} · {hour(r.startedAt)}{r.notStarted ? '' : ` · ${durationLabel((r.endedAt - r.startedAt) / 60_000)}`}
+                {dateFr(r.startedAt)} · {hour(r.startedAt)}{r.notStarted ? '' : ` · ${durationShort(r.endedAt - r.startedAt)}`}
                 {r.pdcId ? H.point(r.pdcId.slice(-4)) : ''}
               </Text>
             </View>

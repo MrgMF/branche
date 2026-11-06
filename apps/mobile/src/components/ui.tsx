@@ -72,15 +72,28 @@ export function Chip(props: { label: string; a11y?: string; active: boolean; onP
 
 export function Notice(props: { children: ReactNode; tone?: 'demo' | 'info' | 'error'; dark?: boolean }) {
   const tone = props.tone ?? 'info';
-  const bg = tone === 'demo' ? colors.warnSoft : tone === 'error' ? colors.dangerSoft : colors.accentSoft;
-  const fg = tone === 'demo' ? colors.warnText : tone === 'error' ? colors.danger : colors.accentPressed;
   const err = tone === 'error';
+  // Thème de nuit : carte sombre + texte clair (contraste AA) et liseré d'accent, au lieu d'une pastille claire éblouissante.
+  const dark = props.dark;
+  const bg = dark ? colors.nightCard : tone === 'demo' ? colors.warnSoft : err ? colors.dangerSoft : colors.accentSoft;
+  const fg = dark
+    ? err
+      ? colors.nightDanger
+      : tone === 'demo'
+        ? colors.charge
+        : colors.nightText
+    : tone === 'demo'
+      ? colors.warnText
+      : err
+        ? colors.danger
+        : colors.accentPressed;
+  const edge = dark ? (err ? colors.nightDanger : colors.charge) : null;
   return (
     <View
       accessibilityRole={err ? 'alert' : 'text'}
       accessibilityLiveRegion={err ? 'assertive' : undefined}
       {...(err ? ({ 'aria-live': 'assertive' } as object) : null)}
-      style={[styles.notice, { backgroundColor: bg }]}
+      style={[styles.notice, { backgroundColor: bg }, edge ? { borderLeftWidth: 3, borderLeftColor: edge } : null]}
     >
       <Text style={[styles.noticeText, { color: fg }]}>{props.children}</Text>
     </View>

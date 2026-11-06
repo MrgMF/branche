@@ -72,6 +72,7 @@ export const fr = {
     reader: 'Carte bancaire au lecteur',
     scan: 'Page de l’opérateur (QR code vérifié)',
     'operator-link': 'Page de l’opérateur (lien connu)',
+    'operator-app': 'Appli de l’opérateur',
     account: 'Compte opérateur connecté',
     badge: 'Badge de recharge',
     unverified: 'Lien non vérifié, confirmé par vous',
@@ -212,6 +213,7 @@ export const fr = {
     closeA11y: 'Fermer la fiche',
     maxPower: 'Puissance max',
     points: 'Points',
+    pointsUnverified: 'Non vérifié',
     access: 'Accès',
     reserved: 'Réservé',
     open: 'Public',
@@ -229,6 +231,7 @@ export const fr = {
     nearestFreeHint: 'Ouvre la fiche de la borne disponible la plus proche',
     noFreeNearby: 'Aucune borne libre signalée à proximité.',
     payText: (op: string) => `Sans compte ni appli : choix du point, prix estimé pour votre voiture, puis paiement direct à ${op} (carte sur la borne ou page officielle vérifiée).`,
+    payApp: (op: string) => `${op} n’accepte que son appli. Branché vous y amène en un geste, puis suit la recharge ; il n’effectue pas le paiement.`,
     prepare: 'Préparer ma recharge',
     hintHere: 'Choix du point de charge, prix avant de payer et mode d’emploi',
     hintPrepare: 'Point, méthode et prix choisis maintenant ; à l’arrivée, un seul geste pour payer',
@@ -557,6 +560,7 @@ export const fr = {
     saveForArrival: 'Enregistrer pour mon arrivée',
     hintReader: 'Ouvre le suivi de la recharge',
     hintQr: 'Branché vérifie le QR code avant d’ouvrir la page de l’opérateur',
+    hintApp: 'Ouvre l’appli de l’opérateur (ou sa fiche de store), puis le suivi',
     otherMethods: 'Autres méthodes',
     unavailableSuffix: ', indisponible',
     callDoubt: (op: string) => `Un doute ? Appeler ${op}`,
@@ -587,6 +591,18 @@ export const fr = {
               'Revenez dans Branché : le suivi démarre, et le compte sera réutilisé la prochaine fois.',
             ],
         cta: connected ? `Démarrer avec mon compte ${connected}` : `Ajouter mon compte ${c.op}`,
+      };
+    },
+    app: (c: MethodCtx, targeted: boolean): MethodTexts => {
+      const pt = ptOf(c);
+      const cable = cableOf(c);
+      return {
+        label: `Démarrer avec l’appli ${c.op}`,
+        why: `${c.op} n’accepte que son appli. Branché vous y amène en un geste : vous démarrez la charge dans l’appli officielle, où votre compte et votre carte restent. Branché n’effectue pas le paiement.`,
+        steps: c.dc
+          ? [`Branchez ${cable} sur votre voiture.`, `Ouvrez l’appli ${c.op} (ou installez-la) et démarrez la charge sur ${pt}${targeted ? '' : ' (choisissez-le dans l’appli)'}.`, 'Revenez dans Branché : le suivi démarre.']
+          : [`Ouvrez l’appli ${c.op} (ou installez-la) et démarrez la charge sur ${pt}${targeted ? '' : ' (choisissez-le dans l’appli)'}.`, `Branchez ${cable}.`, 'Revenez dans Branché : le suivi démarre.'],
+        cta: `Ouvrir l’appli ${c.op}`,
       };
     },
     scan: (c: MethodCtx, declared: boolean): MethodTexts => {
@@ -767,6 +783,9 @@ export const fr = {
     stateAccount: (op: string) => `Démarrage avec votre compte ${op}`,
     stateReader: 'Payez sur le lecteur de la borne',
     statePage: (op: string) => `Paiement chez ${op}`,
+    stateApp: (op: string) => `Démarrage dans l’appli ${op}`,
+    bodyApp: (op: string) => `Démarrez la charge dans l’appli ${op}, puis revenez ici. Branché n’effectue pas le paiement : votre compte et votre carte restent dans l’appli.`,
+    reopenApp: (op: string) => `Rouvrir l’appli ${op}`,
     bodyBadge: 'Passez votre badge sur le lecteur, suivez l’écran s’il y en a un, puis branchez. Branché suit la recharge ici.',
     bodyAccount: (op: string) => `Lancez la charge sur la page ${de(op)}, branchez si ce n’est pas déjà fait, puis revenez ici.`,
     bodyReader: (short: string | null) => `Payez par carte sur le lecteur${short ? ` (point …${short}, sur l’étiquette ou à l’écran)` : ''}, puis branchez. Branché suit la recharge ici.`,

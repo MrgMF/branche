@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 // Portails réels (pipeline/data/operator-portals.json, URL sourcées)
 import realPortals from '../../../../pipeline/data/operator-portals.json';
-import { confirmedChannels, copyIdFor, showsAccepted, trackedPointEntry } from './methods';
-import { acceptedOn, idEntryOf, portalPaid, walletOnPage, type Portals } from './portals';
+import { appLaunchOption, confirmedChannels, copyIdFor, payOptions, showsAccepted, surelyPayable, trackedPointEntry } from './methods';
+import { acceptedOn, appLaunchTargets, appOpenUrl, appStoreUrl, idEntryOf, portalPaid, walletOnPage, type AppLaunch, type Portals } from './portals';
+import type { Operator } from './qr';
+import type { Station } from './stations';
 import { DICTS, LANGS } from '../i18n';
 
 const P = (realPortals as { operators: Portals }).operators;
@@ -83,11 +85,10 @@ describe('moyens acceptés (payMethods sourcés) : seulement les valeurs true, �
     // IONITY : portefeuilles au lecteur seulement, jamais rappelés pour la page
     for (const os of ['ios', 'android', 'web']) expect(walletOnPage(P.ionity, os)).toEqual([]);
   });
-  it('affichés seulement pour une méthode disponible et déclarée (jamais QR « éventuel » ni lecteur « certains sites »)', () => {
+  it('carte d’une méthode disponible seulement ; fiche station : canaux déclarés (jamais QR « éventuel » ni lecteur « certains sites »)', () => {
     expect(showsAccepted({ id: 'scan', available: true })).toBe('web');
     expect(showsAccepted({ id: 'operator-link', available: true })).toBe('web');
     expect(showsAccepted({ id: 'reader', available: true })).toBe('reader');
-    expect(showsAccepted({ id: 'scan', available: true, speculative: true })).toBeNull();
     expect(showsAccepted({ id: 'reader', available: false })).toBeNull();
     expect(showsAccepted({ id: 'badge', available: true })).toBeNull();
     expect(showsAccepted({ id: 'account', available: true })).toBeNull();
@@ -101,5 +102,41 @@ describe('moyens acceptés (payMethods sourcés) : seulement les valeurs true, �
       expect(DICTS[l].accepted.walletOnPage(1, 'Google Pay'), l).toContain('Google Pay');
       expect(DICTS[l].accepted.nfcProbable, l).not.toMatch(/Apple|Google/);
     }
+  });
+});
+
+describe('passerelle « Démarrer avec l’appli » (appLaunch)', () => {
+  const full: AppLaunch = { scheme: 'monapp://', universal: 'https://go.op.fr/charge', evseParam: 'evse', ios: 'https://apps.apple.com/app/id1', android: 'com.op.app' };
+  it('fiche de store selon l’OS (Play construit depuis le paquet, App Store sur iOS/web)', () => {
+    expect(appStoreUrl(full, 'android')).toBe('https://play.google.com/store/apps/details?id=com.op.app');
+    expect(appStoreUrl(full, 'ios')).toBe('https://apps.apple.com/app/id1');
+    expect(appStoreUrl({ ...full, ios: null }, 'web')).toBe('https://play.google.com/store/apps/details?id=com.op.app');
+    expect(appStoreUrl({ ...full, android: null }, 'android')).toBe(null);
+  });
+  it('lien d’ouverture : universal link prioritaire, borne ciblée si evseParam', () => {
+    expect(appOpenUrl(full, 'FR*ABC*E1')).toBe('https://go.op.fr/charge?evse=FR*ABC*E1');
+    expect(appOpenUrl({ ...full, universal: null }, 'FR*ABC*E1')).toBe('monapp://?evse=FR*ABC*E1');
+    expect(appOpenUrl({ ...full, evseParam: null }, 'FR*ABC*E1')).toBe('https://go.op.fr/charge');
+    expect(appOpenUrl({ scheme: null, universal: null, evseParam: null, ios: null, android: 'com.op.app' })).toBe(null);
+  });
+  it('cible nulle quand rien n’est renseigné', () => {
+    expect(appLaunchTargets(null, 'ios')).toBe(null);
+    expect(appLaunchTargets({ scheme: null, universal: null, evseParam: null, ios: null, android: null }, 'ios')).toBe(null);
+  });
+  it('Tesla réel : passerelle disponible (fiche de store Android), mais JAMAIS comptée comme payable dans Branché', () => {
+    const ops: Operator[] = [{ key: 'tesla', names: ['Tesla'], domains: [], payUrl: null }];
+    const tesla = { id: 'T', ok: 'tesla', o: 'Tesla', pay: [], c: ['ccs'], kw: 250, p: 1, free: false, acc: 'public', pdc: [['FR*TSL*E1', 250, ['ccs']]] } as unknown as Station;
+    const androidOpts = payOptions(tesla, null, ops, { portals: P, wallet: { accounts: [], badges: [] }, os: 'android' });
+    const app = appLaunchOption(androidOpts);
+    expect(app?.url).toBe('https://play.google.com/store/apps/details?id=com.teslamotors.tesla');
+    expect(app?.store).toBe('https://play.google.com/store/apps/details?id=com.teslamotors.tesla');
+    expect(surelyPayable(androidOpts)).toBe(false);
+    // iOS sans identifiant App Store confirmé : aucune cible → pas de passerelle (dégradation honnête)
+    const iosOpts = payOptions(tesla, null, ops, { portals: P, wallet: { accounts: [], badges: [] }, os: 'ios' });
+    expect(appLaunchOption(iosOpts)).toBeUndefined();
+  });
+  it('Lidl réel (appLaunch null) : aucune passerelle', () => {
+    const lidl = { id: 'L', ok: 'lidl', o: 'Lidl', pay: [], c: ['t2'], kw: 22, p: 1, free: false, acc: 'public', pdc: [['FR*LDL*E1', 22, ['t2']]] } as unknown as Station;
+    expect(appLaunchOption(payOptions(lidl, null, [], { portals: P, wallet: { accounts: [], badges: [] }, os: 'android' }))).toBeUndefined();
   });
 });

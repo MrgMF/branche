@@ -74,6 +74,7 @@ export const es: Dict = {
     reader: 'Tarjeta bancaria en el lector',
     scan: 'Página del operador (QR verificado)',
     'operator-link': 'Página del operador (enlace conocido)',
+    'operator-app': 'App del operador',
     account: 'Cuenta del operador conectada',
     badge: 'Tarjeta de recarga',
     unverified: 'Enlace no verificado, confirmado por ti',
@@ -214,6 +215,7 @@ export const es: Dict = {
     closeA11y: 'Cerrar la ficha',
     maxPower: 'Potencia máx.',
     points: 'Puntos',
+    pointsUnverified: 'Sin verificar',
     access: 'Acceso',
     reserved: 'Restringido',
     open: 'Público',
@@ -231,6 +233,7 @@ export const es: Dict = {
     nearestFreeHint: 'Abre el cargador disponible más cercano',
     noFreeNearby: 'Ningún cargador libre indicado cerca.',
     payText: (op: string) => `Sin cuenta ni app: elige el punto, ve el precio para tu coche y paga directamente ${aOp(op)} (tarjeta en el cargador o página oficial verificada).`,
+    payApp: (op: string) => `${op} solo acepta su app. Branché te lleva allí en un toque y luego sigue la carga; no realiza el pago.`,
     prepare: 'Preparar mi recarga',
     hintHere: 'Elección del punto, precio antes de pagar e instrucciones',
     hintPrepare: 'Punto, método y precio elegidos ahora; al llegar, un solo gesto para pagar',
@@ -554,6 +557,7 @@ export const es: Dict = {
     saveForArrival: 'Guardar para mi llegada',
     hintReader: 'Abre el seguimiento de la recarga',
     hintQr: 'Branché verifica el código QR antes de abrir la página del operador',
+    hintApp: 'Abre la app del operador (o su ficha en la tienda) y luego el seguimiento',
     otherMethods: 'Otros métodos',
     unavailableSuffix: ', no disponible',
     callDoubt: (op: string) => `¿Dudas? Llamar ${aOp(op)}`,
@@ -566,6 +570,18 @@ export const es: Dict = {
     stationPlugs: ' (conectores de la estación)',
   },
   methods: {
+    app: (c: MethodCtx, targeted: boolean): MethodTexts => {
+      const pt = ptOf(c);
+      const cable = cableOf(c);
+      return {
+        label: `Empezar en la app ${deOp(c.op)}`,
+        why: `${c.op} solo acepta su app. Branché te lleva allí en un toque: inicias la carga en la app oficial, donde quedan tu cuenta y tu tarjeta. Branché no realiza el pago.`,
+        steps: c.dc
+          ? [`Conecta ${cable} a tu coche.`, `Abre la app ${deOp(c.op)} (o instálala) e inicia la carga en ${pt}${targeted ? '' : ' (elígelo en la app)'}.`, 'Vuelve a Branché: empieza el seguimiento.']
+          : [`Abre la app ${deOp(c.op)} (o instálala) e inicia la carga en ${pt}${targeted ? '' : ' (elígelo en la app)'}.`, `Conecta ${cable}.`, 'Vuelve a Branché: empieza el seguimiento.'],
+        cta: `Abrir la app ${deOp(c.op)}`,
+      };
+    },
     account: (c: MethodCtx, connected: string | null): MethodTexts => {
       const pt = ptOf(c);
       const cable = cableOf(c);
@@ -758,6 +774,9 @@ export const es: Dict = {
     stateAccount: (op: string) => `Inicio con tu cuenta ${op}`,
     stateReader: 'Paga en el lector del cargador',
     statePage: (op: string) => `Pago ${aOp(op)}`,
+    stateApp: (op: string) => `Inicio en la app de ${op}`,
+    bodyApp: (op: string) => `Inicia la carga en la app de ${op} y vuelve aquí. Branché no realiza el pago: tu cuenta y tu tarjeta quedan en la app.`,
+    reopenApp: (op: string) => `Reabrir la app de ${op}`,
     bodyBadge: 'Pasa tu tarjeta por el lector, sigue la pantalla si la hay y conecta. Branché sigue la recarga aquí.',
     bodyAccount: (op: string) => `Inicia la carga en la página ${deOp(op)}, conecta si aún no lo has hecho y vuelve aquí.`,
     bodyReader: (short: string | null) => `Paga con tarjeta en el lector${short ? ` (punto …${short}, en la etiqueta o la pantalla)` : ''} y conecta. Branché sigue la recarga aquí.`,

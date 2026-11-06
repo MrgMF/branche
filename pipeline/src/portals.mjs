@@ -68,6 +68,38 @@ export function siteDomainsOf(entry) {
  */
 export const ID_ENTRIES = new Set(['emi3', 'printed', 'select']);
 
+// Lien profond vers l'appli de l'opérateur (passerelle « Démarrer avec l'appli », comme un lien Waze) : schéma/URL
+// PUBLICS seulement, aucune imitation ni identifiant. `scheme` (ex. « monappli:// »), `universal` (universal link https),
+// `evseParam` (paramètre qui cible une borne précise, requiert scheme ou universal), `ios` (fiche App Store),
+// `android` (nom de paquet → fiche Google Play), `sources` (URL confirmant ce qui précède). null = rien de confirmé.
+const SCHEME_RE = /^[a-z][a-z0-9+.-]*:(\/\/)?$/i;
+const PACKAGE_RE = /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/i;
+/** Valide un bloc appLaunch (null autorisé). Chaque champ confirmé exige au moins une source https. */
+export function validateAppLaunch(key, a, errors) {
+  if (a === undefined || a === null) return;
+  if (typeof a !== 'object' || Array.isArray(a)) {
+    errors.push(`${key}.appLaunch : objet ou null attendu`);
+    return;
+  }
+  const str = (v, name) => {
+    if (v != null && typeof v !== 'string') errors.push(`${key}.appLaunch.${name} : chaîne ou null attendue`);
+  };
+  str(a.scheme, 'scheme');
+  str(a.universal, 'universal');
+  str(a.evseParam, 'evseParam');
+  str(a.ios, 'ios');
+  str(a.android, 'android');
+  if (typeof a.scheme === 'string' && !SCHEME_RE.test(a.scheme)) errors.push(`${key}.appLaunch.scheme : schéma attendu (ex. « app:// »)`);
+  if (typeof a.universal === 'string' && !/^https:\/\/\S+$/.test(a.universal)) errors.push(`${key}.appLaunch.universal : URL https attendue`);
+  if (typeof a.ios === 'string' && !/^https:\/\/apps\.apple\.com\/\S+$/.test(a.ios)) errors.push(`${key}.appLaunch.ios : URL App Store (apps.apple.com) attendue`);
+  if (typeof a.android === 'string' && !PACKAGE_RE.test(a.android)) errors.push(`${key}.appLaunch.android : nom de paquet attendu (ex. « com.exemple.appli »)`);
+  if (a.evseParam != null && !a.scheme && !a.universal) errors.push(`${key}.appLaunch.evseParam : requiert scheme ou universal`);
+  const confirmed = [a.scheme, a.universal, a.ios, a.android].some((v) => typeof v === 'string' && v);
+  if (confirmed && !(Array.isArray(a.sources) && a.sources.some((u) => typeof u === 'string' && /^https:\/\//.test(u)))) {
+    errors.push(`${key}.appLaunch : une source https est requise dès qu'un lien est renseigné`);
+  }
+}
+
 /**
  * Moyens de paiement (docs/research/payment-methods.md) : `true`/`false` seulement si une source le dit, sinon null ;
  * `"probable"` = lecteur sans contact confirmé sans que Apple Pay ni Google Pay soient cités. L'app n'affiche que `true`
@@ -129,6 +161,7 @@ export function validatePortals(portals) {
     }
     errors.push(...payMethodsErrors(key, e.payMethods));
     if (e.registryKeys != null && !(Array.isArray(e.registryKeys) && e.registryKeys.every((k) => typeof k === 'string' && k))) errors.push(`${key}.registryKeys : clés attendues`);
+    validateAppLaunch(key, e.appLaunch, errors);
   }
   return errors;
 }
@@ -173,6 +206,23 @@ export function attachPayDomains(registry, portals) {
       };
     }),
   };
+}
+
+/**
+ * Schémas iOS (LSApplicationQueriesSchemes) et paquets Android (<queries>) à déclarer pour que `Linking.canOpenURL`
+ * voie les applis d'opérateurs — tirés UNIQUEMENT des appLaunch sourcés (schéma confirmé, paquet confirmé).
+ * Repris par apps/mobile/app.config.ts pour ne déclarer que des cibles sourcées (jamais QUERY_ALL_PACKAGES).
+ */
+export function appLaunchQueries(portals) {
+  const schemes = new Set();
+  const packages = new Set();
+  for (const e of Object.values(portals?.operators ?? {})) {
+    const a = e.appLaunch;
+    if (!a) continue;
+    if (typeof a.scheme === 'string' && a.scheme) schemes.add(a.scheme.replace(/:\/?\/?$/, ''));
+    if (typeof a.android === 'string' && a.android) packages.add(a.android);
+  }
+  return { schemes: [...schemes].sort(), packages: [...packages].sort() };
 }
 
 export async function readPortals(path = PORTALS_SRC) {

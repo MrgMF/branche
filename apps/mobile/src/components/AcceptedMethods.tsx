@@ -8,12 +8,12 @@ import { Icon, type ShellIcon } from './Icon';
 
 const ICON: Record<AcceptedId, ShellIcon> = { card: 'card', contactless: 'contactless', applePay: 'phone', googlePay: 'phone', paypal: 'wallet', other: 'wallet' };
 
-/** Texte lu par le lecteur d'écran (bouton d'une méthode dont le libellé remplace le contenu). */
+/** Indication lue par le lecteur d'écran (bouton d'une méthode, dont le libellé remplace le contenu). */
 export function acceptedA11y(t: Dict, portal: Portal | undefined, channel: 'web' | 'reader' | null): string {
   const acc = channel ? acceptedOn(portal, channel) : null;
   if (!acc) return '';
   const names = acc.items.map((i) => i.brand ?? (i.id === 'card' ? t.accepted.card : t.accepted.contactless));
-  return [names.length ? `${t.accepted.title} ${names.join(', ')}` : '', acc.nfcProbable ? t.accepted.nfcProbable : ''].filter(Boolean).map((x) => `. ${x}`).join('');
+  return [names.length ? `${t.accepted.title} ${names.join(', ')}` : '', acc.nfcProbable ? t.accepted.nfcProbable : ''].filter(Boolean).join('. ');
 }
 
 /**
@@ -47,13 +47,13 @@ export function AcceptedMethods({ portal, channel, variant = 'card', wallet = fa
         </View>
       ) : null}
       {acc.nfcProbable ? (
-        <View style={styles.row} testID="accepted-nfc-probable">
+        <View style={styles.line} testID="accepted-nfc-probable">
           <Icon name="contactless" size={iconSize} color={colors.inkMuted} />
           <Text style={[styles.prefix, styles.flex]}>{variant === 'sheet' ? A.nfcProbableReader : A.nfcProbable}</Text>
         </View>
       ) : null}
       {wallets.length ? (
-        <View style={styles.row} testID="accepted-wallet">
+        <View style={styles.line} testID="accepted-wallet">
           <Icon name="phone" size={iconSize} color={colors.accentPressed} />
           <Text style={[styles.wallet, styles.flex]}>{A.walletOnPage(wallets.length, wallets.join(A.and))}</Text>
         </View>
@@ -65,10 +65,12 @@ export function AcceptedMethods({ portal, channel, variant = 'card', wallet = fa
 const styles = StyleSheet.create({
   wrap: { gap: 4 },
   row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, rowGap: 2 },
+  // Pictogramme + phrase : le texte passe à la ligne à côté du pictogramme (jamais seul au-dessus)
+  line: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   item: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   prefix: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, color: colors.inkMuted },
   name: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18, color: colors.ink },
   sep: { fontFamily: fonts.medium, color: colors.inkMuted },
   wallet: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18, color: colors.accentPressed },
-  flex: { flexShrink: 1 },
+  flex: { flex: 1 },
 });

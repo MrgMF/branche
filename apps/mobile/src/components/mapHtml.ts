@@ -113,7 +113,8 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
       if(k==='free'){g.moveTo(12,21);g.lineTo(18,27);g.lineTo(28,14)}else if(k==='busy'){g.moveTo(20,11);g.lineTo(20,21);g.lineTo(27,25)}else{g.moveTo(13,13);g.lineTo(27,27);g.moveTo(27,13);g.lineTo(13,27)}
       g.stroke();map.addImage('st-'+k,g.getImageData(0,0,40,40),{pixelRatio:2})});
       map.addLayer({id:'pt-st',type:'symbol',source:'st',filter:['all',['!',['has','point_count']],['in',['get','st'],['literal',['free','busy','down']]]],minzoom:11,
-        layout:{'icon-image':['concat','st-',['get','st']],'icon-offset':[18,-18],'icon-allow-overlap':true,'icon-ignore-placement':false}});
+        // Pictogrammes de statut : ne se chevauchent pas (masqués en collision) ; bornes rapides prioritaires.
+        layout:{'icon-image':['concat','st-',['get','st']],'icon-offset':[18,-18],'icon-allow-overlap':false,'icon-ignore-placement':false,'icon-padding':2,'symbol-sort-key':['case',FAST,0,1]}});
     }catch(e){}
     // Étiquettes : jamais superposées (collisions), placées sous le point ou à côté s'il manque la place ; priorité aux bornes rapides.
     var LBL={'text-size':12,'text-font':['Noto Sans Bold'],'text-allow-overlap':false,'text-ignore-placement':false,'text-padding':3,'text-variable-anchor':['top','bottom','right','left']};
@@ -143,6 +144,11 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
       map.addLayer({id:'me-cone',type:'symbol',source:'me',filter:['all',['!=',['get','nav'],1],['>=',['get','h'],0]],layout:{'icon-image':'cone','icon-rotate':['get','h'],'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true}});
     }catch(e){}
     map.addLayer({id:'me',type:'circle',source:'me',filter:['!=',['get','nav'],1],paint:{'circle-color':'${C.position}','circle-radius':8,'circle-stroke-width':3,'circle-stroke-color':'#fff'}});
+    // Le point de position participe à la détection de collision : une étiquette de borne ne se pose jamais dessus
+    // (icône transparente qui réserve sa place ; placée avant les étiquettes, donc prioritaire).
+    try{var rc=document.createElement('canvas');rc.width=rc.height=56;map.addImage('me-res',rc.getContext('2d').getImageData(0,0,56,56),{pixelRatio:2});
+      map.addLayer({id:'me-res',type:'symbol',source:'me',filter:['!=',['get','nav'],1],layout:{'icon-image':'me-res','icon-allow-overlap':false,'icon-ignore-placement':false,'symbol-sort-key':-100}});
+    }catch(e){}
     try{var c=document.createElement('canvas');c.width=c.height=72;var g=c.getContext('2d');
       g.beginPath();g.moveTo(36,6);g.lineTo(62,64);g.lineTo(36,52);g.lineTo(10,64);g.closePath();g.lineJoin='round';
       g.lineWidth=7;g.strokeStyle='#FFFFFF';g.stroke();g.fillStyle='${C.position}';g.fill();
@@ -157,6 +163,8 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
     // étiquettes (celles-ci les évitent) ; chiffres des grappes et des groupes au-dessus du point bleu.
     ['sel-halo','sel'].forEach(function(l){map.moveLayer(l,'grp')});
     if(map.getLayer('pt-st'))map.moveLayer('pt-st','zones-f');
+    // Réserve de position sous les étiquettes (placée en premier) : les étiquettes la contournent.
+    if(map.getLayer('me-res'))map.moveLayer('me-res','pt-l');
     // Destination (itinéraire, même sans tracé) au-dessus de tout, sauf la flèche de guidage.
     ['cl-n','grp-n','dest-halo','dest','dest-l'].forEach(function(l){map.moveLayer(l)});
     if(map.getLayer('me-arrow'))map.moveLayer('me-arrow');

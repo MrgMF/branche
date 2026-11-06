@@ -1,5 +1,14 @@
 import type { ExpoConfig } from 'expo/config';
 import vehicleApps from './src/lib/vehicle-apps.json';
+import operatorPortals from '../../pipeline/data/operator-portals.json';
+
+// Applis d'opérateurs ouvrables par « Démarrer avec l'appli » (operator-portals.json appLaunch) : schémas iOS et
+// paquets Android SOURCÉS seulement, pour que Linking.canOpenURL les voie (jamais QUERY_ALL_PACKAGES).
+const appLaunches = Object.values((operatorPortals as { operators: Record<string, { appLaunch?: { scheme?: string | null; android?: string | null } | null }> }).operators)
+  .map((o) => o.appLaunch)
+  .filter((a): a is { scheme?: string | null; android?: string | null } => !!a);
+const operatorSchemes = [...new Set(appLaunches.map((a) => a.scheme).filter((s): s is string => !!s).map((s) => s.replace(/:\/?\/?$/, '')))].sort();
+const operatorPackages = [...new Set(appLaunches.map((a) => a.android).filter((a): a is string => !!a))].sort();
 
 // Variables injectées au build (CI GitHub Actions ou EAS) :
 // BASE_URL : sous-chemin web (ex. /branche/app) · DATA_URL : base des tuiles IRVE · API_URL : API de paiement (vide = paiement in-app désactivé)
@@ -48,6 +57,8 @@ const config: ExpoConfig = {
     // Véhicule : photo facultative (envoyée pour identification, jamais conservée) ; ticket de recharge (local uniquement) ; marques des applis constructeur (<queries>)
     ['expo-image-picker', { cameraPermission: CAMERA_TEXT, photosPermission: false, microphonePermission: false }],
     ['./plugins/withVehicleAppQueries', { packages: (vehicleApps.android as { package: string }[]).map((a) => a.package) }],
+    // Passerelle « Démarrer avec l'appli » : schémas iOS et paquets Android d'opérateurs confirmés (sourcés)
+    ['./plugins/withOperatorAppQueries', { schemes: operatorSchemes, packages: operatorPackages }],
     ['expo-splash-screen', { image: './assets/splash-icon.png', imageWidth: 160, resizeMode: 'contain', backgroundColor: '#FFFFFF' }],
     ['expo-camera', { cameraPermission: CAMERA_TEXT, recordAudioAndroid: false }],
     [

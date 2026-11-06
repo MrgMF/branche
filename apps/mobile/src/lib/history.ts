@@ -6,7 +6,7 @@ import { tr } from '../i18n';
 import { decimalSep, monthYear } from '../i18n/format';
 
 /** `unverified` : lien non vérifié par Branché (domaine inconnu, autre opérateur, plateforme), ouvert après confirmation explicite. */
-export type MethodId = 'account' | 'scan' | 'operator-link' | 'reader' | 'badge' | 'unverified';
+export type MethodId = 'account' | 'scan' | 'operator-link' | 'operator-app' | 'reader' | 'badge' | 'unverified';
 
 export const methodLabel = (m: MethodId): string => tr().methodLabel[m] ?? m;
 

@@ -74,6 +74,7 @@ export const de: Dict = {
     reader: 'Bankkarte am Lesegerät',
     scan: 'Betreiberseite (geprüfter QR-Code)',
     'operator-link': 'Betreiberseite (bekannter Link)',
+    'operator-app': 'Betreiber-App',
     account: 'Verbundenes Betreiberkonto',
     badge: 'Ladekarte',
     unverified: 'Nicht geprüfter Link, von Ihnen bestätigt',
@@ -214,6 +215,7 @@ export const de: Dict = {
     closeA11y: 'Details schließen',
     maxPower: 'Max. Leistung',
     points: 'Ladepunkte',
+    pointsUnverified: 'Nicht bestätigt',
     access: 'Zugang',
     reserved: 'Eingeschränkt',
     open: 'Öffentlich',
@@ -231,6 +233,7 @@ export const de: Dict = {
     nearestFreeHint: 'Öffnet die nächste verfügbare Ladesäule',
     noFreeNearby: 'Keine verfügbare Ladesäule in der Nähe gemeldet.',
     payText: (op: string) => `Ohne Konto und App: Ladepunkt wählen, Preis für Ihr Auto sehen, dann direkt ${anOp(op)} zahlen (Karte an der Säule oder geprüfte offizielle Seite).`,
+    payApp: (op: string) => `${op} akzeptiert nur die eigene App. Branché bringt Sie mit einem Tippen dorthin und verfolgt dann den Ladevorgang; die Zahlung wickelt Branché nicht ab.`,
     prepare: 'Ladevorgang vorbereiten',
     hintHere: 'Ladepunkt wählen, Preis vor dem Bezahlen und Anleitung',
     hintPrepare: 'Ladepunkt, Methode und Preis jetzt wählen; bei Ankunft ein Fingertipp zum Bezahlen',
@@ -554,6 +557,7 @@ export const de: Dict = {
     saveForArrival: 'Für meine Ankunft speichern',
     hintReader: 'Öffnet die Ladeverfolgung',
     hintQr: 'Branché prüft den QR-Code, bevor die Betreiberseite geöffnet wird',
+    hintApp: 'Öffnet die App des Betreibers (oder dessen Store-Seite), dann die Verfolgung',
     otherMethods: 'Andere Methoden',
     unavailableSuffix: ', nicht verfügbar',
     callDoubt: (op: string) => `Unsicher? ${op} anrufen`,
@@ -566,6 +570,18 @@ export const de: Dict = {
     stationPlugs: ' (Stecker der Station)',
   },
   methods: {
+    app: (c: MethodCtx, targeted: boolean): MethodTexts => {
+      const pt = ptOf(c);
+      const cable = cableOf(c);
+      return {
+        label: `In der ${c.op}-App starten`,
+        why: `${c.op} akzeptiert nur die eigene App. Branché bringt Sie mit einem Tippen dorthin: Sie starten den Ladevorgang in der offiziellen App, wo Ihr Konto und Ihre Karte bleiben. Branché wickelt die Zahlung nicht ab.`,
+        steps: c.dc
+          ? [`Stecken Sie ${cable} in Ihr Auto.`, `Öffnen Sie die ${c.op}-App (oder installieren Sie sie) und starten Sie den Ladevorgang an ${pt}${targeted ? '' : ' (in der App auswählen)'}.`, 'Zurück zu Branché: Die Verfolgung beginnt.']
+          : [`Öffnen Sie die ${c.op}-App (oder installieren Sie sie) und starten Sie den Ladevorgang an ${pt}${targeted ? '' : ' (in der App auswählen)'}.`, `Stecken Sie ${cable} ein.`, 'Zurück zu Branché: Die Verfolgung beginnt.'],
+        cta: `${c.op}-App öffnen`,
+      };
+    },
     account: (c: MethodCtx, connected: string | null): MethodTexts => {
       const pt = ptOf(c);
       const cable = cableOf(c);
@@ -758,6 +774,9 @@ export const de: Dict = {
     stateAccount: (op: string) => `Start mit Ihrem ${op}-Konto`,
     stateReader: 'Zahlen Sie am Lesegerät der Säule',
     statePage: (op: string) => `Zahlung ${beiOp(op)}`,
+    stateApp: (op: string) => `Start in der ${op}-App`,
+    bodyApp: (op: string) => `Starten Sie den Ladevorgang in der ${op}-App und kommen Sie dann hierher zurück. Branché wickelt die Zahlung nicht ab: Ihr Konto und Ihre Karte bleiben in der App.`,
+    reopenApp: (op: string) => `${op}-App erneut öffnen`,
     bodyBadge: 'Halten Sie Ihre Karte an das Lesegerät, folgen Sie dem Bildschirm, falls vorhanden, und stecken Sie dann ein. Branché verfolgt den Ladevorgang hier.',
     bodyAccount: (op: string) => `Starten Sie das Laden auf der Seite ${vonOp(op)}, stecken Sie ein, falls noch nicht geschehen, und kehren Sie hierher zurück.`,
     bodyReader: (short: string | null) => `Zahlen Sie mit Karte am Lesegerät${short ? ` (Ladepunkt …${short}, auf dem Etikett oder Bildschirm)` : ''}, dann einstecken. Branché verfolgt den Ladevorgang hier.`,

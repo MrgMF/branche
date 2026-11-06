@@ -100,19 +100,20 @@ export default function Comptes() {
         const c = connected(s.key);
         return (
           <View key={s.key} style={[styles.item, c && styles.itemOn]}>
-            <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ minWidth: 0, gap: 2 }}>
               <Text style={styles.itemTitle}>{s.name}</Text>
               <Text style={styles.small} numberOfLines={2}>
                 {c ? A.connectedOn(day(c.connectedAt)) : s.url.replace(/^https:\/\//, '')}
                 {s.canStart ? A.canStart : ''}
               </Text>
             </View>
+            {/* Action sous le nom (jamais coupée lettre par lettre quand le texte est agrandi) */}
             {c ? (
-              <Pressable accessibilityRole="button" accessibilityLabel={A.forgetA11y(s.name)} onPress={async () => setWallet(await forgetAccount(s.key))} style={styles.small2}>
+              <Pressable accessibilityRole="button" accessibilityLabel={A.forgetA11y(s.name)} onPress={async () => setWallet(await forgetAccount(s.key))} style={styles.action}>
                 <Text style={styles.linkDanger}>{A.forget}</Text>
               </Pressable>
             ) : (
-              <Pressable accessibilityRole="button" accessibilityLabel={A.connectA11y(s.name)} onPress={() => connect(s)} style={styles.small2}>
+              <Pressable accessibilityRole="button" accessibilityLabel={A.connectA11y(s.name)} onPress={() => connect(s)} style={styles.action}>
                 <Text style={styles.linkText}>{A.connect}</Text>
               </Pressable>
             )}
@@ -136,7 +137,7 @@ export default function Comptes() {
         })}
       </View>
       <View style={styles.row}>
-        <TextInput value={other} onChangeText={setOther} placeholder={A.otherPh} placeholderTextColor="#6B7773" aria-label={A.otherA11y} style={[styles.input, { flex: 1, minWidth: 0, flexShrink: 1 }]} />
+        <TextInput value={other} onChangeText={setOther} placeholder={A.otherPh} placeholderTextColor="#6B7773" aria-label={A.otherA11y} style={[styles.input, { flexGrow: 1, flexBasis: 180, minWidth: 0 }]} />
         <Button
           label={A.add}
           variant="ghost"
@@ -145,7 +146,7 @@ export default function Comptes() {
             setWallet(await setBadges([...wallet.badges, other]));
             setOther('');
           }}
-          style={{ minHeight: 50, paddingHorizontal: 14, flexShrink: 0 }}
+          style={{ minHeight: 50, paddingHorizontal: 14, flexGrow: 1, flexShrink: 0 }}
         />
       </View>
     </ScrollView>
@@ -164,15 +165,16 @@ const styles = StyleSheet.create({
   cardTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.ink },
   confirm: { borderWidth: 2, borderColor: colors.accent, borderRadius: radius.lg, padding: 14, gap: 8 },
   input: { minHeight: 50, borderRadius: radius.md, borderWidth: 1, borderColor: colors.inputBorder, paddingHorizontal: 14, fontFamily: fonts.medium, fontSize: 16, color: colors.ink },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 64, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  item: { gap: 4, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   itemOn: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   itemTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
-  small2: { minHeight: MIN_TOUCH, minWidth: MIN_TOUCH, justifyContent: 'center', paddingHorizontal: 6 },
+  action: { minHeight: MIN_TOUCH, justifyContent: 'center', alignSelf: 'flex-start', paddingVertical: 4 },
   linkText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.accent },
   linkDanger: { fontFamily: fonts.semibold, fontSize: 15, color: colors.danger },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { minHeight: MIN_TOUCH, paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderColor: colors.inputBorder, justifyContent: 'center' },
   chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
-  row: { flexDirection: 'row', gap: 8 },
+  // 320 px / texte agrandi : le bouton passe sous le champ plutôt que de rogner son invite.
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 });

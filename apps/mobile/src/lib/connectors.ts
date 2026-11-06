@@ -2,14 +2,14 @@
 // ouverte dans l'app). Branché ne voit jamais les données de carte et n'encaisse rien.
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import { displayName, type Station } from './stations';
 import { store, type ChargePlan, type DirectCharge } from './store';
 import { tr } from '../i18n';
 
 export { directPayUrl, operatorLabel, operatorOf, payOptions, type PayOption } from './methods';
 
-export type ConnectorId = 'scan' | 'operator-link' | 'account' | 'reader' | 'badge';
+export type ConnectorId = 'scan' | 'operator-link' | 'operator-app' | 'account' | 'reader' | 'badge';
 
 function stationRef(station: Station | null) {
   return station
@@ -41,6 +41,59 @@ export function startReaderCharge(station: Station, operatorName: string) {
 
 /** Ouverture d'une page de paiement : ouverte, ou refusée faute de réseau (rien n'est démarré). */
 export type OpenResult = 'opened' | 'offline';
+
+/**
+ * Ouvre l'appli officielle de l'opérateur via un lien PUBLIC (universal link ou schéma), sinon sa fiche de store si
+ * l'appli n'est pas installée. Branché ne fait qu'amener au bon endroit : aucun identifiant transmis. true si une appli
+ * ou une fiche de store s'est ouverte.
+ */
+export async function launchApp(open: string | null, store: string | null): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    const target = open ?? store;
+    if (!target) return false;
+    window.open(target, '_blank', 'noopener,noreferrer');
+    return true;
+  }
+  if (open) {
+    try {
+      if (await Linking.canOpenURL(open)) {
+        await Linking.openURL(open);
+        return true;
+      }
+    } catch {
+      /* schéma non déclaré ou appli absente : repli sur la fiche de store */
+    }
+  }
+  if (store) {
+    try {
+      await Linking.openURL(store);
+      return true;
+    } catch {
+      /* rien à ouvrir */
+    }
+  }
+  // Dernier recours : tenter le lien d'appli même si canOpenURL est faux (certains universal links s'ouvrent quand même).
+  if (open) {
+    try {
+      await Linking.openURL(open);
+      return true;
+    } catch {
+      /* rien à ouvrir */
+    }
+  }
+  return false;
+}
+
+/**
+ * Passerelle « Démarrer avec l'appli » : ouvre l'appli de l'opérateur (ou sa fiche de store), puis affiche le suivi.
+ * Suivi identique au lecteur (url ''), `appLaunch` mémorisé pour rouvrir l'appli au besoin. 'offline' si rien n'a pu s'ouvrir.
+ */
+export async function openOperatorApp(open: string | null, store: string | null, station: Station | null, operatorName: string): Promise<OpenResult> {
+  if (!(await launchApp(open, store))) return 'offline';
+  beginCharge('', station, operatorName, { method: 'operator-app', appLaunch: { open, store } });
+  router.push('/recharge');
+  return 'opened';
+}
 
 /**
  * Réseau disponible pour ouvrir la page de l'opérateur ? Web : `navigator.onLine`, lu sans attendre (window.open doit
@@ -94,10 +147,11 @@ export async function openOperatorPayment(url: string, station: Station | null, 
 }
 
 /** Exécute un plan choisi (parcours « Recharger » ou recharge préparée) : un seul geste à la borne. */
-export async function runPlan(station: Station, plan: ChargePlan, operatorName: string, url?: string): Promise<OpenResult> {
+export async function runPlan(station: Station, plan: ChargePlan, operatorName: string, url?: string, appStore?: string): Promise<OpenResult> {
   store.setCurrent(station);
   store.setPlan(plan);
   if (plan.method === 'reader' || plan.method === 'badge') startReaderCharge(station, operatorName);
+  else if (plan.method === 'operator-app') return openOperatorApp(url ?? null, appStore ?? null, station, operatorName);
   else if (plan.method === 'account' && url) {
     // Compte imposé par l'opérateur : jamais « connecté » à l'ouverture du site. Au retour, le suivi demande
     // « Êtes-vous connecté à votre compte X ? » (comme Mes comptes) ; seul un « oui » est retenu, puis réutilisé.

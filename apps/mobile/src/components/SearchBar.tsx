@@ -132,7 +132,7 @@ export function SearchBar(props: { near: { lat: number; lon: number } | null; on
               style={({ pressed }) => [styles.item, pressed && { backgroundColor: colors.surfaceAlt }]}
             >
               <NavIcon name={showRecents ? 'history' : 'search'} size={18} color={colors.inkMuted} />
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.label} numberOfLines={1}>
                   {p.label}
                 </Text>
@@ -142,7 +142,7 @@ export function SearchBar(props: { near: { lat: number; lon: number } | null; on
                   </Text>
                 ) : null}
               </View>
-              {props.near ? <Text style={styles.sub}>{km(distanceKm(props.near, p))}</Text> : null}
+              {props.near ? <Text style={[styles.sub, styles.dist]}>{km(distanceKm(props.near, p))}</Text> : null}
             </Pressable>
           ))}
           {error && !showRecents ? <Text style={[styles.error, noResult && styles.info]}>{error}</Text> : null}
@@ -191,6 +191,8 @@ const styles = StyleSheet.create({
   item: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 14, paddingVertical: 8 },
   label: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
   sub: { fontFamily: fonts.medium, fontSize: 13, color: colors.inkMuted },
+  // Distance : jamais coupée ni rétrécie (insécable), garde sa place sans écraser le nom/l'adresse.
+  dist: { flexShrink: 0, textAlign: 'right' },
   error: { fontFamily: fonts.medium, fontSize: 14, color: colors.danger, paddingHorizontal: 14, paddingVertical: 10 },
   info: { color: colors.inkMuted },
   attr: { fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted, paddingHorizontal: 14, paddingTop: 4, paddingBottom: 6 },

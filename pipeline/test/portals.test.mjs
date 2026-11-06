@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { attachPayDomains, ID_ENTRIES, payMethodsErrors, publishPortals, readPortals, siteDomainsOf, siteHostsOf, sourcedHosts, THIRD_PARTY, validatePortals } from '../src/portals.mjs';
+import { appLaunchQueries, attachPayDomains, ID_ENTRIES, payMethodsErrors, publishPortals, readPortals, siteDomainsOf, siteHostsOf, sourcedHosts, THIRD_PARTY, validateAppLaunch, validatePortals } from '../src/portals.mjs';
 
 test('operator-portals.json réel : valide, payDomains tous tirés des URL sourcées de leur entrée', async () => {
   const p = await readPortals();
@@ -113,6 +113,45 @@ test('registre : siteDomains recopiés (hors domaines IRVE déjà connus), aussi
   assert.deepEqual(out.operators[0].siteHosts, ['alizecharge.com', 'support.reveocharge.com']);
   assert.equal(out.operators[1].siteHosts, undefined);
   assert.deepEqual(out.operators[2].siteHosts, ['recharge.carrefour.fr']);
+});
+
+test('appLaunch réel : Tesla a un paquet Android sourcé, aucun schéma/universel/evse non vérifié ; les autres « appli seule » sont null', async () => {
+  const p = await readPortals();
+  const tesla = p.operators.tesla.appLaunch;
+  assert.equal(tesla.android, 'com.teslamotors.tesla');
+  assert.equal(tesla.scheme, null);
+  assert.equal(tesla.universal, null);
+  assert.equal(tesla.evseParam, null);
+  assert.equal(tesla.ios, null);
+  assert.ok(tesla.sources.some((u) => u.startsWith('https://')));
+  for (const k of ['lidl', 'soregies', 'soregies-mobilites', 'yes55', 'seolis']) assert.equal(p.operators[k].appLaunch, null, k);
+});
+
+test('appLaunch : requêtes iOS/Android confirmées (schémas + paquets sourcés seulement)', async () => {
+  const p = await readPortals();
+  const q = appLaunchQueries(p);
+  assert.deepEqual(q.packages, ['com.teslamotors.tesla']);
+  assert.deepEqual(q.schemes, []); // aucun schéma confirmé pour l'instant
+  assert.deepEqual(appLaunchQueries({ operators: { a: { appLaunch: { scheme: 'monapp://', android: 'com.x.y' } }, b: { appLaunch: null } } }), {
+    schemes: ['monapp'],
+    packages: ['com.x.y'],
+  });
+});
+
+test('validateAppLaunch : formes invalides rejetées, lien sans source rejeté', () => {
+  const ok = [];
+  validateAppLaunch('x', null, ok);
+  validateAppLaunch('x', { scheme: null, universal: null, evseParam: null, ios: null, android: 'com.a.b', sources: ['https://a.b/'] }, ok);
+  assert.deepEqual(ok, []);
+  const e1 = [];
+  validateAppLaunch('x', { scheme: 'pas-de-deux-points', android: 'NoDots' }, e1);
+  assert.equal(e1.length, 3); // schéma invalide, paquet invalide, source manquante
+  const e2 = [];
+  validateAppLaunch('x', { universal: 'http://insecure/', evseParam: 'evse' }, e2);
+  assert.ok(e2.some((m) => /universal/.test(m)));
+  const e3 = [];
+  validateAppLaunch('x', { evseParam: 'evse', ios: 'https://apps.apple.com/app/id1' }, e3);
+  assert.ok(e3.some((m) => /evseParam : requiert/.test(m)));
 });
 
 test('siteHosts réels : Bouygues sans pay.alizecharge.com (non sourcé)', async () => {

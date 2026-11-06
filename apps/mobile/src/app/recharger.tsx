@@ -4,7 +4,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CopyId } from '../components/CopyId';
 import { costLabel, TariffLines } from '../components/Pricing';
@@ -24,9 +24,9 @@ import { store } from '../lib/store';
 import { describeTariff, stationTariff } from '../lib/tariff';
 import { compatible, loadVehicle, saveVehicle, type Vehicle } from '../lib/vehicle';
 import { loadWallet, type Wallet } from '../lib/accounts';
-import { appOnly, badgeMentioned, badgeNames, nearestPayable, showsAccepted, surelyPayable } from '../lib/methods';
+import { appLaunchOption, appOnly, badgeMentioned, badgeNames, nearestPayable, showsAccepted, surelyPayable } from '../lib/methods';
 import { AcceptedMethods, acceptedA11y } from '../components/AcceptedMethods';
-import { loadPortals, portalPaid, preauthMaxOf, type Portals } from '../lib/portals';
+import { loadPortals, portalPaid, preauthMaxOf, type AppOS, type Portals } from '../lib/portals';
 import { colors, fonts, mapColors, MIN_TOUCH, radius } from '../theme';
 import { Icon } from '../components/Icon';
 import { ScreenHeader } from '../components/Screen';
@@ -141,7 +141,11 @@ export default function Recharger() {
     () => (point ? estimateCharge({ vehicle: vehicle ?? null, socPercent: soc, pointKw: point.kw, plugs: point.plugs, tariff }) : null),
     [point, vehicle, soc, tariff],
   );
-  const options = useMemo(() => (station ? payOptions(station, point, ops, { portals, wallet }) : []), [station, point, ops, portals, wallet, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  const os: AppOS = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
+  const options = useMemo(() => (station ? payOptions(station, point, ops, { portals, wallet, os }) : []), [station, point, ops, portals, wallet, os, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Passerelle « Démarrer avec l'appli » (réseau « appli seule » avec lien/fiche sourcés) : action principale honnête,
+  // Branché n'y paie rien. La borne payable la plus proche reste proposée par le bloc « bloqué ».
+  const appChoice = appLaunchOption(options);
   const readerOk = options.some((o) => o.id === 'reader' && o.available && !o.speculative);
   const portal = station?.ok ? portals[station.ok] : undefined;
   // Réseau payant notoire (sources) : une gratuité IRVE non crédible devient « tarif non publié », coût « Inconnu »
@@ -224,7 +228,7 @@ export default function Recharger() {
     }
     if (prepared) clearPrepared();
     setOffline(false);
-    runPlan(station, plan, opName, o.url).then((r) => setOffline(r === 'offline'));
+    runPlan(station, plan, opName, o.url, o.store).then((r) => setOffline(r === 'offline'));
   }
 
   if (station === undefined) {
@@ -419,6 +423,29 @@ export default function Recharger() {
 
           {prepared && !preparing ? <Notice>{R.preparedNotice}</Notice> : null}
           {params.noLink ? <Notice>{R.noLink(!!fallback)}</Notice> : null}
+          {/* Passerelle « Démarrer avec l'appli » : action principale honnête pour un réseau « appli seule » (Branché n'y paie pas) */}
+          {appChoice ? (
+            <View style={[styles.card, styles.methodCard]}>
+              <View style={styles.rowWrap}>
+                <Text style={[styles.cardTitle, { flexShrink: 1 }]} accessibilityRole="header">{appChoice.label}</Text>
+                {blocked ? <Tag>{t.common.recommended}</Tag> : null}
+              </View>
+              <Text style={styles.p}>{appChoice.why}</Text>
+              <Text style={styles.orderText}>{appChoice.order === 'plug-first' ? R.plugFirst : R.payFirst}</Text>
+              {appChoice.steps.map((s, i) => (
+                <View key={s} style={styles.stepRow}>
+                  <View style={styles.num}>
+                    <Text style={styles.numText}>{i + 1}</Text>
+                  </View>
+                  <Text style={[styles.stepLine, { flex: 1 }]}>{s}</Text>
+                </View>
+              ))}
+              <Text style={styles.small}>{R.followStation}</Text>
+              {preparing ? <Text style={styles.small}>{R.prepNote}</Text> : null}
+              <Button label={preparing ? R.saveForArrival : appChoice.cta} onPress={() => go(appChoice)} hint={R.hintApp} />
+              {offline ? <Notice tone="error">{t.common.noNetwork}</Notice> : null}
+            </View>
+          ) : null}
           {blocked ? (
             <View style={[styles.card, { borderColor: colors.busy }]}>
               <Text style={styles.cardTitle} accessibilityRole="header">{unconfirmed ? R.unconfirmedTitle : R.blockedTitle}</Text>
@@ -476,13 +503,14 @@ export default function Recharger() {
 
           <Text style={styles.h3}>{R.otherMethods}</Text>
           {options
-            .filter((o) => o.id !== chosen?.id)
+            .filter((o) => o.id !== chosen?.id && o.id !== 'operator-app')
             .map((o) => (
               <Pressable
                 key={o.id}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !o.available }}
-                accessibilityLabel={`${o.label}${o.available ? '' : R.unavailableSuffix}${acceptedA11y(t, portal, showsAccepted(o))}`}
+                accessibilityLabel={`${o.label}${o.available ? '' : R.unavailableSuffix}`}
+                accessibilityHint={acceptedA11y(t, portal, showsAccepted(o)) || undefined}
                 disabled={!o.available}
                 onPress={() => setMethod(o.id)}
                 style={({ pressed }) => [styles.alt, large && { flexDirection: 'column', alignItems: 'stretch' }, !o.available && styles.altOff, pressed && { backgroundColor: colors.surfaceAlt }]}

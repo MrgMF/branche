@@ -147,6 +147,25 @@ export function tidyCaps(n: string): string {
 /** Nom d'une borne pour le guidage (bandeau, voix, partage) : jamais le nom IRVE brut en capitales. */
 export const navName = (s: Pick<Station, 'n' | 'o' | 'a'>): string => tidyCaps(displayName(s));
 
+/**
+ * Un seul emplacement physique dépasse rarement quelques dizaines de points de charge. Au-delà, la valeur `p`
+ * publiée est jugée non fiable (agrégat de réseau, erreur de saisie IRVE).
+ */
+export const MAX_REALISTIC_POINTS = 60;
+
+/**
+ * Libellé du nombre de points de charge, robuste aux valeurs aberrantes (« Points 229 »).
+ * - `p` crédible → on l'affiche ;
+ * - sinon on compte les points réellement listés (`pdc`) s'il y en a un nombre crédible ;
+ * - sinon « non vérifié ».
+ */
+export function pointsLabel(s: Pick<Station, 'p' | 'pdc'>): string {
+  const listed = s.pdc?.length ?? 0;
+  if (s.p > 0 && s.p <= MAX_REALISTIC_POINTS) return String(s.p);
+  if (listed > 0 && listed <= MAX_REALISTIC_POINTS) return String(listed);
+  return tr().station.pointsUnverified;
+}
+
 /** Le champ tarification contient parfois une URL plutôt qu'un prix. */
 export function priceInfo(s: Pick<Station, 'prix' | 'free' | 'kw' | 'pay'>): { text: string; url?: string } {
   if (s.free) return { text: freeCredible(s) ? tr().station.free : tr().tariff.freeDoubtful };

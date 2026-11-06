@@ -303,6 +303,7 @@
     },
     "lidl": {
       "name": "Lidl France",
+      "appLaunch": null,
       "webPortal": null,
       "webStart": {
         "status": "no",
@@ -1015,6 +1016,7 @@
     },
     "soregies-mobilites": {
       "name": "Sorégies Mobilités",
+      "appLaunch": null,
       "webPortal": "https://soregies.evc-net.com",
       "webStart": {
         "status": "no",
@@ -1181,6 +1183,7 @@
     },
     "yes55": {
       "name": "YES55",
+      "appLaunch": null,
       "webPortal": null,
       "webStart": {
         "status": "no",
@@ -1385,6 +1388,7 @@
     },
     "seolis": {
       "name": "Seolis (AlterBase)",
+      "appLaunch": null,
       "webPortal": "https://alterbase.evc-net.com/",
       "webStart": {
         "status": "no",
@@ -1530,6 +1534,17 @@
     },
     "tesla": {
       "name": "Tesla Superchargeurs",
+      "appLaunch": {
+        "scheme": null,
+        "universal": null,
+        "evseParam": null,
+        "ios": null,
+        "android": "com.teslamotors.tesla",
+        "sources": [
+          "https://www.tesla.com/support/charging/supercharging-other-evs",
+          "https://appgoblin.info/apps/com.teslamotors.tesla"
+        ]
+      },
       "webPortal": null,
       "webStart": {
         "status": "unknown",
@@ -1638,6 +1653,7 @@
     },
     "soregies": {
       "name": "Sorégies",
+      "appLaunch": null,
       "webPortal": "https://soregies.evc-net.com",
       "webStart": {
         "status": "no",

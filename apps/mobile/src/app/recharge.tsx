@@ -25,6 +25,7 @@ import { postReport } from '../lib/navigation';
 import { cancelAlerts, scheduleAlerts, type Alert } from '../lib/notify';
 import { store, type DirectCharge } from '../lib/store';
 import { trackedPointEntry } from '../lib/methods';
+import { launchApp } from '../lib/connectors';
 import { idEntryOf, loadPortals, type Portal, type Portals } from '../lib/portals';
 import { planTariff, ttcFactor } from '../lib/tariff';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
@@ -306,8 +307,12 @@ export default function Recharge() {
     );
   }
 
-  const reader = !d.url;
-  const reopen = () => (Platform.OS === 'web' ? window.open(d.url, '_blank', 'noopener,noreferrer') : WebBrowser.openBrowserAsync(d.url));
+  // Passerelle « Démarrer avec l'appli » : démarrage dans l'appli de l'opérateur (url '', comme au lecteur) ; `appLaunch` permet de la rouvrir.
+  const viaApp = (d.method ?? d.plan?.method) === 'operator-app';
+  const reader = !d.url && !viaApp;
+  const reopen = viaApp
+    ? () => launchApp(d.appLaunch?.open ?? null, d.appLaunch?.store ?? null)
+    : () => (Platform.OS === 'web' ? window.open(d.url, '_blank', 'noopener,noreferrer') : WebBrowser.openBrowserAsync(d.url));
   const tel = d.station.tel ? () => Linking.openURL(`tel:${d.station.tel!.replace(/[^+\d]/g, '')}`) : null;
   const elapsedMs = d.chargeStartedAt ? (d.endedAt ?? now) - d.chargeStartedAt : 0;
   const prog = progressAt(input, elapsedMs / 60_000);
@@ -339,16 +344,18 @@ export default function Recharge() {
         <>
           <View style={styles.ring}>
             <Text style={styles.stateBig} accessibilityRole="header">
-              {d.plan?.method === 'badge' ? C.stateBadge : d.plan?.method === 'account' ? C.stateAccount(d.operatorName) : reader ? C.stateReader : C.statePage(d.operatorName)}
+              {viaApp ? C.stateApp(d.operatorName) : d.plan?.method === 'badge' ? C.stateBadge : d.plan?.method === 'account' ? C.stateAccount(d.operatorName) : reader ? C.stateReader : C.statePage(d.operatorName)}
             </Text>
             <Text style={styles.muted}>
-              {d.plan?.method === 'badge'
-                ? C.bodyBadge
-                : d.plan?.method === 'account'
-                  ? C.bodyAccount(d.operatorName)
-                  : reader
-                    ? C.bodyReader(d.plan?.pdcId ? d.plan.pdcId.slice(-4) : null)
-                    : C.bodyPage(d.operatorName)}
+              {viaApp
+                ? C.bodyApp(d.operatorName)
+                : d.plan?.method === 'badge'
+                  ? C.bodyBadge
+                  : d.plan?.method === 'account'
+                    ? C.bodyAccount(d.operatorName)
+                    : reader
+                      ? C.bodyReader(d.plan?.pdcId ? d.plan.pdcId.slice(-4) : null)
+                      : C.bodyPage(d.operatorName)}
             </Text>
           </View>
           {entry.copyId ? <CopyId id={entry.copyId} dark /> : null}
@@ -357,7 +364,7 @@ export default function Recharge() {
           ) : null}
           <Button label={C.started} onPress={started} hint={C.startedHint} />
           <Button label={C.notStarting} variant="light" onPress={() => setHelp(true)} hint={C.notStartingHint} />
-          {!reader ? <Button label={C.reopen(d.operatorName)} variant="ghost" onPress={reopen} /> : null}
+          {viaApp ? <Button label={C.reopenApp(d.operatorName)} variant="ghost" onPress={reopen} /> : !reader ? <Button label={C.reopen(d.operatorName)} variant="ghost" onPress={reopen} /> : null}
         </>
       ) : null}
 
@@ -405,7 +412,7 @@ export default function Recharge() {
           )}
           {d.alertIds?.length ? <Text style={styles.small}>{C.reminder(!!idleAt)}</Text> : null}
           <Button label={C.done} onPress={finish} />
-          {!reader ? <Button label={C.reopen(d.operatorName)} variant="ghost" onPress={reopen} /> : null}
+          {viaApp ? <Button label={C.reopenApp(d.operatorName)} variant="ghost" onPress={reopen} /> : !reader ? <Button label={C.reopen(d.operatorName)} variant="ghost" onPress={reopen} /> : null}
           {tel ? <Button label={C.problemCall(d.operatorName)} variant="ghost" onPress={tel} /> : null}
         </>
       ) : null}

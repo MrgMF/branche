@@ -3,6 +3,25 @@
 import { DATA_URL } from './config';
 import type { IdEntryInfo } from '../i18n/types';
 
+/**
+ * Lien profond vers l'appli officielle de l'opérateur (passerelle « Démarrer avec l'appli », comme un lien Waze) :
+ * Branché n'ouvre que des schémas/URL PUBLICS et documentés, n'imite rien, ne transmet aucun identifiant. null = rien
+ * de confirmé pour cet opérateur (on retombe sur la fiche de store, ou rien).
+ */
+export interface AppLaunch {
+  /** Schéma personnalisé (ex. « monapp:// »), ouvert via Linking si l'appli est installée. */
+  scheme: string | null;
+  /** Universal link https : ouvre l'appli si installée, sinon la page web de l'opérateur. */
+  universal: string | null;
+  /** Paramètre qui cible une borne précise (son EVSE/ID) sur le lien, s'il est documenté. */
+  evseParam: string | null;
+  /** Fiche App Store (https://apps.apple.com/…), repli si l'appli n'est pas installée. */
+  ios: string | null;
+  /** Nom de paquet Android → fiche Google Play, repli si l'appli n'est pas installée. */
+  android: string | null;
+  sources?: string[] | null;
+}
+
 export interface Portal {
   name: string;
   /** Site officiel où l'utilisateur se connecte à son compte. */
@@ -26,11 +45,37 @@ export interface Portal {
   payDomains?: string[] | null;
   /** Montant maximal pré-autorisé (€), seulement quand l'opérateur le publie. */
   preauthMax?: number | null;
+  /** Lien profond / fiche de store de l'appli de l'opérateur (réseaux « appli seule »), null si rien de confirmé. */
+  appLaunch?: AppLaunch | null;
   sources?: string[] | null;
   /** Moyens de paiement sourcés (docs/research/payment-methods.md) : page ad hoc et lecteur de la borne. */
   payMethods?: PayMethods | null;
 }
 export type Portals = Record<string, Portal>;
+
+export type AppOS = 'ios' | 'android' | 'web';
+
+/** Fiche de store de l'appli pour cet OS (repli quand l'appli n'est pas installée), sinon null. */
+export function appStoreUrl(a: AppLaunch, os: AppOS): string | null {
+  if (os === 'android') return a.android ? `https://play.google.com/store/apps/details?id=${a.android}` : null;
+  // iOS et web : la fiche App Store est la plus universelle (sur le web, Google Play s'ouvre aussi dans un navigateur).
+  return a.ios ?? (os === 'web' && a.android ? `https://play.google.com/store/apps/details?id=${a.android}` : null);
+}
+
+/** Lien qui ouvre l'appli (universal link https prioritaire, sinon schéma), avec la borne ciblée si `evseParam` existe. */
+export function appOpenUrl(a: AppLaunch, evse?: string | null): string | null {
+  const withEvse = (base: string | null): string | null =>
+    base && a.evseParam && evse ? `${base}${base.includes('?') ? '&' : '?'}${a.evseParam}=${encodeURIComponent(evse)}` : base;
+  return withEvse(a.universal) ?? withEvse(a.scheme);
+}
+
+/** Cible « Démarrer avec l'appli » : lien d'ouverture et fiche de store de repli ; aucune des deux → rien à proposer. */
+export function appLaunchTargets(a: AppLaunch | null | undefined, os: AppOS, evse?: string | null): { open: string | null; store: string | null } | null {
+  if (!a) return null;
+  const open = appOpenUrl(a, evse);
+  const store = appStoreUrl(a, os);
+  return open || store ? { open, store } : null;
+}
 
 /** true/false seulement si une source le dit, sinon null ; « probable » : lecteur sans contact confirmé, portefeuilles non cités. */
 export type PayValue = boolean | 'probable' | null;
