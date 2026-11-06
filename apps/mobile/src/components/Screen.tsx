@@ -34,11 +34,11 @@ export function useBackKeys(onBack: () => void, custom: boolean): void {
   );
 }
 
-export function ScreenHeader(props: { title: string; kicker?: string; sub?: string; onBack?: () => void; dark?: boolean; right?: ReactNode; titleLines?: number }) {
+export function ScreenHeader(props: { title: string; kicker?: string; sub?: string; onBack?: () => void; dark?: boolean; right?: ReactNode; titleLines?: number; subLines?: number }) {
   const t = useT();
   const back = props.onBack ?? goBack;
   useBackKeys(back, !!props.onBack);
-  const ink = props.dark ? '#F2F6F4' : colors.ink;
+  const ink = props.dark ? colors.nightText : colors.ink;
   return (
     <View style={styles.head}>
       <Pressable
@@ -57,7 +57,7 @@ export function ScreenHeader(props: { title: string; kicker?: string; sub?: stri
           {props.title}
         </Text>
         {props.sub ? (
-          <Text style={[styles.sub, props.dark && { color: colors.nightMuted }]} numberOfLines={2}>
+          <Text style={[styles.sub, props.dark && { color: colors.nightMuted }]} numberOfLines={props.subLines ?? 2}>
             {props.sub}
           </Text>
         ) : null}

@@ -8,6 +8,7 @@ import {
   chargersOnRoute,
   checkFresh,
   deltaText,
+  followOffsetFor,
   instructionOf,
   LOW_SOC,
   liveArrivalSoc,
@@ -199,10 +200,10 @@ const blank = (dest: Destination, over: Partial<Trip> = {}): Trip => ({
 
 type Fix = { lat: number; lon: number; t: number; speed: number | null; heading: number | null; accuracy: number | null };
 
-/** Décalage vertical du véhicule (px) : plus bas en portrait, modéré en paysage (carte à droite du bandeau). */
+/** Décalage du véhicule (px) : plus bas, et centré dans la zone libre de la carte sur grand écran (guidance.ts). */
 const followOffset = () => {
   const { width, height } = Dimensions.get('window');
-  return width > height ? Math.round(height * 0.18) : 150;
+  return followOffsetFor(width, height);
 };
 
 export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null, sheetH: number) {
@@ -678,7 +679,8 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     prevFix.current = p;
     const zoom = (speed ?? 0) > 80 ? 15 : (speed ?? 0) > 45 ? 16 : 17;
     map.current?.post({ type: 'user', lat: p.lat, lon: p.lon, bearing: lastBearing.current, nav: true });
-    map.current?.post({ type: 'follow', lat: p.lat, lon: p.lon, bearing: lastBearing.current, zoom, offsetY: followOffset() });
+    const off = followOffset();
+    map.current?.post({ type: 'follow', lat: p.lat, lon: p.lon, bearing: lastBearing.current, zoom, offsetX: off.x, offsetY: off.y });
 
     // Hors trajet : 2 positions consécutives au-delà de la tolérance (précision GPS comprise).
     const tol = Math.max(45, Math.min(p.accuracy ?? 20, 60) + 30);
@@ -712,7 +714,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     if (via && metersBetween(p, via) < 50) {
       announce([{ text: tr().voice.viaReached(via.name), priority: 'maneuver' }]);
       setTrip((x) => (x ? { ...x, arrivedAtVia: via, speedKmh: speed, offer: null } : x));
-      map.current?.post({ type: 'follow', lat: via.lat, lon: via.lon, bearing: 0, pitch: 0, zoom: 17, offsetY: -120, duration: 1200 });
+      map.current?.post({ type: 'follow', lat: via.lat, lon: via.lon, bearing: 0, pitch: 0, zoom: 17, offsetX: followOffset().x, offsetY: -120, duration: 1200 });
       return;
     }
 
@@ -789,7 +791,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
       stopWatch();
       void keepScreenOn(false);
       // Recentrage sur la destination, vue du dessus, au-dessus de la fiche d'arrivée.
-      map.current?.post({ type: 'follow', lat: t.dest.lat, lon: t.dest.lon, bearing: 0, pitch: 0, zoom: 17, offsetY: -120, duration: 1200 });
+      map.current?.post({ type: 'follow', lat: t.dest.lat, lon: t.dest.lon, bearing: 0, pitch: 0, zoom: 17, offsetX: followOffset().x, offsetY: -120, duration: 1200 });
     } else drawProgress(route, prog.seg, prog.along);
     announce(parts);
     setTrip((x) =>

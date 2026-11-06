@@ -1,11 +1,11 @@
 // Guidage plein écran : lisible d'un coup d'œil (manœuvre, distance, rue, voies, vitesse, limitation, arrivée).
-import { useEffect, useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type Ref } from 'react';
+import { AccessibilityInfo, Linking, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View, type HostInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navigationLinks } from '../lib/charge';
 import { kw } from '../lib/format';
 import { displayName } from '../lib/stations';
-import { bigDist, etaClock, instructionOf, isOverSpeed, LOW_SOC, maneuverOf, SOC_CHOICES } from '../lib/guidance';
+import { bigDist, etaClock, guidanceSide, instructionOf, isOverSpeed, LOW_SOC, maneuverOf, SOC_CHOICES } from '../lib/guidance';
 import { useT } from '../i18n';
 import { speedUnit, speedValue } from '../i18n/format';
 import { distText, durationText, incidentLabel, postReport, type IncidentType } from '../lib/navigation';
@@ -19,19 +19,39 @@ import { Button } from './ui';
 
 const REPORTS: IncidentType[] = ['accident', 'bouchon', 'travaux', 'obstacle', 'borne_hs'];
 
-/** Paysage : largeur du bandeau de guidage à gauche (la carte occupe le reste, à droite). 0 en portrait. */
-export const guidanceSide = (width: number, height: number) => (width > height ? Math.min(420, Math.max(300, Math.round(width * 0.42))) : 0);
+export { guidanceSide } from '../lib/guidance';
 
 export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: Station) => void }) {
   const t = useT();
   const insets = useSafeAreaInsets();
   const trip = nav.trip;
   const [muted, setMutedState] = useState(isMuted());
-  const [reporting, setReporting] = useState(false);
+  const [reporting, setReportingState] = useState(false);
+  const reportBtn = useRef<HostInstance>(null);
+  // Fermeture de la feuille « Signaler » : le focus revient au bouton d'origine (clavier, lecteur d'écran).
+  const setReporting = useCallback((open: boolean) => {
+    setReportingState(open);
+    if (open) return;
+    setTimeout(() => {
+      const el = reportBtn.current;
+      if (!el) return;
+      if (Platform.OS === 'web') (el as unknown as { focus?: () => void }).focus?.();
+      else AccessibilityInfo.sendAccessibilityEvent(el, 'focus');
+    }, 50);
+  }, []);
+  // Web : Échap = Annuler.
+  useEffect(() => {
+    if (!reporting || Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setReporting(false);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [reporting, setReporting]);
   const [note, setNote] = useState<string | null>(null);
   const [, setTick] = useState(0);
   const { width, height } = useWindowDimensions();
   const side = guidanceSide(width, height);
+  // Grille équilibrée : 6 boutons (5 types + Annuler) en 3 × 2 sur grand écran, 2 × 3 sinon.
+  const reportCols = width >= 600 ? 3 : 2;
   useEffect(() => onMutedChange(setMutedState), []);
   // Décompte de la proposition de trajet plus rapide (rafraîchi chaque seconde).
   const offerAt = trip?.offer?.deadline;
@@ -220,7 +240,7 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
               <NavIcon name={muted ? 'voice-off' : 'voice-on'} size={26} color={muted ? colors.danger : colors.ink} />
             </RoundBtn>
             {canReport ? (
-              <RoundBtn label={t.guidance.report} onPress={() => setReporting(true)}>
+              <RoundBtn label={t.guidance.report} onPress={() => setReporting(true)} btnRef={reportBtn}>
                 <NavIcon name="report" size={26} color={colors.busy} />
               </RoundBtn>
             ) : null}
@@ -301,16 +321,16 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
 
       {reporting && canReport ? (
         <View style={styles.scrim}>
-          <View style={[styles.reportSheet, { paddingBottom: insets.bottom + 16 }]} accessibilityViewIsModal>
+          <View style={[styles.reportSheet, styles.reportCenter, { paddingBottom: insets.bottom + 16 }]} accessibilityViewIsModal aria-modal testID="report-sheet">
             <Text style={styles.arrTitle} accessibilityRole="header">
               {t.guidance.report}
             </Text>
             <Text style={styles.smallDark}>{t.guidance.reportNote}</Text>
             <View style={styles.grid}>
               {REPORTS.map((x) => (
-                <Button key={x} label={incidentLabel(x) ?? x} variant="ghost" style={styles.reportBtn} onPress={() => report(x)} />
+                <ReportBtn key={x} label={incidentLabel(x) ?? x} cols={reportCols} onPress={() => report(x)} />
               ))}
-              <Button label={t.common.cancel} variant="secondary" style={styles.reportBtn} onPress={() => setReporting(false)} />
+              <ReportBtn label={t.common.cancel} cols={reportCols} cancel onPress={() => setReporting(false)} />
             </View>
           </View>
         </View>
@@ -319,9 +339,30 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
   );
 }
 
-function RoundBtn(props: { label: string; onPress: () => void; children: React.ReactNode; pressed?: boolean }) {
+function ReportBtn(props: { label: string; onPress: () => void; cols: number; cancel?: boolean }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      onPress={props.onPress}
+      style={({ pressed }) => [
+        styles.reportBtn,
+        { width: props.cols === 3 ? '31.5%' : '48%' },
+        props.cancel ? styles.reportCancel : null,
+        pressed && { backgroundColor: colors.border },
+      ]}
+    >
+      <Text style={styles.reportLabel} numberOfLines={2}>
+        {props.label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function RoundBtn(props: { label: string; onPress: () => void; children: React.ReactNode; pressed?: boolean; btnRef?: Ref<HostInstance> }) {
+  return (
+    <Pressable
+      ref={props.btnRef}
       accessibilityRole="button"
       accessibilityLabel={props.label}
       accessibilityState={props.pressed === undefined ? undefined : { selected: props.pressed }}
@@ -341,7 +382,7 @@ const styles = StyleSheet.create({
   bannerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   dist: { fontFamily: fonts.display, fontSize: 44, lineHeight: 50, color: '#FFFFFF' },
   unit: { fontFamily: fonts.displayMedium, fontSize: 24, color: '#FFFFFF' },
-  street: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 25, color: '#E8EEEC' },
+  street: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 25, color: colors.nightText },
   // Panneau de sortie (vert autoroute français : texte blanc, contraste AA).
   exitBadge: { alignSelf: 'flex-start', backgroundColor: colors.signExit, color: '#FFFFFF', fontFamily: fonts.bold, fontSize: 16, borderRadius: 6, borderWidth: 2, borderColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 2, marginBottom: 4, overflow: 'hidden' },
   offer: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 12, gap: 8, borderWidth: 2, borderColor: colors.accent, ...shadow },
@@ -352,10 +393,10 @@ const styles = StyleSheet.create({
   lane: { paddingHorizontal: 8, paddingVertical: 2 },
   laneSep: { borderLeftWidth: 2, borderLeftColor: 'rgba(255,255,255,0.25)', borderStyle: 'dashed' },
   then: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: colors.nightCard, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
-  thenText: { fontFamily: fonts.semibold, fontSize: 15, color: '#E8EEEC' },
+  thenText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.nightText },
   pill: { alignSelf: 'stretch', borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 10, fontFamily: fonts.bold, fontSize: 15, color: colors.ink, overflow: 'hidden', ...shadow },
   pillText: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
-  pillWarn: { backgroundColor: '#FEF3E2', borderWidth: 2, borderColor: colors.busy },
+  pillWarn: { backgroundColor: colors.warnSoft, borderWidth: 2, borderColor: colors.busy },
   pillDanger: { backgroundColor: colors.dangerSoft, borderWidth: 2, borderColor: colors.danger },
   pillOk: { backgroundColor: colors.accentSoft, borderWidth: 2, borderColor: colors.accent },
   pillInfo: { backgroundColor: colors.surface },
@@ -380,11 +421,15 @@ const styles = StyleSheet.create({
   smallDark: { fontFamily: fonts.medium, fontSize: 14, color: colors.inkMuted, lineHeight: 20 },
   scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,26,23,0.45)', justifyContent: 'flex-end' },
   reportSheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: 18, gap: 12 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10 },
   offRoute: { flex: 1, fontFamily: fonts.display, fontSize: 26, lineHeight: 32, color: '#FFFFFF', paddingVertical: 10 },
   socRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   socChip: { minWidth: MIN_TOUCH, minHeight: 48, flexGrow: 1, paddingHorizontal: 8, borderRadius: radius.md, borderWidth: 2, borderColor: colors.accent, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   socChipText: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
-  reportBtn: { minHeight: 64, flexBasis: '47%', flexGrow: 1 },
+  reportBtn: { minHeight: 64, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 8 },
+  reportCancel: { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.inputBorder },
+  reportLabel: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22, color: colors.ink, textAlign: 'center' },
+  // Feuille centrée et de largeur bornée sur grand écran.
+  reportCenter: { alignSelf: 'center', width: '100%', maxWidth: 640 },
 });
 

@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { lastPriceText, reliabilityText, type Community } from '../lib/community';
 import type { ChargePoint } from '../lib/evse';
 import { durationLabel, estimateCharge } from '../lib/estimate';
-import { euros } from '../lib/format';
+import { euros, withUnit } from '../lib/format';
 import type { Operator } from '../lib/qr';
 import { loadOperators, type Station } from '../lib/stations';
 import { describeTariff, safeTariffUrl, stationTariff } from '../lib/tariff';
@@ -88,11 +88,12 @@ export function PriceSummary({
         {R.priceBefore}
       </Text>
       <TariffLines station={station} community={community} compact />
-      <Text style={styles.src}>{R.estimateFor(est.assumedVehicle ? R.avgVehicle55 : vehicle?.name ?? '', est.fromSoc, est.toSoc)}</Text>
+      <Text style={styles.src}>{withUnit(R.estimateFor(est.assumedVehicle ? R.avgVehicle55 : vehicle?.name ?? '', est.fromSoc, est.toSoc))}</Text>
       <Text style={styles.line}>
-        {`${R.energy} ${kwhText(est.kWhBilled)} · ${R.duration} ≈ ${durationLabel(est.minutes)} · ${R.cost} ${cost}`}
+        {withUnit(`${R.energy} ${kwhText(est.kWhBilled)} · ${R.duration} ≈ ${durationLabel(est.minutes)} · ${R.cost} ${cost}`)}
       </Text>
-      {est.unknownPrice ? <Text style={styles.src}>{R.unknownPriceNote.trim()}</Text> : null}
+      {/* Tarif non publié : le conseil « vérifiez l'écran » est déjà affiché au-dessus */}
+      {est.unknownPrice && (describeTariff(tariff).length || tariff.kind === 'link') ? <Text style={styles.src}>{R.unknownPriceNote.trim()}</Text> : null}
       <Text style={styles.line}>{preauthMax != null ? `${R.preauth} · ${eur(preauthMax, 0)}` : R.preauthGeneric}</Text>
     </View>
   );

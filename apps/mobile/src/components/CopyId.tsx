@@ -12,7 +12,7 @@ export function CopyId({ id, dark }: { id: string; dark?: boolean }) {
     <View style={[styles.box, dark && styles.dark]}>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={[styles.label, dark && { color: colors.nightMuted }]}>{t.copyId.label}</Text>
-        <Text style={[styles.id, dark && { color: '#F2F6F4' }]} selectable>
+        <Text style={[styles.id, dark && { color: colors.nightText }]} selectable>
           {id}
         </Text>
       </View>
@@ -37,5 +37,5 @@ const styles = StyleSheet.create({
   label: { fontFamily: fonts.semibold, fontSize: 12, color: colors.inkMuted },
   id: { fontFamily: fonts.display, fontSize: 17, color: colors.ink },
   btn: { minHeight: MIN_TOUCH, minWidth: 88, borderRadius: radius.md, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  btnText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF' },
+  btnText: { fontFamily: fonts.bold, fontSize: 15, color: colors.onAccent },
 });

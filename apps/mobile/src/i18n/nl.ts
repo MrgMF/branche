@@ -162,6 +162,7 @@ export const nl: Dict = {
     itemA11y: (name: string, d: string, p: string) => `${name}, op ${d}, ${p}`,
     reserved: 'Beperkte toegang',
     homeTip: 'Tip: zet deze pagina op je telefoon op het beginscherm.',
+    group: (n: number) => `${n}\u00A0laadpalen hier`,
     scan: 'Scannen',
     scanA11y: 'QR-code van een laadpaal scannen',
   },

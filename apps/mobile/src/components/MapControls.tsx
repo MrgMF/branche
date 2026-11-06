@@ -12,21 +12,59 @@ import type { MapOut } from './mapHtml';
 
 export type FollowMode = 'none' | 'follow' | 'heading';
 
+type Pt = { lat: number; lon: number };
+/** Cadrage de « Ma position » : borne conseillée à montrer avec la position, marges des contrôles et du panneau (px). */
+export type LocateFrame = { target: Pt | null; pad: { top: number; bottom: number; left: number; right: number } };
+const distM = (a: Pt, b: Pt) => {
+  const k = Math.PI / 180;
+  const x = (b.lon - a.lon) * k * Math.cos(((a.lat + b.lat) / 2) * k);
+  return Math.hypot(x, (b.lat - a.lat) * k) * 6_371_000;
+};
+/** Au-delà, la borne conseillée n'est pas cadrée (zoom trop faible pour se repérer) : recentrage simple. */
+const FRAME_MAX_M = 3000;
+
 /** État de suivi de la carte + point bleu (hors guidage). */
-export function useMapControls(map: React.RefObject<MapHandle | null>, loc: UserLocation, opts: { guiding: boolean; offsetY: number }) {
+export function useMapControls(map: React.RefObject<MapHandle | null>, loc: UserLocation, opts: { guiding: boolean; offsetY: number; frame?: () => LocateFrame | null }) {
   const [mode, setMode] = useState<FollowMode>('none');
   const [bearing, setBearing] = useState(0);
   const [note, setNote] = useState<NoteKey | null>(null);
   const [ready, setReady] = useState(false);
   const modeRef = useRef(mode);
   modeRef.current = mode;
+  const frameRef = useRef(opts.frame);
+  frameRef.current = opts.frame;
+  // Cadrage position + borne conseillée en cours (suivi sans recentrer sur la seule position) : dernière position cadrée.
+  const framed = useRef<{ at: Pt; target: Pt } | null>(null);
+
+  /** fitBounds position + borne, marges des contrôles et du panneau, zoom max 16. Faux si rien à cadrer. */
+  const fit = useCallback(
+    (f: Pt, duration = 700): boolean => {
+      const fr = frameRef.current?.();
+      if (!fr?.target || distM(f, fr.target) > FRAME_MAX_M) return false;
+      const t = fr.target;
+      map.current?.post({
+        type: 'fit',
+        bounds: [Math.min(f.lon, t.lon), Math.min(f.lat, t.lat), Math.max(f.lon, t.lon), Math.max(f.lat, t.lat)],
+        ...fr.pad,
+        maxZoom: 16,
+        bearing: 0,
+        duration,
+      });
+      framed.current = { at: f, target: t };
+      return true;
+    },
+    [map],
+  );
 
   // Point bleu, halo de précision, cône de direction ; suivi de la caméra.
   useEffect(() => {
     const f = loc.fix;
     if (!f || opts.guiding || !ready) return;
     map.current?.post({ type: 'user', lat: f.lat, lon: f.lon, accuracy: f.accuracy, heading: loc.heading });
-    if (modeRef.current !== 'none') {
+    if (modeRef.current === 'follow' && framed.current) {
+      // Cadrage conservé : recadré seulement après un déplacement notable (pas de saut à chaque mesure).
+      if (distM(framed.current.at, f) > 15) fit(f, 600);
+    } else if (modeRef.current !== 'none') {
       map.current?.post({ type: 'follow', lat: f.lat, lon: f.lon, bearing: modeRef.current === 'heading' ? loc.heading ?? undefined : 0, pitch: 0, offsetY: opts.offsetY, duration: 600 });
     }
   }, [loc.fix, loc.heading, opts.guiding, ready]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -44,7 +82,10 @@ export function useMapControls(map: React.RefObject<MapHandle | null>, loc: User
   const onMapMessage = useCallback((m: MapOut) => {
     if (m.type === 'ready') setReady(true);
     else if (m.type === 'camera') setBearing(m.bearing);
-    else if (m.type === 'moveend' && m.user) setMode('none');
+    else if (m.type === 'moveend' && m.user) {
+      framed.current = null;
+      setMode('none');
+    }
   }, []);
 
   const locate = useCallback(async () => {
@@ -59,16 +100,21 @@ export function useMapControls(map: React.RefObject<MapHandle | null>, loc: User
     }
     const f = loc.fix;
     if (modeRef.current === 'follow') {
+      framed.current = null;
       const ok = await loc.enableCompass();
       if (!ok && loc.heading === null) setNote('compassUnavailable');
       setMode('heading');
       map.current?.post({ type: 'follow', lat: f.lat, lon: f.lon, bearing: loc.heading ?? undefined, pitch: 0, offsetY: opts.offsetY, duration: 500 });
     } else {
       setMode('follow');
-      map.current?.post({ type: 'follow', lat: f.lat, lon: f.lon, bearing: 0, pitch: 0, zoom: 16, offsetY: opts.offsetY, duration: 700 });
+      // Position ET borne conseillée dans la partie visible de la carte ; sinon recentrage sur la position.
+      if (!fit(f)) {
+        framed.current = null;
+        map.current?.post({ type: 'follow', lat: f.lat, lon: f.lon, bearing: 0, pitch: 0, zoom: 16, offsetY: opts.offsetY, duration: 700 });
+      }
     }
     return true;
-  }, [loc, map, opts.offsetY]);
+  }, [loc, map, opts.offsetY, fit]);
 
   const north = useCallback(() => {
     if (modeRef.current === 'heading') setMode('follow');
@@ -141,7 +187,7 @@ export function MapControls({ api, bottom, top, left = 12, height, onLocate, sta
         <View style={[styles.note, { top, left, maxHeight: Math.max(120, height - top - bottom) }]} accessibilityLiveRegion="polite" testID="map-note">
           <Text style={styles.noteText}>{MAP_T[api.note]}</Text>
           {status === 'denied' || status === 'unavailable' ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={MAP_T.retry} onPress={() => api.locate()} style={styles.noteBtn}>
+            <Pressable accessibilityRole="button" accessibilityLabel={MAP_T.retry} onPress={() => api.locate()} style={({ pressed }) => [styles.noteBtn, pressed && { backgroundColor: colors.accentPressed }]}>
               <Text style={styles.noteBtnText}>{MAP_T.retry}</Text>
             </Pressable>
           ) : null}
@@ -188,6 +234,6 @@ const styles = StyleSheet.create({
   on: { backgroundColor: colors.position },
   note: { position: 'absolute', left: 12, right: 12 + 52 + 10, maxWidth: 360, backgroundColor: colors.surface, borderRadius: radius.md, padding: 12, gap: 8, borderWidth: 2, borderColor: colors.busy, overflow: 'hidden', ...shadow },
   noteText: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20, color: colors.ink },
-  noteBtn: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 22, backgroundColor: colors.ink },
+  noteBtn: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: radius.md, backgroundColor: colors.accent },
   noteBtnText: { fontFamily: fonts.bold, fontSize: 14, color: colors.onAccent },
 });

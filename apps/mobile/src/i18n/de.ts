@@ -164,6 +164,7 @@ export const de: Dict = {
     itemA11y: (name: string, d: string, p: string) => `${name}, ${d} entfernt, ${p}`,
     reserved: 'Eingeschränkter Zugang',
     homeTip: 'Tipp: Fügen Sie diese Seite auf dem Telefon zum Startbildschirm hinzu.',
+    group: (n: number) => `${n}\u00A0Ladesäulen hier`,
     scan: 'Scannen',
     scanA11y: 'QR-Code einer Ladesäule scannen',
   },

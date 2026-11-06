@@ -8,6 +8,10 @@ Critique paiement passe 2 : Tesla (appli seule) → « Pas de paiement possible 
 proche ; TotalEnergies 300 kW « gratuite » IRVE → « à vérifier », coût inconnu, lecteur CB « certains sites » ; QR
 pay.alizecharge.com sur une borne Bouygues → site officiel (pas un sosie), pré-autorisation 75 € avant « Payer » ;
 bannière d'accueil « Paiement en attente » tant que le démarrage n'est pas confirmé.
+Critique paiement passe 3 : hors ligne (« Pas de réseau : payez au lecteur CB ou réessayez »), paiement jamais confirmé
+> 6 h (« Abandonner ce paiement ? » → « non démarré »), QR paypal.me bloqué, buy.stripe.com bloqué (page officielle
+proposée), Virta (numéro inscrit sur la borne), Zunder (« Non confirmé ici »), pay.alizecharge.com (hôte non sourcé →
+confirmation par case).
 
 Prérequis : un site assemblé (scripts/assemble-site.mjs + scripts/e2e-setup.mjs) avec une app exportée par
   EXPO_OFFLINE=1 BASE_URL=/branche/app DATA_URL=http://127.0.0.1:8080/branche/data SITE_URL=http://127.0.0.1:8080/branche \
@@ -320,7 +324,9 @@ try:
         page.wait_for_selector('text=Coût estimé')
         page.wait_for_timeout(800)
         shot(page, 'b6-suivi-cb')
-        assert 'Prix inconnu' in page.inner_text('body'), 'coût inconnu attendu (tarif = lien)'
+        body = page.inner_text('body')
+        assert 'Inconnu' in body, 'coût inconnu attendu (tarif = lien) : tuile « Inconnu »'
+        assert 'Coût estimé : Prix inconnu' not in body, 'ligne redondante sous la tuile'
         page.get_by_role('button', name='J’ai terminé ma recharge').click()
         page.get_by_role('button', name='Enregistrer le reçu').click()
         page.wait_for_selector('text=Reçu enregistré')
@@ -575,20 +581,116 @@ try:
         box = page.get_by_placeholder('ex. FR*ABC*E1234 ou https://…')
         box.fill('https://pay.alizecharge.com/?evse=FR*S77*E770340011')  # borne Bouygues réelle (Blandy)
         page.get_by_role('button', name='Vérifier').click()
-        page.wait_for_selector('text=Site officiel de l’opérateur', timeout=15000)
-        page.wait_for_selector('text=Domaine du site officiel de Bouygues Energies & Services')
+        # Passe 3 : alizecharge.com est sourcé, mais pas l'hôte pay.alizecharge.com → ni vert ni bloqué : confirmation par case
+        page.wait_for_selector('text=Site de l’opérateur, page non sourcée : à vérifier', timeout=15000)
+        page.wait_for_selector('text=Adresse sur le domaine de Bouygues Energies & Services (alizecharge.com), mais absente des pages sourcées')
         page.wait_for_selector('text=Pré-autorisation · 75 €')
-        pay_btn = page.get_by_role('button', name='Payer sur la page Bouygues Energies & Services')
-        pay_btn.wait_for()
-        assert page.get_by_text('Pré-autorisation · 75 €').bounding_box()['y'] < pay_btn.bounding_box()['y'], 'pré-autorisation avant « Payer »'
+        assert page.get_by_role('button', name='Payer sur la page Bouygues Energies & Services').count() == 0, 'pas de vert sur un hôte non sourcé'
+        cont = page.get_by_role('button', name='Continuer vers ce site')
+        assert cont.is_disabled(), 'confirmation exigée'
+        page.get_by_role('checkbox', name='J’ai vérifié la borne et je veux continuer').click()
+        assert cont.is_enabled()
+        assert page.get_by_text('Pré-autorisation · 75 €').bounding_box()['y'] < cont.bounding_box()['y'], 'pré-autorisation avant « Continuer »'
         assert 'paiement bloqué' not in page.inner_text('body')
-        pay_btn.scroll_into_view_if_needed()
+        cont.scroll_into_view_if_needed()
         no_overflow(page, 'bouygues')
-        shot(page, 'h4-bouygues-alize-officiel')
+        shot(page, 'h4-bouygues-alize-a-confirmer')
+        box.fill('https://support.alizecharge.com/support/home')
+        page.get_by_role('button', name='Vérifier').click()
+        page.wait_for_selector('text=Domaine du site officiel de Bouygues Energies & Services')
         box.fill('https://pay-alizecharge.com/')
         page.get_by_role('button', name='Vérifier').click()
         page.wait_for_selector('text=paiement bloqué')
-        ok('Bouygues : pay.alizecharge.com officiel (site sourcé), « Pré-autorisation · 75 € » avant « Payer » ; sosie pay-alizecharge.com bloqué')
+        ok('Bouygues : pay.alizecharge.com (hôte non sourcé) → confirmation par case, pré-autorisation 75 € avant ; support.alizecharge.com (sourcé) → site officiel ; sosie bloqué')
+        assert not errors, errors
+        ctx.close()
+
+        # ---------- I. Critique paiement passe 3 : hors ligne, Virta (numéro inscrit), Zunder (non confirmé), QR entre particuliers ----------
+        ctx = new_ctx(b, TEST_POS)
+        page = ctx.new_page()
+        errors = []
+        page.on('pageerror', lambda e: errors.append(str(e)))
+        page.goto(f'{BASE}/app/recharger?evse=FR*TST*E0001', wait_until='load')
+        page.wait_for_selector('text=Prix avant de payer', timeout=20000)
+        page.wait_for_timeout(1800)  # écrans du paiement préchargés après le premier affichage
+        page.get_by_role('button', name='Scanner le QR code').click()
+        page.wait_for_selector('text=Payer la borne')
+        box = page.get_by_placeholder('ex. FR*ABC*E1234 ou https://…')
+        box.fill('http://localhost:8090/pay?evse=FR*TST*E0001')
+        page.get_by_role('button', name='Vérifier').click()
+        page.wait_for_selector('text=Domaine de l’opérateur (base IRVE)')
+        ctx.set_offline(True)
+        pages_before = len(ctx.pages)
+        page.get_by_role('button', name='Payer sur la page Opérateur Test').click()
+        page.wait_for_selector('text=Pas de réseau : payez au lecteur CB ou réessayez')
+        page.wait_for_timeout(500)
+        assert len(ctx.pages) == pages_before, 'aucune page ouverte hors ligne'
+        assert 'Paiement chez Opérateur Test' not in page.inner_text('body'), 'aucun suivi démarré hors ligne'
+        shot(page, 'i1-hors-ligne')
+        ctx.set_offline(False)
+        with ctx.expect_page() as pop:
+            page.get_by_role('button', name='Payer sur la page Opérateur Test').click()
+        pop.value.close()
+        page.wait_for_selector('text=Paiement chez Opérateur Test')
+        ok('hors ligne : « Pas de réseau : payez au lecteur CB ou réessayez », rien ouvert ni suivi ; réseau revenu → page ouverte')
+
+        # Paiement jamais confirmé depuis plus de 6 h : « Abandonner ce paiement ? » → archivé « non démarré »
+        page.evaluate("""() => { const k = 'branche.direct.v1'; const d = JSON.parse(localStorage.getItem(k));
+            d.openedAt = Date.now() - 7 * 3600 * 1000; localStorage.setItem(k, JSON.stringify(d)); }""")
+        page.goto(f'{BASE}/app/', wait_until='load')
+        page.wait_for_selector('text=Abandonner ce paiement ?', timeout=20000)
+        page.wait_for_selector('text=Paiement chez Opérateur Test jamais confirmé depuis plus de 6 h.')
+        shot(page, 'i2-paiement-6h')
+        page.get_by_role('button', name='Oui', exact=True).click()
+        page.get_by_text('Abandonner ce paiement ?').wait_for(state='detached')
+        assert 'Paiement en attente chez' not in page.inner_text('body')
+        page.goto(f'{BASE}/app/historique', wait_until='load')
+        page.get_by_text('Non démarré', exact=False).first.wait_for(timeout=15000)
+        shot(page, 'i3-historique-non-demarre')
+        ok('paiement jamais confirmé > 6 h : « Abandonner ce paiement ? » (Oui / Toujours en cours) → historique « non démarré »')
+
+        # QR entre particuliers et lien Stripe sur une borne à page officielle connue
+        page.goto(f'{BASE}/app/payer', wait_until='load')
+        box = page.get_by_placeholder('ex. FR*ABC*E1234 ou https://…')
+        box.fill('https://paypal.me/borne-recharge/12')
+        page.get_by_role('button', name='Vérifier').click()
+        page.wait_for_selector('text=paiement bloqué', timeout=15000)
+        page.wait_for_selector('text=Lien de paiement entre particuliers (PayPal.me)')
+        shot(page, 'i4-qr-paypal-me')
+        page.goto(f'{BASE}/app/recharger?evse=FRVIAE12345955331', wait_until='load')  # ENGIE Vianeo (page officielle connue)
+        page.wait_for_selector('text=Prix avant de payer', timeout=20000)
+        page.get_by_role('button', name='Scanner le QR code').click()
+        box = page.get_by_placeholder('ex. FR*ABC*E1234 ou https://…')
+        box.fill('https://buy.stripe.com/test_borne')
+        page.get_by_role('button', name='Vérifier').click()
+        page.wait_for_selector('text=paiement bloqué')
+        page.wait_for_selector('text=ENGIE Vianeo a une page de paiement officielle connue')
+        page.get_by_role('button', name='Ouvrir la page officielle ENGIE Vianeo').wait_for()
+        shot(page, 'i5-qr-stripe-bloque')
+        ok('QR paypal.me bloqué (entre particuliers) ; buy.stripe.com bloqué chez ENGIE Vianeo, page officielle proposée')
+
+        # Virta : numéro de 4 à 5 chiffres inscrit sur la borne (idEntry printed), rien à copier
+        page.goto(f'{BASE}/app/recharger?evse=FRVIRE269470', wait_until='load')
+        page.wait_for_selector('text=Prix avant de payer', timeout=20000)
+        if page.get_by_role('button', name='Page de paiement Virta', exact=False).count():
+            page.get_by_role('button', name='Page de paiement Virta', exact=False).first.click()
+        page.wait_for_selector('text=saisissez le numéro de 4 à 5 chiffres inscrit sur la borne')
+        assert 'collez l’identifiant' not in page.inner_text('body')
+        page.get_by_text('saisissez le numéro de 4 à 5 chiffres', exact=False).scroll_into_view_if_needed()
+        shot(page, 'i6-virta-numero-inscrit')
+        ok('Virta : « saisissez le numéro de 4 à 5 chiffres inscrit sur la borne », aucun identifiant IRVE à copier')
+
+        # Zunder (badge seul dans l'IRVE, lecteur CB « certains sites ») : « Non confirmé ici » + borne payable proposée
+        page.goto(f'{BASE}/app/recharger?evse=ESZUNEINAAU000001ER01', wait_until='load')
+        page.wait_for_selector('text=Non confirmé ici', timeout=20000)
+        body = page.inner_text('body')
+        assert 'Pas de paiement possible dans Branché ici' not in body
+        assert 'Recommandé' not in body
+        page.wait_for_selector('text=Borne payable la plus proche', timeout=20000)
+        page.get_by_text('Non confirmé ici').scroll_into_view_if_needed()
+        no_overflow(page, 'zunder')
+        shot(page, 'i7-zunder-non-confirme')
+        ok('Zunder (seulement du spéculatif) : « Non confirmé ici », rien de recommandé, borne payable la plus proche proposée')
         assert not errors, errors
         ctx.close()
         b.close()

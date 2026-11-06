@@ -30,6 +30,8 @@ export interface ChargeRecord {
   endSoc?: number;
   /** Photo du ticket gardée sur l'appareil (ticket.ts). */
   ticket?: boolean;
+  /** Paiement ouvert puis abandonné sans démarrage confirmé (« non démarré ») : hors totaux et compteurs. */
+  notStarted?: boolean;
 }
 
 const KEY = 'branche.history.v1';
@@ -115,13 +117,15 @@ export async function clearHistory(): Promise<void> {
 export function monthStats(list: ChargeRecord[], now = Date.now()) {
   const d = new Date(now);
   const inMonth = list.filter((r) => {
+    if (r.notStarted) return false;
     const x = new Date(r.startedAt);
     return x.getFullYear() === d.getFullYear() && x.getMonth() === d.getMonth();
   });
   return { ...totals(inMonth), month: monthYear(d) };
 }
 
-export function totals(list: ChargeRecord[]) {
+export function totals(all: ChargeRecord[]) {
+  const list = all.filter((r) => !r.notStarted);
   const paid = list.filter((r) => r.pricePaid != null);
   const total = paid.reduce((t, r) => t + (r.pricePaid ?? 0), 0);
   const both = paid.filter((r) => r.kWh && r.kWh > 0);

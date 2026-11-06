@@ -28,6 +28,8 @@ export function StationDetail(props: {
   onClose: () => void;
   /** Ouvre une autre borne (borne libre la plus proche quand celle-ci est hors service). */
   onPick?: (s: Station) => void;
+  /** Action principale rendue à part, collée en bas du panneau (texte agrandi) : voir `StationMainAction`. */
+  stickyAction?: boolean;
 }) {
   const t = useT();
   const { station: s, distance, api } = props;
@@ -38,8 +40,7 @@ export function StationDetail(props: {
   const reserved = s.acc === 'reserve';
   const opName = props.operatorName;
   const [community, setCommunity] = useState<Community | null>(null);
-  const [avail, setAvail] = useState<Record<string, AvailItem>>({});
-  const live = stationSummary(s, avail);
+  const live = useLive(s);
   const near = distance != null && distance < 0.3;
   const tel = s.tel ? phone(s.tel) : null;
   const large = useLargeText();
@@ -59,7 +60,6 @@ export function StationDetail(props: {
     let alive = true;
     setCommunity(null);
     getCommunity(s.id).then((c) => alive && setCommunity(c));
-    getAvailability((s.pdc ?? []).map(([id]) => id)).then((a) => alive && setAvail(a));
     return () => {
       alive = false;
     };
@@ -114,15 +114,7 @@ export function StationDetail(props: {
         </View>
       ) : null}
       <View style={styles.cta}>
-        <Button
-          variant={down ? 'secondary' : 'primary'}
-          label={near ? t.here.rechargeHere : t.station.prepare}
-          onPress={() => {
-            store.setCurrent(s);
-            router.push({ pathname: '/recharger', params: near ? { station: s.id } : { station: s.id, prepare: '1' } });
-          }}
-          hint={near ? t.station.hintHere : t.station.hintPrepare}
-        />
+        {props.stickyAction ? null : <MainButton s={s} near={near} down={down} />}
         {!near ? (
           <Pressable
             accessibilityRole="button"
@@ -137,10 +129,13 @@ export function StationDetail(props: {
         ) : null}
       </View>
 
+      {/* Temps réel : rien pendant le chargement ou si la requête échoue ; « État inconnu » seulement si l'API le renvoie. */}
       {live.known && !down ? (
         <Text style={[styles.live, { color: live.free ? colors.accentPressed : colors.busy }]}>
           {live.free ? t.station.liveFree(live.free, live.total) : t.station.liveNone}{t.station.liveSuffix}{live.down ? t.station.liveDown(live.down) : ''}
         </Text>
+      ) : !live.known && live.reported ? (
+        <Text style={[styles.live, styles.liveUnknown]} testID="station-unknown">{t.avail.inconnu}</Text>
       ) : null}
 
       <View style={styles.tags}>
@@ -182,6 +177,45 @@ export function StationDetail(props: {
   );
 }
 
+/** Disponibilité temps réel des points de la station (cache 60 s partagé : la fiche et l'action collante ne refont pas la requête). */
+function useLive(s: Station) {
+  const [avail, setAvail] = useState<Record<string, AvailItem>>({});
+  useEffect(() => {
+    let alive = true;
+    setAvail({});
+    getAvailability((s.pdc ?? []).map(([id]) => id)).then((a) => alive && setAvail(a));
+    return () => {
+      alive = false;
+    };
+  }, [s.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  return stationSummary(s, avail);
+}
+
+function MainButton({ s, near, down }: { s: Station; near: boolean; down: boolean }) {
+  const t = useT();
+  return (
+    <Button
+      variant={down ? 'secondary' : 'primary'}
+      label={near ? t.here.rechargeHere : t.station.prepare}
+      onPress={() => {
+        store.setCurrent(s);
+        router.push({ pathname: '/recharger', params: near ? { station: s.id } : { station: s.id, prepare: '1' } });
+      }}
+      hint={near ? t.station.hintHere : t.station.hintPrepare}
+    />
+  );
+}
+
+/** « Recharger ici » / « Préparer la recharge » collé en bas du panneau (texte agrandi : toujours atteignable sans défiler). */
+export function StationMainAction({ station, distance }: { station: Station; distance: number | null }) {
+  const live = useLive(station);
+  return (
+    <View style={styles.sticky} testID="station-sticky-cta">
+      <MainButton s={station} near={distance != null && distance < 0.3} down={allDown(live)} />
+    </View>
+  );
+}
+
 /**
  * Numéro lisible et numéro à composer : « tel:+33176401280 » → « +33 1 76 40 12 80 » ; « 0176401280 » → « 01 76 40 12 80 ».
  */
@@ -208,6 +242,8 @@ const styles = StyleSheet.create({
   cta: { gap: 2 },
   payCard: { borderWidth: 2, borderColor: colors.accent, borderRadius: radius.lg, padding: 14, gap: 10 },
   live: { fontFamily: fonts.bold, fontSize: 14 },
+  liveUnknown: { fontFamily: fonts.medium, color: colors.inkMuted },
+  sticky: { paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface },
   payTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.ink },
   payText: { fontFamily: fonts.medium, fontSize: 14, color: colors.inkMuted, lineHeight: 20 },
   priceRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },

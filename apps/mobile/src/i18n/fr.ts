@@ -166,6 +166,7 @@ export const fr = {
     itemA11y: (name: string, d: string, p: string) => `${name}, à ${d}, ${p}`,
     reserved: 'Accès réservé',
     homeTip: 'Astuce : sur téléphone, ajoutez cette page à l’écran d’accueil.',
+    group: (n: number) => `${n}\u00A0bornes ici`,
     scan: 'Scanner',
     scanA11y: 'Scanner le QR code d’une borne',
   },

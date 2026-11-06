@@ -164,6 +164,7 @@ export const it: Dict = {
     itemA11y: (name: string, d: string, p: string) => `${name}, a ${d}, ${p}`,
     reserved: 'Accesso riservato',
     homeTip: 'Suggerimento: sul telefono, aggiungi questa pagina alla schermata Home.',
+    group: (n: number) => `${n}\u00A0colonnine qui`,
     scan: 'Scansiona',
     scanA11y: 'Scansiona il codice QR di una colonnina',
   },

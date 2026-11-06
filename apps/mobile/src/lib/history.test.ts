@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import AsyncStorage, { failWrites } from '../../test/async-storage';
-import { addRecord, clearHistory, csvCell, HistorySaveError, loadHistory, monthStats, removeRecord, toCsv, totals, updateRecord, type ChargeRecord } from './history';
+import { addRecord, clearHistory, csvCell, HistorySaveError, loadHistory, monthStats, removeAllTickets, removeRecord, toCsv, totals, updateRecord, type ChargeRecord } from './history';
 import { loadTicket, saveTicket, setTicketBlobs, ticketKey } from './ticket';
 import type { TicketBlobStore } from './ticketBlob';
 
@@ -162,5 +162,20 @@ describe('historique : toute erreur d’écriture remonte (affichée par l’éc
     const list = await loadHistory();
     expect(list.map((r) => r.id)).toEqual(['keep']);
     expect(list[0].pricePaid).toBe(9.8);
+  });
+});
+
+describe('stockage plein : « Supprimer des photos de tickets »', () => {
+  it('supprime toutes les photos, garde les recharges', async () => {
+    await clearHistory();
+    const base = { startedAt: 1, endedAt: 2, stationId: 's', stationName: 'S', operatorName: 'O', method: 'reader' as const, kWh: 1, kWhEstimated: false, pricePaid: null, estimatedCost: null, ok: true };
+    await addRecord({ ...base, id: 'a', ticket: true });
+    await addRecord({ ...base, id: 'b', startedAt: 3 });
+    expect(await saveTicket('a', 'data:image/jpeg;base64,AAAA')).toBe(true);
+    expect(await removeAllTickets()).toBe(1);
+    expect(await loadTicket('a')).toBeNull();
+    const list = await loadHistory();
+    expect(list.map((r) => [r.id, !!r.ticket])).toEqual([['b', false], ['a', false]]);
+    expect(await removeAllTickets()).toBe(0);
   });
 });

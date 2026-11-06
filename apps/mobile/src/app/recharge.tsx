@@ -14,9 +14,9 @@ import { Button, Notice } from '../components/ui';
 import { loadWallet, markConnected } from '../lib/accounts';
 import { apiEnabled } from '../lib/api';
 import { sendCheckin } from '../lib/community';
-import { durationLabel, estimateCharge, progressAt, type EstimateInput } from '../lib/estimate';
+import { estimateCharge, progressAt, type EstimateInput } from '../lib/estimate';
 import { parseEuros, invalidAmount } from '../lib/amount';
-import { euros } from '../lib/format';
+import { durationShort, euros, withUnit } from '../lib/format';
 import { autoFinish, departed, distanceToStation, recordOf, AUTO_END_M } from '../lib/autoEnd';
 import { addRecord, methodLabel, updateRecord, type ChargeRecord } from '../lib/history';
 import { saveTicket } from '../lib/ticket';
@@ -31,12 +31,6 @@ import { tr, useT } from '../i18n';
 import { clock as clockFmt, kwhText, num } from '../i18n/format';
 
 const clock = clockFmt;
-const fmt = (ms: number) => {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  return h ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min ${String(s % 60).padStart(2, '0')} s`;
-};
 /** Saisie facultative : vide = OK ; hors de la forme `^\d{1,4}([.,]\d{1,2})?$` = erreur affichée, rien n'est enregistré. */
 const invalid = invalidAmount;
 
@@ -263,8 +257,8 @@ export default function Recharge() {
           {saved.pdcId ? <Row k={C.point} v={`…${saved.pdcId.slice(-4)}`} /> : null}
           <Row k={C.paidTo} v={saved.operatorName} />
           <Row k={C.method} v={methodLabel(saved.method)} />
-          <Row k={C.duration} v={durationLabel((saved.endedAt - saved.startedAt) / 60_000)} />
-          <Row k={saved.kWhEstimated ? C.energyEst : C.energy} v={saved.kWh != null ? kwhText(saved.kWh) : '—'} />
+          <Row k={C.duration} v={durationShort(saved.endedAt - saved.startedAt)} />
+          <Row k={saved.kWhEstimated ? C.energyEst : C.energy} v={saved.kWh != null ? withUnit(kwhText(saved.kWh)) : t.recharger.unknown} />
           <Row k={C.paid} v={saved.pricePaid != null ? euros(Math.round(saved.pricePaid * 100)) : t.common.notProvided} strong />
           {saved.ticket && ticket ? <Image source={{ uri: ticket }} style={styles.ticket} resizeMode="contain" accessibilityLabel={C.ticketA11y} /> : null}
           <Text style={styles.mutedLeft}>{C.keptHere(saved.operatorName)}</Text>
@@ -368,25 +362,24 @@ export default function Recharge() {
       {charging ? (
         <>
           <View style={styles.ring} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: prog.soc }}>
-            <Text style={styles.big}>{prog.soc} %</Text>
+            <Text style={styles.big}>{withUnit(prog.soc, '%')}</Text>
             <Text style={styles.state}>{prog.done ? C.goalReached(est.toSoc) : C.charging(est.toSoc, clock(endAt))}</Text>
             <View style={styles.bar}>
               <View style={[styles.barFill, { width: `${Math.round(pct * 100)}%` }]} />
             </View>
             <View style={styles.stats}>
-              <Stat label={C.energy} value={kwhText(prog.kWhBilled)} />
-              <Stat label={C.costEst} value={prog.cost != null ? euros(Math.round(prog.cost * 100)) : '—'} a11y={prog.cost != null ? undefined : `${C.costEst} : ${t.common.unknownPrice}`} />
-              <Stat label={C.elapsed} value={fmt(elapsedMs)} />
+              <Stat label={C.energy} value={withUnit(kwhText(prog.kWhBilled))} />
+              <Stat label={C.costEst} value={prog.cost != null ? euros(Math.round(prog.cost * 100)) : t.recharger.unknown} />
+              <Stat label={C.elapsed} value={durationShort(elapsedMs)} />
             </View>
-            {prog.cost == null ? <Text style={styles.small}>{`${C.costEst} : ${t.common.unknownPrice}`}</Text> : null}
             <Text style={styles.muted}>
-              {C.estimateNote(d.plan?.vehicle?.name ?? null, est.fromSoc, `${num(est.powerKw)} kW`, d.operatorName)}
+              {C.estimateNote(d.plan?.vehicle?.name ?? null, est.fromSoc, withUnit(num(est.powerKw), 'kW'), d.operatorName)}
             </Text>
           </View>
           {prog.done ? <Notice tone="demo">{C.unplug(est.toSoc, !!idleAt)}</Notice> : null}
           {idleAt ? (
             <Notice tone="demo">
-              {C.idleNotice(clock(idleAt), `${num(tariff!.idle!.perMin, 3)} €/min`)}
+              {C.idleNotice(clock(idleAt), withUnit(num(tariff!.idle!.perMin, 3), '€/min'))}
             </Notice>
           ) : (
             <Notice dark>{C.freeSpot}</Notice>
@@ -403,9 +396,9 @@ export default function Recharge() {
           <View style={styles.card}>
             <Text style={styles.cardTitle} accessibilityRole="header">{C.endedTitle}</Text>
             {d.autoEnded ? <Text style={styles.mutedLeft}>{C.autoEnded(clock(d.endedAt))}</Text> : null}
-            <Row k={C.duration} v={fmt(elapsedMs)} />
-            <Row k={C.energyEstimated} v={kwhText(prog.kWhBilled)} />
-            <Row k={C.costEst} v={prog.cost != null ? euros(Math.round(prog.cost * 100)) : t.common.unknownPrice} />
+            <Row k={C.duration} v={durationShort(elapsedMs)} />
+            <Row k={C.energyEstimated} v={withUnit(kwhText(prog.kWhBilled))} />
+            <Row k={C.costEst} v={prog.cost != null ? euros(Math.round(prog.cost * 100)) : t.recharger.unknown} />
           </View>
 
           <View style={styles.card}>

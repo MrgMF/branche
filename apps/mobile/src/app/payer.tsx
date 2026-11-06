@@ -368,6 +368,12 @@ export default function Payer() {
               {P.dangerous(atStation.length ? atStation.join(', ') : null)}
             </Text>
           ) : null}
+          {/* Sans réseau : message à côté du bouton qui vient d'échouer */}
+          {offline ? (
+            <View role="alert" accessibilityLiveRegion="assertive">
+              <Notice tone="error">{t.common.noNetwork}</Notice>
+            </View>
+          ) : null}
           {result.alternative === 'page' && officialLink ? <Button label={P.useOfficialPage(opName)} onPress={() => pay(officialLink, opName, 'operator-link')} /> : null}
           {result.alternative === 'reader' || (result.alternative === 'page' && !officialLink && readerConfirmed) ? (
             <Button label={P.useReader} variant={result.alternative === 'reader' ? 'primary' : 'secondary'} onPress={payAtReader} hint={t.recharger.hintReader} />
@@ -399,11 +405,6 @@ export default function Payer() {
           </Pressable>
         ) : null}
       </View>
-      {offline ? (
-        <View role="alert" accessibilityLiveRegion="assertive">
-          <Notice tone="error">{t.common.noNetwork}</Notice>
-        </View>
-      ) : null}
       {Platform.OS === 'web' ? <Text style={styles.small}>{P.webTab}</Text> : null}
     </ScrollView>
   );

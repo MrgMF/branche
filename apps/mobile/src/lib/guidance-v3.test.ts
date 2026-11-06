@@ -113,3 +113,12 @@ describe('2. voix : session audio de guidage', () => {
     voice.stopSpeaking();
   });
 });
+
+describe('guidage sur ordinateur : caméra dans la zone libre', () => {
+  it('≥ 768 px : véhicule décalé à gauche de la colonne de boutons ; mobile : centré', async () => {
+    const { followOffsetFor, GUIDANCE_ACTIONS_W } = await import('./guidance');
+    expect(followOffsetFor(1280, 800)).toEqual({ x: -GUIDANCE_ACTIONS_W / 2, y: 144 });
+    expect(followOffsetFor(390, 844)).toEqual({ x: 0, y: 150 });
+    expect(followOffsetFor(844, 390).x).toBeLessThan(0);
+  });
+});

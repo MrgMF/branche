@@ -83,15 +83,15 @@ export default function Historique() {
                 {r.stationName}
               </Text>
               <Text style={styles.small}>
-                {dateFr(r.startedAt)} · {hour(r.startedAt)} · {durationLabel((r.endedAt - r.startedAt) / 60_000)}
+                {dateFr(r.startedAt)} · {hour(r.startedAt)}{r.notStarted ? '' : ` · ${durationLabel((r.endedAt - r.startedAt) / 60_000)}`}
                 {r.pdcId ? H.point(r.pdcId.slice(-4)) : ''}
               </Text>
             </View>
             <Text style={styles.amount}>{r.pricePaid != null ? euros(Math.round(r.pricePaid * 100)) : '—'}</Text>
           </View>
           <Text style={styles.small}>
-            {r.operatorName} · {methodLabel(r.method)} · {r.kWh != null ? `${kwhText(r.kWh)}${r.kWhEstimated ? H.kwhEst : ''}` : H.kwhUnknown}
-            {r.ok === false ? H.failed : ''}
+            {r.operatorName} · {methodLabel(r.method)}
+            {r.notStarted ? H.notStarted : ` · ${r.kWh != null ? `${kwhText(r.kWh)}${r.kWhEstimated ? H.kwhEst : ''}` : H.kwhUnknown}${r.ok === false ? H.failed : ''}`}
           </Text>
           {r.ticket ? <TicketPhoto record={r} onRemoved={setList} onError={() => setSaveErr(true)} /> : null}
           {confirmId === r.id ? (

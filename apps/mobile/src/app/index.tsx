@@ -5,21 +5,24 @@ import { ActivityIndicator, BackHandler, Platform, Pressable, ScrollView, StyleS
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapView, type MapHandle } from '../components/MapView';
 import type { MapOut } from '../components/mapHtml';
-import { StationDetail } from '../components/StationDetail';
+import { StationDetail, StationMainAction } from '../components/StationDetail';
 import { ChargeShortcuts, HereBanner } from '../components/HereBanner';
 import { TripFooter, TripPanel } from '../components/TripPanel';
 import { Guidance, guidanceSide } from '../components/Guidance';
 import { SearchBar } from '../components/SearchBar';
 import { useRechargeHere } from '../lib/useRechargeHere';
 import { Button, Chip, Notice } from '../components/ui';
-import { getAvailability, stationSummary } from '../lib/availability';
+import { getAvailability, stationStatus, stationSummary, type StationStatus } from '../lib/availability';
+import { groupColocated } from '../lib/colocated';
 import { apiEnabled, getConfigWithRetry, type ApiConfig } from '../lib/api';
 import { DEFAULT_CENTER } from '../lib/config';
 import { km, kw, minutes, plugLabel } from '../lib/format';
 import { operatorLabel } from '../lib/connectors';
 import type { Operator } from '../lib/qr';
 import { applyFilters, displayName, distanceKm, loadAround, loadOperators, nearest, NO_FILTERS, type Filters, type Station } from '../lib/stations';
-import { store } from '../lib/store';
+import { staleUnconfirmed, store } from '../lib/store';
+import { abandonUnconfirmed } from '../lib/autoEnd';
+import { SaveFailed } from '../components/SaveFailed';
 import { placeDest, stationDest, useTrip } from '../lib/useTrip';
 import { useUserLocation } from '../lib/useLocation';
 import { useGoParam } from '../lib/useGoParam';
@@ -60,11 +63,13 @@ export default function MapScreen() {
   const [ops, setOps] = useState<Operator[]>([]);
   // Recharge suivie : « Paiement en attente » tant que le démarrage n'est pas confirmé, « Recharge en cours » ensuite
   const [resume, setResume] = useState<{ op: string; started: boolean } | null>(null);
+  const [stale, setStale] = useState<string | null>(null);
+  const [staleSaveErr, setStaleSaveErr] = useState(false);
   // Mise en page mesurée : bas du bloc recherche + filtres, hauteur réelle de la fiche.
   const [topH, setTopH] = useState(insets.top + 130);
   const [sheetH, setSheetH] = useState(0);
   const [advisedId, setAdvisedId] = useState<string | null>(null);
-  const [status, setStatus] = useState<Record<string, 'free' | 'busy' | 'down'>>({});
+  const [status, setStatus] = useState<Record<string, StationStatus>>({});
   const large = useLargeText();
   // Panneau : remis en haut à chaque fiche ouverte (titre et « Recharger ici » visibles sans défiler).
   const sheetScroll = useRef<ScrollViewInstance>(null);
@@ -75,7 +80,11 @@ export default function MapScreen() {
   // Au retour sur la carte : recharge en cours / préparée (badge du menu, bandeau « Reprendre »)
   useFocusEffect(
     useCallback(() => {
-      store.loadDirect().then((d) => setResume(d && !d.endedAt ? { op: d.operatorName, started: !!d.chargeStartedAt } : null));
+      store.loadDirect().then((d) => {
+        setResume(d && !d.endedAt ? { op: d.operatorName, started: !!d.chargeStartedAt } : null);
+        // Paiement jamais confirmé depuis plus de 6 h : « Abandonner ce paiement ? »
+        setStale(staleUnconfirmed(d) ? d.operatorName : null);
+      });
       chargeState().then(setBadge);
     }, []),
   );
@@ -83,6 +92,24 @@ export default function MapScreen() {
   useEffect(() => {
     loadOperators().then(setOps);
   }, []);
+
+  /** « Oui » : archivé dans l'historique comme « non démarré », bandeau retiré. */
+  async function abandonStale() {
+    const d = store.direct();
+    if (!d) return setStale(null);
+    if (!(await abandonUnconfirmed(d))) return setStaleSaveErr(true);
+    store.setDirect(null);
+    setStaleSaveErr(false);
+    setStale(null);
+    setResume(null);
+    chargeState().then(setBadge);
+  }
+  /** « Toujours en cours » : bandeau « Paiement en attente » gardé, question reposée dans 6 h. */
+  function keepStale() {
+    const d = store.direct();
+    if (d) store.setDirect({ ...d, stillOnAt: Date.now() });
+    setStale(null);
+  }
 
   // Configuration du paiement
   useEffect(() => {
@@ -151,11 +178,11 @@ export default function MapScreen() {
     const list = statusKey.split(',').map((id) => byId.get(id)).filter((s): s is Station => !!s);
     getAvailability(list.flatMap((s) => (s.pdc ?? []).map(([id]) => id))).then((items) => {
       if (!alive) return;
-      const next: Record<string, 'free' | 'busy' | 'down'> = {};
+      // Pas de réponse (chargement, échec) : aucune mention ; « inconnu » seulement si l'API renvoie ce statut.
+      const next: Record<string, StationStatus> = {};
       for (const s of list) {
-        const sum = stationSummary(s, items);
-        if (!sum.known) continue;
-        next[s.id] = sum.free ? 'free' : sum.down === sum.known ? 'down' : 'busy';
+        const st = stationStatus(stationSummary(s, items));
+        if (st) next[s.id] = st;
       }
       setStatus(next);
     });
@@ -170,9 +197,22 @@ export default function MapScreen() {
   useGoParam({ byId, setById, ready: !!user || loc === 'denied', plan, setSelectedId });
   const rechargeHere = useRechargeHere();
   const [searching, setSearching] = useState(false);
-  const controls = useMapControls(map, geo, { guiding: !!trip?.guiding, offsetY: wide ? 0 : -height * 0.18 });
-  const sheetMax = Math.round(height * (trip ? 0.58 : selected ? 0.62 : 0.46));
   const PANEL = 440;
+  // « Ma position » : position ET borne du bandeau (conseillée, « Vous êtes à ») ou, à défaut, la plus proche de la liste,
+  // dans la partie visible de la carte (sous la recherche, au-dessus du panneau, à gauche des contrôles).
+  const frameTarget = (advisedId ? byId.get(advisedId) : null) ?? closest[0]?.s ?? null;
+  const controls = useMapControls(map, geo, {
+    guiding: !!trip?.guiding,
+    offsetY: wide ? 0 : -height * 0.18,
+    frame: () => ({
+      target: frameTarget,
+      pad: wide
+        ? { top: topH + 24, bottom: 48, left: 16 + PANEL + 40, right: 12 + 52 + 28 }
+        : { top: topH + 24, bottom: (trip ? sheetH : Math.min(sheetH, Math.round(height * 0.46))) + 28, left: 32, right: 12 + 52 + 20 },
+    }),
+  });
+  // Texte agrandi : fiche plus haute et action principale collée en bas du panneau (toujours atteignable).
+  const sheetMax = Math.round(height * (trip ? 0.58 : selected ? (large ? 0.74 : 0.62) : 0.46));
 
   useEffect(() => {
     store.setStations(all);
@@ -184,11 +224,26 @@ export default function MapScreen() {
   // Synchronisation carte
   useEffect(() => {
     if (!mapReady) return;
+    // Bornes au même endroit (≤ 5 m) : une pastille « 3 bornes ici » qui se déploie en éventail au toucher.
+    const gOf = new Map<string, string>();
+    const groups = groupColocated(visible)
+      .filter((g) => g.length > 1)
+      .map((g) => {
+        const key = g.map((s) => s.id).sort()[0];
+        for (const s of g) gOf.set(s.id, key);
+        return { g: key, lat: g.reduce((a, s) => a + s.lat, 0) / g.length, lon: g.reduce((a, s) => a + s.lon, 0) / g.length, label: t.map.group(g.length) };
+      });
     map.current?.post({
       type: 'stations',
-      stations: visible.map((s) => ({ id: s.id, lat: s.lat, lon: s.lon, kw: s.kw, r: s.acc === 'reserve', label: s.kw ? kw(s.kw) : '', st: status[s.id] })),
+      stations: visible.map((s) => {
+        const st = status[s.id];
+        const live = st === 'unknown' ? undefined : st;
+        const label = s.kw ? kw(s.kw) : '';
+        return { id: s.id, lat: s.lat, lon: s.lon, kw: s.kw, r: s.acc === 'reserve', label, st: live, g: gOf.get(s.id), a11y: [displayName(s), label, live ? availText(live) : null].filter(Boolean).join(', ') };
+      }),
+      groups,
     });
-  }, [visible, mapReady, status]);
+  }, [visible, mapReady, status, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Attribution OSM / MapLibre toujours visible : sous la recherche et les filtres (mobile, loin du point bleu et de la fiche),
   // à droite du panneau (large), en bas pendant le guidage.
@@ -241,6 +296,7 @@ export default function MapScreen() {
   }
 
   const toggle = (k: keyof Filters) => setFilters((f) => ({ ...f, [k]: !f[k] }));
+  const availText = (st: StationStatus) => (st === 'free' ? t.avail.libre : st === 'busy' ? t.avail.occupe : st === 'down' ? t.avail.hors_service : t.avail.inconnu);
 
   return (
     <View style={styles.root}>
@@ -318,6 +374,7 @@ export default function MapScreen() {
               onRoute={() => plan(selected)}
               onClose={() => setSelectedId(null)}
               onPick={select}
+              stickyAction={large}
             />
           ) : (
             <>
@@ -331,7 +388,15 @@ export default function MapScreen() {
                 </Pressable>
               </View>
               <ChargeShortcuts />
-              {resume ? (
+              {stale ? (
+                <View style={styles.stale} role="alert" accessibilityLiveRegion="polite">
+                  <Text style={styles.staleTitle} accessibilityRole="header">{t.map.staleQ}</Text>
+                  <Text style={styles.staleBody}>{t.map.staleBody(stale)}</Text>
+                  <Button label={t.map.staleYes} variant="secondary" onPress={abandonStale} />
+                  <Button label={t.map.staleKeep} variant="ghost" onPress={keepStale} />
+                  {staleSaveErr ? <SaveFailed /> : null}
+                </View>
+              ) : resume ? (
                 <Pressable accessibilityRole="button" onPress={() => router.push('/recharge')} style={styles.resume}>
                   <Text style={styles.resumeText}>{t.map.resume(resume.op, resume.started)}</Text>
                 </Pressable>
@@ -376,13 +441,13 @@ export default function MapScreen() {
                 // Distance seulement depuis la position réelle (jamais depuis le centre de la carte).
                 const d = user ? distanceKm(user, s) : null;
                 const st = status[s.id];
-                const stLabel = st === 'free' ? t.avail.libre : st === 'busy' ? t.avail.occupe : st === 'down' ? t.avail.hors_service : t.avail.inconnu;
+                const stLabel = st ? availText(st) : null;
                 return (
                 <Pressable
                   key={s.id}
                   onPress={() => select(s)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${d != null ? t.map.itemA11y(displayName(s), km(d), kw(s.kw)) : [displayName(s), kw(s.kw)].join(', ')}, ${stLabel}`}
+                  accessibilityLabel={[d != null ? t.map.itemA11y(displayName(s), km(d), kw(s.kw)) : [displayName(s), kw(s.kw)].join(', '), stLabel].filter(Boolean).join(', ')}
                   style={({ pressed }) => [styles.item, large && styles.itemLarge, i === 0 && !advisedId && styles.itemFirst, pressed && { backgroundColor: colors.surfaceAlt }]}
                 >
                   <View style={{ flex: 1, gap: 3 }}>
@@ -392,10 +457,12 @@ export default function MapScreen() {
                     <Text style={styles.itemSub} numberOfLines={large ? 3 : 1}>
                       {[kw(s.kw), s.c.map((c) => plugLabel(c)).join(', '), s.acc === 'reserve' ? t.map.reserved : null].filter(Boolean).join(' · ')}
                     </Text>
-                    {/* Statut temps réel par ligne ; inconnu : mention discrète, sans pastille. */}
-                    <View style={[styles.pill, st === 'free' ? styles.pillFree : st === 'busy' ? styles.pillBusy : st === 'down' ? styles.pillDown : styles.pillUnknown]} accessibilityElementsHidden importantForAccessibility="no">
-                      <Text style={[styles.pillText, { color: st === 'free' ? colors.accentPressed : st === 'busy' ? colors.warnText : st === 'down' ? colors.danger : colors.inkMuted }, !st && styles.pillTextUnknown]}>{stLabel}</Text>
-                    </View>
+                    {/* Statut temps réel par ligne ; rien tant que l'API n'a pas répondu ; « inconnu » renvoyé : mention discrète, sans pastille. */}
+                    {st ? (
+                      <View style={[styles.pill, st === 'free' ? styles.pillFree : st === 'busy' ? styles.pillBusy : st === 'down' ? styles.pillDown : styles.pillUnknown]} accessibilityElementsHidden importantForAccessibility="no">
+                        <Text style={[styles.pillText, { color: st === 'free' ? colors.accentPressed : st === 'busy' ? colors.warnText : st === 'down' ? colors.danger : colors.inkMuted }, st === 'unknown' && styles.pillTextUnknown]}>{stLabel}</Text>
+                      </View>
+                    ) : null}
                   </View>
                   {d != null ? (
                     <View style={{ alignItems: large ? 'flex-start' : 'flex-end' }}>
@@ -410,7 +477,7 @@ export default function MapScreen() {
             </>
           )}
         </ScrollView>
-        {trip ? <TripFooter nav={nav} /> : null}
+        {trip ? <TripFooter nav={nav} /> : selected && large ? <StationMainAction station={selected} distance={user ? distanceKm(user, selected) : null} /> : null}
       </View>
       <AppMenu open={menu} onClose={closeMenu} />
     </View>
@@ -466,6 +533,9 @@ const styles = StyleSheet.create({
   infoBtn: { width: MIN_TOUCH, height: MIN_TOUCH, borderRadius: 22, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   resume: { minHeight: MIN_TOUCH, borderRadius: radius.md, backgroundColor: colors.ink, justifyContent: 'center', paddingHorizontal: 14 },
   resumeText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.onAccent },
+  stale: { gap: 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.busy, backgroundColor: colors.warnSoft, padding: 12 },
+  staleTitle: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
+  staleBody: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.warnText },
   h1: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   loading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   muted: { fontFamily: fonts.medium, fontSize: 14, color: colors.inkMuted },

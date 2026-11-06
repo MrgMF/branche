@@ -79,10 +79,10 @@ export function TripPanel({ nav }: { nav: TripApi }) {
                   onPress={() => nav.selectRoute(i)}
                   style={[styles.card, on && styles.cardOn]}
                 >
-                  <View style={[styles.bar, { backgroundColor: on ? '#1D4ED8' : '#8A9792' }]} />
+                  <View style={[styles.bar, { backgroundColor: on ? colors.accent : colors.switchOff }]} />
                   <View style={{ flex: 1, gap: 3 }}>
                     <View style={styles.rowBetween}>
-                      <Text style={[styles.dur, on && { color: '#1D4ED8' }]}>{durationText(x.durationS)}</Text>
+                      <Text style={[styles.dur, on && { color: colors.accentPressed }]}>{durationText(x.durationS)}</Text>
                       <Text style={[styles.delta, i === 0 ? { color: colors.accentPressed } : null]}>{i === 0 ? t.trip.fastest : deltaText(x.durationS - best.durationS)}</Text>
                     </View>
                     <Text style={styles.meta}>
@@ -224,7 +224,8 @@ const styles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
   muted: { fontFamily: fonts.medium, fontSize: 14, color: colors.inkMuted, lineHeight: 20 },
   card: { flexDirection: 'row', gap: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 12, paddingLeft: 10, minHeight: 72 },
-  cardOn: { borderColor: '#1D4ED8', borderWidth: 2, backgroundColor: '#F3F6FE' },
+  // Trajet sélectionné : accent de la marque (le bleu reste réservé à la position et au tracé sur la carte).
+  cardOn: { borderColor: colors.accent, borderWidth: 2, backgroundColor: colors.accentSoft },
   bar: { width: 5, borderRadius: 3 },
   dur: { fontFamily: fonts.display, fontSize: 24, color: colors.ink },
   delta: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },

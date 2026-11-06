@@ -98,6 +98,26 @@ export function maneuverVoice(level: AnnounceLevel, inM: number, step: RouteStep
   return announcementText(level, inM, step, then);
 }
 
+// ---------------------------------------------------------------- Guidage : mise en page et caméra
+
+/** Paysage : largeur du bandeau de guidage à gauche (la carte occupe le reste, à droite). 0 en portrait. */
+export const guidanceSide = (width: number, height: number) => (width > height ? Math.min(420, Math.max(300, Math.round(width * 0.42))) : 0);
+
+/** Colonne des boutons ronds (voix, signaler, partager) à droite de la carte : 56 px + marges. */
+export const GUIDANCE_ACTIONS_W = 80;
+
+/**
+ * Décalage de la caméra en guidage (px, centre de la carte → position du véhicule). Vertical : véhicule plus bas
+ * (plus de route devant). Ordinateur / grand écran (≥ 768 px) : centré horizontalement dans la zone libre de la carte,
+ * à gauche de la colonne de boutons (le tracé ne passe pas sous les boutons). En paysage, la carte commence déjà
+ * à droite du bandeau (app/index.tsx : left = guidanceSide), d'où un décalage d'une demi-colonne seulement.
+ */
+export function followOffsetFor(width: number, height: number): { x: number; y: number } {
+  const y = width > height ? Math.round(height * 0.18) : 150;
+  const x = width >= 768 ? -Math.round(GUIDANCE_ACTIONS_W / 2) : 0;
+  return { x, y };
+}
+
 // ---------------------------------------------------------------- Guidage : états
 
 /** Tracé de la proposition de trajet plus rapide, affiché sur la carte jusqu'à la décision (« −X min »). */

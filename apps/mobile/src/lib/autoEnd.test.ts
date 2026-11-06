@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { autoFinish, departed, recordOf } from './autoEnd';
+import { abandonUnconfirmed, autoFinish, departed, notStartedRecord, recordOf } from './autoEnd';
 import { clearHistory, loadHistory } from './history';
-import type { DirectCharge } from './store';
+import { staleUnconfirmed, type DirectCharge } from './store';
+import { monthStats } from './history';
 
 const d: DirectCharge = {
   station: { id: 'FRTSTP0001', name: 'Borne de test', lat: 48.7585, lon: 2.3035 },
@@ -38,5 +39,28 @@ describe('fin automatique', () => {
     expect(h[0]).toMatchObject({ id: `${d.chargeStartedAt}-FRTSTP0001`, method: 'reader', kWhEstimated: true, pricePaid: null });
     expect(h[0].kWh).toBeGreaterThan(5);
     expect(recordOf(d, lastNear).id).toBe(h[0].id);
+  });
+});
+
+describe('paiement jamais confirmé depuis plus de 6 h', () => {
+  const pending: DirectCharge = { ...d, url: 'https://pay.test/', chargeStartedAt: null };
+  const H = 3600_000;
+  it('question posée seulement après 6 h sans démarrage, reposée 6 h après « Toujours en cours »', () => {
+    expect(staleUnconfirmed(pending, pending.openedAt + 5 * H)).toBe(false);
+    expect(staleUnconfirmed(pending, pending.openedAt + 6 * H + 1)).toBe(true);
+    expect(staleUnconfirmed(d, d.openedAt + 30 * H)).toBe(false); // démarrée
+    expect(staleUnconfirmed({ ...pending, endedAt: pending.openedAt + H }, pending.openedAt + 30 * H)).toBe(false);
+    const kept = { ...pending, stillOnAt: pending.openedAt + 7 * H };
+    expect(staleUnconfirmed(kept, pending.openedAt + 8 * H)).toBe(false);
+    expect(staleUnconfirmed(kept, pending.openedAt + 13 * H + 1)).toBe(true);
+    expect(staleUnconfirmed(null)).toBe(false);
+  });
+  it('« Oui » : archivé « non démarré » (ni énergie ni coût), hors totaux du mois', async () => {
+    expect(notStartedRecord(pending)).toMatchObject({ notStarted: true, ok: false, kWh: null, estimatedCost: null, endedAt: pending.openedAt });
+    expect(await abandonUnconfirmed(pending)).toBe(true);
+    const list = await loadHistory();
+    expect(list).toHaveLength(1);
+    expect(list[0].notStarted).toBe(true);
+    expect(monthStats(list, pending.openedAt).count).toBe(0);
   });
 });

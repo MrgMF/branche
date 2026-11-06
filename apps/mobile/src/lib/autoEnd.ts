@@ -81,3 +81,18 @@ export async function autoFinish(d: DirectCharge, now = Date.now()): Promise<Dir
   await scheduleAlerts([{ at: now + 1500, title: tr().recharge.autoEndTitle, body: tr().recharge.autoEndBody(d.station.name) }]);
   return { ...d, endedAt, autoEnded: true, alertIds: [], ...(saved ? {} : { saveFailed: true }) };
 }
+
+/** Reçu « non démarré » d'un paiement abandonné : ni énergie, ni coût estimé, échec. */
+export function notStartedRecord(d: DirectCharge): ChargeRecord {
+  const { startSoc: _a, endSoc: _b, ...r } = recordOf(d, d.openedAt);
+  return { ...r, endedAt: d.openedAt, kWh: null, kWhEstimated: false, estimatedCost: null, ok: false, notStarted: true };
+}
+
+/** « Abandonner ce paiement ? » → Oui : archivé dans l'historique (« non démarré »), rappels annulés. false si l'historique n'a pas pu être écrit. */
+export async function abandonUnconfirmed(d: DirectCharge): Promise<boolean> {
+  await cancelAlerts(d.alertIds);
+  return addRecord(notStartedRecord(d)).then(
+    () => true,
+    () => false,
+  );
+}

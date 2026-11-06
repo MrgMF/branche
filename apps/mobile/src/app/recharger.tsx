@@ -4,7 +4,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CopyId } from '../components/CopyId';
 import { TariffLines } from '../components/Pricing';
@@ -15,12 +15,13 @@ import { availLabel, getAvailability, type AvailItem } from '../lib/availability
 import { clearPrepared, loadPrepared, savePrepared, type Prepared } from '../lib/prepared';
 import { durationLabel, estimateCharge, isDc } from '../lib/estimate';
 import { findStation, pointById, pointsOf, type ChargePoint } from '../lib/evse';
-import { euros, km, kw, plugLabel } from '../lib/format';
+import { euros, km, kw, NBSP, plugLabel, withUnit } from '../lib/format';
+import { useLargeText } from '../lib/useLargeText';
 import type { MethodId } from '../lib/history';
 import type { Operator } from '../lib/qr';
 import { displayName, loadAround, loadOperators, nearest, type Station } from '../lib/stations';
 import { store } from '../lib/store';
-import { stationTariff } from '../lib/tariff';
+import { describeTariff, stationTariff } from '../lib/tariff';
 import { compatible, loadVehicle, saveVehicle, type Vehicle } from '../lib/vehicle';
 import { loadWallet, type Wallet } from '../lib/accounts';
 import { appOnly, badgeMentioned, badgeNames, nearestPayable, surelyPayable } from '../lib/methods';
@@ -39,6 +40,10 @@ export default function Recharger() {
   const R = t.recharger;
   const { lang } = useLocale();
   const insets = useSafeAreaInsets();
+  // Texte agrandi (≥ 130 %) : titres sur plusieurs lignes, tuiles empilées, marges des boutons texte proportionnelles
+  const large = useLargeText();
+  const { fontScale } = useWindowDimensions();
+  const pad = Math.round(8 * Math.min(2, Math.max(1, fontScale)));
   const params = useLocalSearchParams<{ evse?: string; station?: string; step?: string; method?: string; noLink?: string; prepare?: string }>();
   const [station, setStation] = useState<Station | null | undefined>(undefined);
   const [pointId, setPointId] = useState<string | null>(null);
@@ -270,6 +275,8 @@ export default function Recharger() {
         kicker={`${preparing ? R.prepKicker : ''}${step === 'point' ? R.step1 : points.length > 1 || autoPoint === null ? R.step2 : t.titles.recharger}`}
         title={displayName(station)}
         sub={opName}
+        titleLines={large ? 0 : 2}
+        subLines={large ? 0 : 2}
       />
       {step === 'point' && reliabilityText(community) ? <Text style={styles.small}>{t.pricing.reliability(reliabilityText(community)!)}</Text> : null}
 
@@ -328,17 +335,17 @@ export default function Recharger() {
             <TariffLines station={station} community={community} />
             <View style={styles.estimate} accessibilityRole="summary">
               <Text style={styles.estLabel}>
-                {R.estimateFor(est.assumedVehicle ? R.avgVehicle55 : vehicle?.name ?? '', est.fromSoc, est.toSoc)}
+                {withUnit(R.estimateFor(est.assumedVehicle ? R.avgVehicle55 : vehicle?.name ?? '', est.fromSoc, est.toSoc))}
               </Text>
-              <View style={styles.estRow}>
-                <Big label={R.energy} value={kwhText(est.kWhBilled)} />
-                <Big label={R.duration} value={`≈ ${durationLabel(est.minutes)}`} />
-                <Big label={R.cost} value={est.cost != null ? `≈ ${euros(Math.round(est.cost * 100))}` : R.unknown} />
+              <View style={[styles.estRow, large && { flexDirection: 'column' }]}>
+                <Big label={R.energy} value={withUnit(kwhText(est.kWhBilled))} large={large} />
+                <Big label={R.duration} value={withUnit(`≈${NBSP}${durationLabel(est.minutes)}`)} large={large} />
+                <Big label={R.cost} value={est.cost != null ? `≈${NBSP}${euros(Math.round(est.cost * 100))}` : R.unknown} large={large} />
               </View>
               <Text style={styles.small}>
-                {R.powerNote(kw(est.powerKw), isDc(point.kw, point.plugs), kw(point.kw), est.assumedVehicle)}
+                {withUnit(R.powerNote(kw(est.powerKw), isDc(point.kw, point.plugs), kw(point.kw), est.assumedVehicle))}
                 {est.partial ? R.partial : ''}
-                {est.unknownPrice ? R.unknownPriceNote : ''}
+                {est.unknownPrice && (describeTariff(tariff).length || tariff.kind === 'link') ? R.unknownPriceNote : ''}
               </Text>
               <View style={styles.socRow}>
                 <Text style={[styles.p, { flex: 1 }]}>{R.socNow(soc == null)}</Text>
@@ -346,7 +353,7 @@ export default function Recharger() {
                   <Text style={styles.stepText}>−</Text>
                 </Pressable>
                 <Text style={styles.socValue} accessibilityLabel={R.socA11y(soc ?? 20)}>
-                  {soc ?? 20} %
+                  {withUnit(soc ?? 20, '%')}
                 </Text>
                 <Pressable accessibilityRole="button" accessibilityLabel={R.socPlus} onPress={() => changeSoc(5)} style={styles.step}>
                   <Text style={styles.stepText}>+</Text>
@@ -461,7 +468,7 @@ export default function Recharger() {
                 accessibilityLabel={`${o.label}${o.available ? '' : R.unavailableSuffix}`}
                 disabled={!o.available}
                 onPress={() => setMethod(o.id)}
-                style={({ pressed }) => [styles.alt, !o.available && styles.altOff, pressed && { backgroundColor: colors.surfaceAlt }]}
+                style={({ pressed }) => [styles.alt, large && { flexDirection: 'column', alignItems: 'stretch' }, !o.available && styles.altOff, pressed && { backgroundColor: colors.surfaceAlt }]}
               >
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={styles.altTitle}>{o.label}</Text>
@@ -469,7 +476,13 @@ export default function Recharger() {
                     {o.why}
                   </Text>
                 </View>
-                {!o.available ? <Tag>{t.common.unavailable}</Tag> : <Text style={styles.linkText}>{t.common.choose}</Text>}
+                {!o.available ? (
+                  <Tag>{t.common.unavailable}</Tag>
+                ) : (
+                  <View style={[styles.choosePill, { paddingHorizontal: pad * 1.5, paddingVertical: pad / 2 }, large && { alignSelf: 'flex-start' }]}>
+                    <Text style={styles.linkText}>{t.common.choose}</Text>
+                  </View>
+                )}
               </Pressable>
             ))}
           {station.tel ? (
@@ -531,11 +544,12 @@ function PointRow({ p, onPress, selected, disabled, status }: { p: ChargePoint; 
   );
 }
 
-function Big({ label, value }: { label: string; value: string }) {
+function Big({ label, value, large }: { label: string; value: string; large?: boolean }) {
   return (
     <View style={styles.big}>
       <Text style={styles.bigLabel}>{label}</Text>
-      <Text style={styles.bigValue} numberOfLines={1} adjustsFontSizeToFit>
+      {/* Texte agrandi : jamais tronqué ni réduit sur une ligne */}
+      <Text style={styles.bigValue} numberOfLines={large ? undefined : 1} adjustsFontSizeToFit={!large}>
         {value}
       </Text>
     </View>
@@ -598,6 +612,7 @@ const styles = StyleSheet.create({
   alt: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 64, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   altOff: { opacity: 0.6 },
   altTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
+  choosePill: { minHeight: MIN_TOUCH, justifyContent: 'center', borderRadius: radius.md, borderWidth: 1, borderColor: colors.accent },
   link: { minHeight: MIN_TOUCH, justifyContent: 'center' },
   linkText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.accent },
 });

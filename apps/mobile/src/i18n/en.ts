@@ -163,6 +163,7 @@ export const en: Dict = {
     itemA11y: (name: string, d: string, p: string) => `${name}, ${d} away, ${p}`,
     reserved: 'Restricted access',
     homeTip: 'Tip: on a phone, add this page to your home screen.',
+    group: (n: number) => `${n}\u00A0chargers here`,
     scan: 'Scan',
     scanA11y: 'Scan a charger’s QR code',
   },

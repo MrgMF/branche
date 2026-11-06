@@ -41,6 +41,14 @@ export interface DirectCharge {
   accountAsk?: { key: string; name: string };
   /** Le reçu (fin automatique) n'a pas pu être écrit dans l'historique : affiché, « Enregistrer » réessaie. */
   saveFailed?: boolean;
+  /** « Toujours en cours » répondu à « Abandonner ce paiement ? » : question reposée 6 h plus tard. */
+  stillOnAt?: number;
+}
+
+/** Paiement ouvert dont le démarrage n'est jamais confirmé : au-delà de 6 h, l'accueil demande « Abandonner ce paiement ? ». */
+export const STALE_UNCONFIRMED_MS = 6 * 3600_000;
+export function staleUnconfirmed(d: DirectCharge | null, now = Date.now()): d is DirectCharge {
+  return !!d && !d.chargeStartedAt && !d.endedAt && now - Math.max(d.openedAt, d.stillOnAt ?? 0) > STALE_UNCONFIRMED_MS;
 }
 
 const KEY = 'branche.direct.v1';
@@ -89,8 +97,9 @@ export const store = {
     } catch {
       direct = null;
     }
-    // Une recharge abandonnée depuis plus de 24 h n'est plus proposée
-    if (direct && Date.now() - direct.openedAt > 24 * 3600 * 1000) store.setDirect(null);
+    // Une recharge démarrée puis abandonnée depuis plus de 24 h n'est plus proposée. Un paiement jamais confirmé n'est
+    // jamais effacé en silence : l'accueil demande « Abandonner ce paiement ? » (archivé « non démarré » si oui).
+    if (direct && direct.chargeStartedAt && Date.now() - direct.openedAt > 24 * 3600 * 1000) store.setDirect(null);
     return direct;
   },
 };

@@ -7,7 +7,7 @@ import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getAvailability, stationSummary } from '../lib/availability';
 import { runPlan } from '../lib/connectors';
 import { shortId } from '../lib/evse';
-import { euros, km, kw, plugLabel } from '../lib/format';
+import { euros, km, kw, plugLabel, withUnit } from '../lib/format';
 import { methodLabel } from '../lib/history';
 import { clearPrepared, loadPrepared, type Prepared } from '../lib/prepared';
 import { compatible, loadVehicle, type Vehicle } from '../lib/vehicle';
@@ -24,8 +24,8 @@ import { distText } from '../i18n/format';
 type Pos = { lat: number; lon: number };
 
 /**
- * `filters` : la borne conseillée respecte les filtres de la carte. `onAdvised` : identifiant de la borne conseillée affichée
- * (la carte l'omet de sa liste pour ne pas la répéter). Sans position, aucune borne n'est conseillée (pas de distance inventée).
+ * `filters` : la borne conseillée respecte les filtres de la carte. `onAdvised` : identifiant de la borne mise en avant dans le
+ * bandeau (« Vous êtes à », recharge préparée ou borne conseillée) : la carte l'omet de sa liste pour ne pas la répéter. Sans position, aucune borne n'est conseillée (pas de distance inventée).
  */
 export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { user: Pos | null; onPick?: (s: Station) => void; filters?: Filters; onAdvised?: (id: string | null) => void }) {
   const t = useT();
@@ -122,10 +122,10 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
     };
   }, [hitId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Borne conseillée réellement affichée (cas 3 ci-dessous), signalée à la carte.
+  // Borne réellement affichée dans le bandeau (cas 1, 2 ou 3 ci-dessous), signalée à la carte.
   const preparedHere = !!(hit && prepared && prepared.station.id === hit.station.id);
   const hereShown = !!(hit && hidden !== hit.station.id);
-  const advisedId = !preparedHere && !hereShown && onPick ? (prepared ? prepared.station.id : pick?.s.id ?? null) : null;
+  const advisedId = preparedHere || hereShown ? hit!.station.id : onPick ? (prepared ? prepared.station.id : pick?.s.id ?? null) : null;
   useEffect(() => {
     onAdvised?.(advisedId);
   }, [advisedId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -134,7 +134,7 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
   // 1. Arrivé à une borne préparée : un seul geste pour payer
   if (hit && prepared && prepared.station.id === hit.station.id) {
     const p = prepared;
-    const cost = p.estimatedCost != null ? ` · ≈ ${euros(Math.round(p.estimatedCost * 100))}` : '';
+    const cost = p.estimatedCost != null ? ` · ≈\u00A0${euros(Math.round(p.estimatedCost * 100))}` : '';
     return (
       <View style={styles.card} accessibilityRole="summary">
         <Text style={styles.kicker}>{t.here.ready}</Text>
@@ -175,7 +175,7 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
     const down = hitDown?.id === s.id;
     const downAlt = down ? hitDown.alt : undefined;
     return (
-      <View style={[styles.card, down && styles.cardDown]} accessibilityRole="summary" accessibilityLabel={t.here.youAreAtA11y(displayName(s), distText(hit.distanceM))}>
+      <View style={[styles.card, down && styles.cardDown]} accessibilityRole="summary" accessibilityLabel={t.here.youAreAtA11y(displayName(s), withUnit(distText(hit.distanceM)))}>
         <View style={styles.row}>
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={styles.kicker}>{t.here.youAreAt}</Text>
@@ -183,7 +183,7 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
               {displayName(s)}
             </Text>
             <Text style={styles.sub} numberOfLines={2}>
-              {distText(hit.distanceM)} · {kw(s.kw)} · {s.c.map((c) => plugLabel(c)).join(', ')}
+              {withUnit(distText(hit.distanceM))} · {kw(s.kw)} · {s.c.map((c) => plugLabel(c)).join(', ')}
             </Text>
             {down ? <Text style={styles.down}>{t.station.allDown}</Text> : null}
           </View>
