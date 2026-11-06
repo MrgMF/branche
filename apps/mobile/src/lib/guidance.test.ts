@@ -166,4 +166,19 @@ describe('recherche Photon côté app (site sans API)', () => {
     });
     expect(r).toEqual([{ label: '10 Rue de Rivoli', sublabel: '75004 Paris', lat: 48.85566, lon: 2.3589, kind: 'address' }]);
   });
+
+  it('« carrefour » : un commerce nommé (osm_key shop, type house) est un lieu, nom en titre et adresse en sous-titre', () => {
+    const carrefour = { type: 'house', osm_key: 'shop', name: "Carrefour L'Haÿ-les-Roses", street: 'Avenue du Général de Gaulle', housenumber: '97', postcode: '94240', city: "L'Haÿ-les-Roses", countrycode: 'FR' };
+    const r = parsePhotonClient({
+      features: [
+        { geometry: { coordinates: [2.34575, 48.78393] }, properties: carrefour },
+        // Bâtiment nommé et lieu-dit : pas des lieux au sens commerce/équipement.
+        { geometry: { coordinates: [2.35, 48.78] }, properties: { type: 'house', osm_key: 'building', name: 'Résidence A', street: 'Rue B', housenumber: '3', postcode: '94240', city: 'X' } },
+        { geometry: { coordinates: [2.29, 48.75] }, properties: { type: 'city', osm_key: 'place', name: 'Antony', postcode: '92160', state: 'Île-de-France' } },
+      ],
+    });
+    expect(r[0]).toEqual({ label: "Carrefour L'Haÿ-les-Roses", sublabel: "97 Avenue du Général de Gaulle, 94240 L'Haÿ-les-Roses", lat: 48.78393, lon: 2.34575, kind: 'poi' });
+    expect(r[1]).toMatchObject({ label: '3 Rue B', kind: 'address' });
+    expect(r[2]).toMatchObject({ label: 'Antony', kind: 'city' });
+  });
 });

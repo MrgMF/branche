@@ -122,9 +122,48 @@ export function followOffsetFor(width: number, height: number): { x: number; y: 
 
 /** Tracé de la proposition de trajet plus rapide, affiché sur la carte jusqu'à la décision (« −X min »). */
 export const OFFER_ROUTE_ID = '__offer';
-export function offerAlt(offer: { route: Pick<RouteOption, 'geometry'>; gainS: number } | null | undefined): { id: string; coords: LonLat[]; label: string }[] {
+/** Tronçon déjà parcouru (gris, sous le tracé). */
+export const DONE_ROUTE_ID = '__done';
+
+/** Tolérance d'écart au tracé (m), précision GPS comprise : hors trajet au-delà. */
+export const routeTolerance = (accuracy: number | null | undefined) => Math.max(45, Math.min(accuracy ?? 20, 60) + 30);
+
+/** Ligne coupée à la projection de `p` (le reste du tracé, depuis la position). */
+export function lineFrom(line: LonLat[], p: { lat: number; lon: number }): LonLat[] {
+  if (line.length < 2) return line;
+  const { seg } = progressOnRoute(p, line);
+  const a = line[seg]!, b = line[seg + 1]!;
+  const k = Math.cos((p.lat * Math.PI) / 180);
+  const dx = (b[0] - a[0]) * k, dy = b[1] - a[1];
+  const len2 = dx * dx + dy * dy;
+  const t = len2 ? Math.max(0, Math.min(1, ((p.lon - a[0]) * k * dx + (p.lat - a[1]) * dy) / len2)) : 0;
+  const here: LonLat = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const rest = line.slice(seg + 1);
+  return rest.length ? [here, ...rest] : [here, b];
+}
+
+/**
+ * Tracé proposé sur la carte (« −X min ») jusqu'à la décision, coupé à la position actuelle `from` (seul le trajet
+ * à venir est dessiné, jamais la partie déjà dépassée).
+ */
+export function offerAlt(
+  offer: { route: Pick<RouteOption, 'geometry'>; gainS: number } | null | undefined,
+  from?: { lat: number; lon: number } | null,
+): { id: string; coords: LonLat[]; label: string }[] {
   if (!offer || offer.route.geometry.length < 2) return [];
-  return [{ id: OFFER_ROUTE_ID, coords: offer.route.geometry, label: tr().navx.gainLabel(Math.max(1, Math.round(offer.gainS / 60))) }];
+  const coords = from ? lineFrom(offer.route.geometry, from) : offer.route.geometry;
+  if (coords.length < 2) return [];
+  return [{ id: OFFER_ROUTE_ID, coords, label: tr().navx.gainLabel(Math.max(1, Math.round(offer.gainS / 60))) }];
+}
+
+/**
+ * Proposition toujours valable à cette position ? Le conducteur doit être sur le trajet proposé (écart < tolérance) :
+ * sinon (bifurcation dépassée) l'offre est retirée sans annonce. Position trop imprécise (> 100 m) : pas de verdict.
+ */
+export function offerStillValid(p: { lat: number; lon: number; accuracy?: number | null }, offer: { route: Pick<RouteOption, 'geometry'> }): boolean {
+  if ((p.accuracy ?? 0) > 100) return true;
+  if (offer.route.geometry.length < 2) return false;
+  return progressOnRoute(p, offer.route.geometry).off < routeTolerance(p.accuracy);
 }
 
 /** Bascule du fournisseur en cours de guidage : TomTom (trafic) → Valhalla (sans trafic) = toast d'avertissement. */

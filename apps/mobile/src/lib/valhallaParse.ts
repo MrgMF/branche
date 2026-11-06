@@ -4,7 +4,7 @@
 
 export type VhManeuver =
   | 'depart' | 'straight' | 'turn-left' | 'turn-right' | 'slight-left' | 'slight-right' | 'sharp-left' | 'sharp-right'
-  | 'uturn' | 'roundabout' | 'exit-left' | 'exit-right' | 'keep-left' | 'keep-right' | 'merge' | 'ferry' | 'waypoint' | 'arrive';
+  | 'uturn' | 'roundabout' | 'exit-left' | 'exit-right' | 'keep-left' | 'keep-right' | 'merge' | 'ramp' | 'ferry' | 'waypoint' | 'arrive';
 export type VhLaneDir =
   | 'straight' | 'slight-left' | 'left' | 'sharp-left' | 'uturn-left' | 'slight-right' | 'right' | 'sharp-right' | 'uturn-right' | 'merge-left' | 'merge-right';
 
@@ -92,6 +92,8 @@ export function instructionFr(s: Pick<VhStep, 'maneuver' | 'street' | 'exit' | '
       return `Restez à droite${toward || onto}`;
     case 'merge':
       return s.street ? `Insérez-vous sur ${s.street}` : 'Insérez-vous dans la circulation';
+    case 'ramp':
+      return `Prenez la bretelle${toward || onto}`;
     case 'ferry':
       return `Prenez le bac${onto}`;
     case 'waypoint':

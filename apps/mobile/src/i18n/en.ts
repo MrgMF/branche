@@ -333,6 +333,7 @@ export const en: Dict = {
       'keep-left': 'keep left',
       'keep-right': 'keep right',
       merge: 'merge',
+      ramp: 'ramp',
       ferry: 'ferry',
       waypoint: 'stop',
       arrive: 'arrival',
@@ -382,6 +383,7 @@ export const en: Dict = {
   voice: {
     go: (dest: string, trafficMin: number | null, first: string | null) => `Let’s go to ${dest}${trafficMin ? `, including ${trafficMin} minutes of traffic` : ''}.${first ? ` ${first}` : ''}`,
     newRoute: 'New route.',
+    rerouting: 'Recalculating route.',
     viaReached: (n: string) => `You have reached your stop, ${n}.`,
     arrivingIn: (d: string) => `In ${d}, you will arrive.`,
     dangerZone: 'Danger zone.',
@@ -448,6 +450,7 @@ export const en: Dict = {
     'keep-left': (p: InstrParts) => `Keep left${toward(p) || onto(p)}`,
     'keep-right': (p: InstrParts) => `Keep right${toward(p) || onto(p)}`,
     merge: (p: InstrParts) => (p.street ? `Merge onto ${p.street}` : 'Merge into traffic'),
+    ramp: (p: InstrParts) => `Take the ramp${toward(p) || onto(p)}`,
     ferry: (p: InstrParts) => `Take the ferry${onto(p)}`,
     waypoint: (_p: InstrParts) => 'You have reached your stop',
     arrive: (_p: InstrParts) => 'You have arrived at your destination',

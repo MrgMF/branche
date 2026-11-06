@@ -4,7 +4,7 @@ import { AccessibilityInfo, Linking, Platform, Pressable, StyleSheet, Text, useW
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navigationLinks } from '../lib/charge';
 import { kw } from '../lib/format';
-import { displayName } from '../lib/stations';
+import { navName } from '../lib/stations';
 import { bigDist, etaClock, guidanceSide, instructionOf, isOverSpeed, LOW_SOC, maneuverOf, SOC_CHOICES } from '../lib/guidance';
 import { useT } from '../i18n';
 import { speedUnit, speedValue } from '../i18n/format';
@@ -71,7 +71,7 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
   const m = next ? maneuverOf(next.step) : 'straight';
   const d = bigDist(next?.inM ?? 0);
   // Sortie / bifurcation : la direction des panneaux en ligne principale ; arrivée : le nom de la destination.
-  const signpost = m.startsWith('exit-') || m.startsWith('keep-');
+  const signpost = m.startsWith('exit-') || m.startsWith('keep-') || m === 'ramp';
   const street = !next
     ? t.guidance.follow
     : m === 'arrive'
@@ -188,7 +188,7 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
           <View style={[styles.offer, styles.lowSoc]} accessibilityLiveRegion="polite" testID="low-soc">
             <Text style={styles.offerTitle}>{t.navx.lowSocTitle(Math.max(0, trip.lowSoc))}</Text>
             <Text style={styles.offerMeta} numberOfLines={2}>
-              {lowCharger ? t.navx.lowSocCharger(displayName(lowCharger.station), kw(lowCharger.station.kw), distText(lowCharger.alongM - trip.along)) : trip.chargerSearching ? t.navx.lowSocSearching : t.trip.noChargers}
+              {lowCharger ? t.navx.lowSocCharger(navName(lowCharger.station), kw(lowCharger.station.kw), distText(lowCharger.alongM - trip.along)) : trip.chargerSearching ? t.navx.lowSocSearching : t.trip.noChargers}
             </Text>
             {lowCharger ? <Button label={t.trip.addVia} style={{ minHeight: 52 }} onPress={() => nav.addVia(lowCharger.station)} /> : null}
           </View>

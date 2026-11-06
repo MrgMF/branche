@@ -10,7 +10,7 @@ export type LonLat = [number, number];
 /** Manœuvre normalisée par l'API (docs/api-contract-v2-navigation.md). */
 export type Maneuver =
   | 'depart' | 'straight' | 'turn-left' | 'turn-right' | 'slight-left' | 'slight-right' | 'sharp-left' | 'sharp-right'
-  | 'uturn' | 'roundabout' | 'exit-left' | 'exit-right' | 'keep-left' | 'keep-right' | 'merge' | 'ferry' | 'waypoint' | 'arrive';
+  | 'uturn' | 'roundabout' | 'exit-left' | 'exit-right' | 'keep-left' | 'keep-right' | 'merge' | 'ramp' | 'ferry' | 'waypoint' | 'arrive';
 export type LaneDir =
   | 'straight' | 'slight-left' | 'left' | 'sharp-left' | 'uturn-left' | 'slight-right' | 'right' | 'sharp-right' | 'uturn-right' | 'merge-left' | 'merge-right';
 export interface Lane {

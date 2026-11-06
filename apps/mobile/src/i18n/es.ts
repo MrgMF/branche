@@ -337,6 +337,7 @@ export const es: Dict = {
       'keep-left': 'mantenerse a la izquierda',
       'keep-right': 'mantenerse a la derecha',
       merge: 'incorporación',
+      ramp: 'vía de acceso',
       ferry: 'ferri',
       waypoint: 'parada',
       arrive: 'llegada',
@@ -386,6 +387,7 @@ export const es: Dict = {
   voice: {
     go: (dest: string, trafficMin: number | null, first: string | null) => `En marcha hacia ${dest}${trafficMin ? `, con ${trafficMin} minutos de tráfico` : ''}.${first ? ` ${first}` : ''}`,
     newRoute: 'Nueva ruta.',
+    rerouting: 'Recalculando la ruta.',
     viaReached: (n: string) => `Has llegado a tu parada, ${n}.`,
     arrivingIn: (d: string) => `En ${d}, habrás llegado.`,
     dangerZone: 'Zona de peligro.',
@@ -452,6 +454,7 @@ export const es: Dict = {
     'keep-left': (p: InstrParts) => `Mantente a la izquierda${toward(p) || onto(p)}`,
     'keep-right': (p: InstrParts) => `Mantente a la derecha${toward(p) || onto(p)}`,
     merge: (p: InstrParts) => (p.street ? `Incorpórate a ${p.street}` : 'Incorpórate al tráfico'),
+    ramp: (p: InstrParts) => `Toma la vía de acceso${toward(p) || onto(p)}`,
     ferry: (p: InstrParts) => `Toma el ferri${onto(p)}`,
     waypoint: (_p: InstrParts) => 'Has llegado a tu parada',
     arrive: (_p: InstrParts) => 'Has llegado a tu destino',

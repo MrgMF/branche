@@ -34,11 +34,15 @@ export function parsePhotonClient(body: unknown): Place[] {
     const hn = txt(pr.housenumber);
     const city = join(txt(pr.postcode), txt(pr.city) || txt(pr.county));
     const t = txt(pr.type);
+    const key = txt(pr.osm_key);
+    const address = join(hn, street);
     let p: Omit<Place, 'lat' | 'lon'>;
-    if (t === 'house' && street && (hn || !name)) p = { label: join(hn, street), sublabel: city, kind: 'address' };
-    else if (t === 'street') p = { label: name || street, sublabel: city, kind: 'street' };
-    else if (['city', 'district', 'locality', 'county', 'state'].includes(t)) p = { label: name, sublabel: join(txt(pr.postcode), txt(pr.state)), kind: 'city' };
-    else p = { label: name || join(hn, street), sublabel: name && street ? `${join(hn, street)}, ${city}` : city, kind: 'poi' };
+    if (t === 'street') p = { label: name || street, sublabel: city, kind: 'street' };
+    else if (['city', 'district', 'locality', 'county', 'state'].includes(t) && (!key || key === 'place' || key === 'boundary')) p = { label: name, sublabel: join(txt(pr.postcode), txt(pr.state)), kind: 'city' };
+    // Lieu nommé (commerce, équipement…, osm_key autre que place/building) : son nom en titre, l'adresse en sous-titre.
+    else if (name && key && key !== 'place' && key !== 'building') p = { label: name, sublabel: address ? `${address}, ${city}` : city, kind: 'poi' };
+    else if (t === 'house' && street && (hn || !name)) p = { label: address, sublabel: city, kind: 'address' };
+    else p = { label: name || address, sublabel: name && street ? `${address}, ${city}` : city, kind: 'poi' };
     const k = `${p.label}|${p.sublabel}`.toLowerCase();
     if (!p.label || seen.has(k)) continue;
     seen.add(k);

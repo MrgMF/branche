@@ -114,6 +114,20 @@ describe('POST /v1/search — repli Photon (sans clé)', () => {
     expect(() => loadConfig({ PHOTON_URL: 'ftp://x' })).toThrow(/PHOTON_URL/);
   });
 
+  it('« carrefour » : commerce nommé (osm_key shop) = lieu, nom en titre et adresse en sous-titre', () => {
+    const r = parsePhoton({
+      features: [
+        {
+          geometry: { coordinates: [2.34575, 48.78393] },
+          properties: { type: 'house', osm_key: 'shop', name: "Carrefour L'Haÿ-les-Roses", street: 'Avenue du Général de Gaulle', housenumber: '97', postcode: '94240', city: "L'Haÿ-les-Roses", countrycode: 'FR' },
+        },
+        { geometry: { coordinates: [2.35, 48.78] }, properties: { type: 'house', osm_key: 'building', name: 'Résidence A', street: 'Rue B', housenumber: '3', postcode: '94240', city: 'X' } },
+      ],
+    });
+    expect(r[0]).toMatchObject({ label: "Carrefour L'Haÿ-les-Roses", sublabel: "97 Avenue du Général de Gaulle, 94240 L'Haÿ-les-Roses", kind: 'poi' });
+    expect(r[1]).toMatchObject({ label: '3 Rue B', kind: 'address' });
+  });
+
   it('parseurs tolérants (entrées invalides → liste vide)', () => {
     expect(parsePhoton(null)).toEqual([]);
     expect(parsePhoton({ features: [{ geometry: { coordinates: ['x', 1] }, properties: {} }] })).toEqual([]);

@@ -23,7 +23,7 @@ import { applyFilters, displayName, distanceKm, loadAround, loadOperators, neare
 import { staleUnconfirmed, store } from '../lib/store';
 import { abandonUnconfirmed } from '../lib/autoEnd';
 import { SaveFailed } from '../components/SaveFailed';
-import { placeDest, stationDest, useTrip } from '../lib/useTrip';
+import { searchDest, useTrip } from '../lib/useTrip';
 import { useUserLocation } from '../lib/useLocation';
 import { useGoParam } from '../lib/useGoParam';
 import { MapControls, useMapControls } from '../components/MapControls';
@@ -248,16 +248,22 @@ export default function MapScreen() {
   }, [visible, mapReady, status, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Attribution OSM / MapLibre toujours visible : sous la recherche et les filtres (mobile, loin du point bleu et de la fiche),
-  // à droite du panneau (large), en bas pendant le guidage.
+  // à droite du panneau (large), en bas pendant le guidage. Guidage en paysage (carte à droite du bandeau) : au-dessus de
+  // la vitesse (76 px, à 12 px du bas) et à gauche de la colonne de boutons ronds (largeur limitée dans mapHtml).
+  const guideSide = guidanceSide(width, height);
   useEffect(() => {
     if (!mapReady) return;
-    map.current?.post(wide ? { type: 'pad', bottom: 0, left: 16 + PANEL + 8 } : trip?.guiding
-          ? { type: 'pad', bottom: 0, left: 0 }
-          : // Écran court ou texte agrandi : la position est sous la recherche, l'attribution reste juste au-dessus de la fiche.
-            height - topH - sheetH > 220
-            ? { type: 'pad', bottom: 0, left: 4, top: topH }
-            : { type: 'pad', bottom: sheetH, left: 0 });
-  }, [mapReady, wide, topH, sheetH, height, trip?.guiding]);
+    map.current?.post(trip?.guiding
+      ? guideSide
+        ? { type: 'pad', bottom: 12 + 76 + 8 + insets.bottom, left: 4 }
+        : { type: 'pad', bottom: 0, left: 0 }
+      : wide
+        ? { type: 'pad', bottom: 0, left: 16 + PANEL + 8 }
+        : // Écran court ou texte agrandi : la position est sous la recherche, l'attribution reste juste au-dessus de la fiche.
+          height - topH - sheetH > 220
+          ? { type: 'pad', bottom: 0, left: 4, top: topH }
+          : { type: 'pad', bottom: sheetH, left: 0 });
+  }, [mapReady, wide, topH, sheetH, height, trip?.guiding, guideSide, insets.bottom]);
 
   // Premier centrage sur la position ; ensuite, recentrage/suivi via « Ma position » (MapControls).
   const flown = useRef(false);
@@ -332,9 +338,10 @@ export default function MapScreen() {
               onFocusChange={setSearching}
               onSelect={(p) => {
                 setSelectedId(null);
-                // Adresse d'une borne connue : la destination devient la borne (arrivée → recharge).
+                // Le nom recherché reste la destination ; une borne à moins de 40 m est seulement rattachée
+                // (enchaînement arrivée → recharge), sans renommer la destination.
                 const st = all.find((s) => distanceKm(s, p) < 0.04);
-                plan(st ? { ...stationDest(st), name: displayName(st) } : placeDest(p));
+                plan(searchDest(p, st));
               }}
             />
           </View>

@@ -157,12 +157,17 @@ export function parsePhoton(body: unknown): Place[] {
     const hn = text(pr.housenumber);
     const city = join(text(pr.postcode), text(pr.city) || text(pr.county));
     const t = text(pr.type);
+    const key = text(pr.osm_key);
+    const address = join(hn, street);
     let p: Omit<Place, 'lat' | 'lon'>;
-    if (t === 'house' && street && (hn || !name)) p = { label: join(hn, street), sublabel: name && name !== street ? join(name, '·', city) : city, kind: 'address' };
-    else if (t === 'street') p = { label: name || street, sublabel: city, kind: 'street' };
-    else if (t === 'city' || t === 'district' || t === 'locality' || t === 'county' || t === 'state') {
+    if (t === 'street') p = { label: name || street, sublabel: city, kind: 'street' };
+    else if ((t === 'city' || t === 'district' || t === 'locality' || t === 'county' || t === 'state') && (!key || key === 'place' || key === 'boundary')) {
       p = { label: name, sublabel: join(text(pr.postcode), text(pr.state)) || text(pr.country), kind: 'city' };
-    } else p = { label: name || join(hn, street), sublabel: name && street ? `${join(hn, street)}, ${city}` : city, kind: 'poi' };
+    }
+    // Lieu nommé (commerce, équipement…, osm_key autre que place/building) : son nom en titre, l'adresse en sous-titre.
+    else if (name && key && key !== 'place' && key !== 'building') p = { label: name, sublabel: address ? `${address}, ${city}` : city, kind: 'poi' };
+    else if (t === 'house' && street && (hn || !name)) p = { label: address, sublabel: name && name !== street ? join(name, '·', city) : city, kind: 'address' };
+    else p = { label: name || join(hn, street), sublabel: name && street ? `${join(hn, street)}, ${city}` : city, kind: 'poi' };
     if (p.label) out.push({ ...p, lat: round(lat, 6), lon: round(lon, 6) });
   }
   return dedupe(out).slice(0, MAX_RESULTS);

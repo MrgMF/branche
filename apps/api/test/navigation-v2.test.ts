@@ -126,7 +126,7 @@ describe('POST /v1/route v2 — TomTom (sections, instructions balisées)', () =
     expect(tomtomManeuver('BEAR_RIGHT')).toBe('slight-right');
     expect(tomtomManeuver('SHARP_LEFT')).toBe('sharp-left');
     expect(tomtomManeuver('TRY_MAKE_UTURN')).toBe('uturn');
-    expect(tomtomManeuver('ENTRANCE_RAMP')).toBe('merge');
+    expect(tomtomManeuver('ENTRANCE_RAMP')).toBe('ramp');
     expect(tomtomManeuver('WAYPOINT_REACHED')).toBe('waypoint');
     expect(tomtomManeuver('ARRIVE_LEFT')).toBe('arrive');
     expect(tomtomManeuver('INCONNU')).toBe('straight');
@@ -263,6 +263,9 @@ describe('POST /v1/route v2 — Valhalla (alternates, rond-point, voies, limitat
 
   it('instructionFr : consignes générées en français', () => {
     expect(instructionFr({ maneuver: 'roundabout', exit: 1, street: 'Rue Velpeau' })).toBe('Au rond-point, prenez la 1re sortie sur Rue Velpeau');
+    // Bretelle d'accès : « prendre la bretelle », jamais « insérez-vous ».
+    expect(instructionFr({ maneuver: 'ramp', towards: 'A86 / Versailles' })).toBe('Prenez la bretelle vers A86 / Versailles');
+    expect(instructionFr({ maneuver: 'ramp', street: 'D920' })).toBe('Prenez la bretelle sur D920');
     expect(instructionFr({ maneuver: 'exit-right', exitNumber: '12', towards: 'Orly' })).toBe('Prenez la sortie 12 à droite vers Orly');
     expect(instructionFr({ maneuver: 'keep-left' })).toBe('Restez à gauche');
   });

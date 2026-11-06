@@ -6,7 +6,7 @@ import { deltaText, etaClock, LOW_SOC } from '../lib/guidance';
 import { distText, durationText, incidentLabel } from '../lib/navigation';
 import { useT } from '../i18n';
 import { clock } from '../i18n/format';
-import { displayName } from '../lib/stations';
+import { navName } from '../lib/stations';
 import type { TripApi } from '../lib/useTrip';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { NavIcon } from './ManeuverIcon';
@@ -133,7 +133,7 @@ export function TripPanel({ nav }: { nav: TripApi }) {
                   <View key={c.station.id} style={styles.charger}>
                     <View style={{ flex: 1, gap: 2 }}>
                       <Text style={styles.incTitle} numberOfLines={1}>
-                        {displayName(c.station)}
+                        {navName(c.station)}
                       </Text>
                       <Text style={styles.muted} numberOfLines={2}>
                         {t.trip.chargerMeta(kw(c.station.kw), distText(c.alongM), c.socAt)}

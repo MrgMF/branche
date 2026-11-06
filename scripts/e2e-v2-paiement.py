@@ -829,7 +829,8 @@ try:
             page.get_by_role('button', name='Ouvrir la page Virta').click()
         pop.value.close()
         page.wait_for_selector('text=Paiement chez Virta', timeout=10000)
-        page.wait_for_selector('text=saisissez le numéro de 4 à 5 chiffres inscrit sur la borne')
+        # Le parcours « Recharger » (même texte dans son mode d'emploi) reste monté, masqué, sous le suivi
+        page.locator('text=Sur la page de paiement, saisissez le numéro de 4 à 5 chiffres inscrit sur la borne >> visible=true').first.wait_for()
         assert 'Identifiant du point à saisir' not in page.inner_text('body'), 'Virta : rien à copier'
         shot(page, 'j9-suivi-virta-numero-inscrit')
         ok('suivi Virta : pas d’identifiant IRVE à copier, rappel « numéro de 4 à 5 chiffres inscrit sur la borne »')
@@ -837,6 +838,10 @@ try:
         ctx.close()
         b.close()
 except Exception:
+    try:
+        page.screenshot(path=f'{OUT}/echec.png', full_page=True)  # état de l'écran au moment de l'échec
+    except Exception:
+        pass
     now = time.time()
     print('Requêtes en cours :', [(r.method, r.url[:140], round(now - t, 1)) for r, t in PENDING.items() if now - t > 2], flush=True)
     raise

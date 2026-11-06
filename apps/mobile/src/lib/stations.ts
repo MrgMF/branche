@@ -126,6 +126,27 @@ export function displayName(s: Pick<Station, 'n' | 'o' | 'a'>): string {
   return [op, street].filter(Boolean).join(' — ') || tr().common.stationFallback;
 }
 
+const SMALL_WORDS = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'et', 'en', 'sur', 'sous', 'au', 'aux', 'à', 'd', 'l']);
+/**
+ * Nom saisi tout en capitales (IRVE brut : « L'HAY LES ROSES ») → casse de titre (« L'Hay les Roses ») ; un nom déjà en
+ * minuscules/majuscules mêlées est gardé tel quel. Sigles sans voyelle (« SDE », « ZI ») conservés.
+ */
+export function tidyCaps(n: string): string {
+  if (/\p{Ll}/u.test(n) || !/\p{Lu}{3}/u.test(n)) return n;
+  let first = true;
+  return n.replace(/\p{L}+/gu, (w) => {
+    const lw = w.toLowerCase();
+    const isFirst = first;
+    first = false;
+    if (!isFirst && SMALL_WORDS.has(lw)) return lw;
+    if (w.length <= 4 && !/[aeiouyàâäéèêëïîôöùûüÿ]/i.test(w)) return w;
+    return lw.charAt(0).toUpperCase() + lw.slice(1);
+  });
+}
+
+/** Nom d'une borne pour le guidage (bandeau, voix, partage) : jamais le nom IRVE brut en capitales. */
+export const navName = (s: Pick<Station, 'n' | 'o' | 'a'>): string => tidyCaps(displayName(s));
+
 /** Le champ tarification contient parfois une URL plutôt qu'un prix. */
 export function priceInfo(s: Pick<Station, 'prix' | 'free' | 'kw' | 'pay'>): { text: string; url?: string } {
   if (s.free) return { text: freeCredible(s) ? tr().station.free : tr().tariff.freeDoubtful };

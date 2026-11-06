@@ -9,15 +9,17 @@
 //   Mode silencieux : comportement de la session système à confirmer sur appareil réel ; si la voix y est coupée,
 //   il faudra expo-audio (setAudioModeAsync playsInSilentMode + interruptionMode 'duckOthers') avec
 //   useApplicationAudioSession: true — non ajouté ici (dépendance native supplémentaire, build de développement).
-// - Android : expo-speech ne fixe ni AudioAttributes (usage USAGE_ASSISTANCE_NAVIGATION_GUIDANCE) ni focus audio
-//   (AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK) et n'expose aucune option pour le faire : la voix sort sur le flux média,
-//   sans atténuation de la musique. Impossible depuis JS ; nécessite un module natif (ou un correctif d'expo-speech :
-//   TextToSpeech.setAudioAttributes + AudioManager.requestAudioFocus autour de chaque annonce).
+// - Android : expo-speech ne demande pas de focus audio. Le module local modules/branche-audio-focus (Expo Modules,
+//   lié automatiquement au build natif, sans éjection ni permission) demande AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+//   (usage USAGE_ASSISTANCE_NAVIGATION_GUIDANCE) avant chaque annonce et le rend à la fin : la musique est atténuée
+//   pendant la voix. Limite restante : expo-speech ne fixe pas les AudioAttributes de sa synthèse, la voix suit donc
+//   le volume média (pas le volume « guidage »). Expo Go / web : module absent, sans effet.
 // - Web : speechSynthesis du navigateur, aucune maîtrise de la session audio (le guidage exige l'écran allumé).
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
 import { localeTag } from '../i18n';
+import { duckOthers, releaseFocus } from './audioFocus';
 import { combine, SpeechQueue, type Part, type Priority } from './speechQueue';
 
 export type { Part, Priority } from './speechQueue';
@@ -48,7 +50,13 @@ const queue = new SpeechQueue({
     const entry = [...voiceLog].reverse().find((e) => e.text === text && e.spokenAt === undefined);
     if (entry) entry.spokenAt = Date.now();
     // Voix de la langue de l'app (région de l'appareil si elle correspond : fr-FR, en-US, de-DE…)
-    Speech.speak(text, { ...SPEECH_AUDIO, language: localeTag(), rate: 1.0, onDone: done, onStopped: done, onError: done });
+    // Android : musique atténuée pendant l'annonce (focus audio rendu à la fin, quelle qu'elle soit).
+    duckOthers();
+    const end = () => {
+      releaseFocus();
+      done();
+    };
+    Speech.speak(text, { ...SPEECH_AUDIO, language: localeTag(), rate: 1.0, onDone: end, onStopped: end, onError: end });
   },
   stop() {
     try {
@@ -56,6 +64,7 @@ const queue = new SpeechQueue({
     } catch {
       /* indisponible */
     }
+    releaseFocus();
   },
 });
 

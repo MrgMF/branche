@@ -336,6 +336,7 @@ export const fr = {
       'keep-left': 'rester à gauche',
       'keep-right': 'rester à droite',
       merge: 'insertion',
+      ramp: 'bretelle',
       ferry: 'bac',
       waypoint: 'étape',
       arrive: 'arrivée',
@@ -385,6 +386,7 @@ export const fr = {
   voice: {
     go: (dest: string, trafficMin: number | null, first: string | null) => `C’est parti vers ${dest}${trafficMin ? `, dont ${trafficMin} minutes de trafic` : ''}.${first ? ` ${first}` : ''}`,
     newRoute: 'Nouvel itinéraire.',
+    rerouting: 'Recalcul de l’itinéraire.',
     viaReached: (n: string) => `Vous êtes arrivé à votre étape, ${n}.`,
     arrivingIn: (d: string) => `Dans ${d}, vous serez arrivé.`,
     dangerZone: 'Zone de danger.',
@@ -452,6 +454,7 @@ export const fr = {
     'keep-left': (p: InstrParts) => `Restez à gauche${toward(p) || onto(p)}`,
     'keep-right': (p: InstrParts) => `Restez à droite${toward(p) || onto(p)}`,
     merge: (p: InstrParts) => (p.street ? `Insérez-vous sur ${p.street}` : 'Insérez-vous dans la circulation'),
+    ramp: (p: InstrParts) => `Prenez la bretelle${toward(p) || onto(p)}`,
     ferry: (p: InstrParts) => `Prenez le bac${onto(p)}`,
     waypoint: (_p: InstrParts) => 'Vous avez atteint votre étape',
     arrive: (_p: InstrParts) => 'Vous êtes arrivé à destination',

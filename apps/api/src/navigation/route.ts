@@ -20,6 +20,7 @@ export type Maneuver =
   | 'keep-left'
   | 'keep-right'
   | 'merge'
+  | 'ramp'
   | 'ferry'
   | 'waypoint'
   | 'arrive';
@@ -241,6 +242,8 @@ export function instructionFr(s: Pick<RouteStep, 'maneuver' | 'street' | 'exit' 
       return `Restez à droite${toward || onto}`;
     case 'merge':
       return s.street ? `Insérez-vous sur ${s.street}` : 'Insérez-vous dans la circulation';
+    case 'ramp':
+      return `Prenez la bretelle${toward || onto}`;
     case 'ferry':
       return `Prenez le bac${onto}`;
     case 'waypoint':
@@ -304,7 +307,8 @@ const TOMTOM_MANEUVER: Record<string, Maneuver> = {
   ENTER_MOTORWAY: 'merge',
   ENTER_FREEWAY: 'merge',
   ENTER_HIGHWAY: 'merge',
-  ENTRANCE_RAMP: 'merge',
+  // Bretelle d'accès (pas une insertion) : « Prenez la bretelle ».
+  ENTRANCE_RAMP: 'ramp',
   MOTORWAY_EXIT_LEFT: 'exit-left',
   MOTORWAY_EXIT_RIGHT: 'exit-right',
   TAKE_FERRY: 'ferry',

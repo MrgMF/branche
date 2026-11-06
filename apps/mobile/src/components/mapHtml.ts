@@ -71,8 +71,13 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
     map.addSource('dest',{type:'geojson',data:empty});
     map.addSource('pins',{type:'geojson',data:empty});
     var lr={'line-cap':'round','line-join':'round'};
-    map.addLayer({id:'alts-casing',type:'line',source:'alts',layout:lr,paint:{'line-color':'#FFFFFF','line-width':9}});
-    map.addLayer({id:'alts',type:'line',source:'alts',layout:lr,paint:{'line-color':'${M.routeAlt}','line-width':5}});
+    // Trajets alternatifs (aperçu) et tronçon parcouru (guidage) : gris. Trajet proposé en guidage (id __offer) : style propre,
+    // accent en pointillés sur liseré blanc, coupé à la position (useTrip) — jamais confondu avec le tronçon parcouru.
+    var NOT_OFFER=['!=',['get','id'],'__offer'],IS_OFFER=['==',['get','id'],'__offer'];
+    map.addLayer({id:'alts-casing',type:'line',source:'alts',filter:NOT_OFFER,layout:lr,paint:{'line-color':'#FFFFFF','line-width':9}});
+    map.addLayer({id:'alts',type:'line',source:'alts',filter:NOT_OFFER,layout:lr,paint:{'line-color':'${M.routeAlt}','line-width':5}});
+    map.addLayer({id:'offer-casing',type:'line',source:'alts',filter:IS_OFFER,layout:lr,paint:{'line-color':'#FFFFFF','line-width':11}});
+    map.addLayer({id:'offer',type:'line',source:'alts',filter:IS_OFFER,layout:{'line-cap':'butt','line-join':'round'},paint:{'line-color':'${C.accent}','line-width':6,'line-dasharray':[1.6,1]}});
     map.addLayer({id:'alts-hit',type:'line',source:'alts',layout:lr,paint:{'line-color':'#000','line-opacity':0,'line-width':28}});
     map.addLayer({id:'alts-l',type:'symbol',source:'alts',layout:{'symbol-placement':'line-center','text-field':['get','label'],'text-size':13,'text-font':['Noto Sans Bold']},paint:{'text-color':'#0F1A17','text-halo-color':'#fff','text-halo-width':2.5}});
     map.addLayer({id:'route-casing',type:'line',source:'route',layout:lr,paint:{'line-color':'#FFFFFF','line-width':11}});
@@ -147,7 +152,7 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
     ['hit','cl-hit'].forEach(function(l){map.on('mouseenter',l,function(){map.getCanvas().style.cursor='pointer'});map.on('mouseleave',l,function(){map.getCanvas().style.cursor=''})});
     map.on('moveend',function(e){var c=map.getCenter();send({type:'moveend',lat:c.lat,lon:c.lng,zoom:map.getZoom(),user:!!e.originalEvent})});
     // Itinéraire et perturbations au-dessus des bornes (sinon les grappes masquent le tracé).
-    ['zones-f','zones-l','alts-casing','alts','alts-hit','alts-l','route-casing','route','traffic','inc','inc-l'].forEach(function(l){if(map.getLayer(l))map.moveLayer(l,'pins')});
+    ['zones-f','zones-l','alts-casing','alts','offer-casing','offer','alts-hit','alts-l','route-casing','route','traffic','inc','inc-l'].forEach(function(l){if(map.getLayer(l))map.moveLayer(l,'pins')});
     // Anneau de sélection sous les groupes (un groupe voisin reste visible) ; pictogrammes de statut placés avant les
     // étiquettes (celles-ci les évitent) ; chiffres des grappes et des groupes au-dessus du point bleu.
     ['sel-halo','sel'].forEach(function(l){map.moveLayer(l,'grp')});

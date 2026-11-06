@@ -17,6 +17,7 @@ import type { LonLat, RouteStep } from './navigation';
 import { setLang } from '../i18n';
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
+vi.mock('expo', () => ({ requireOptionalNativeModule: () => null }));
 const speakMock = vi.fn();
 vi.mock('expo-speech', () => ({ speak: (...a: unknown[]) => speakMock(...a), stop: vi.fn() }));
 

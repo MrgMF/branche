@@ -161,7 +161,7 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
         />
         {offline ? (
           <View role="alert" accessibilityLiveRegion="assertive">
-            <Notice tone="error">{t.common.noNetwork}</Notice>
+            <Notice tone="error">{hit.station.pay.some((m) => m === 'cb' || m === 'sans_contact') ? t.common.noNetworkReader : t.common.noNetwork}</Notice>
           </View>
         ) : null}
         <Text style={styles.small}>{t.here.payNote(p.operatorName)}</Text>

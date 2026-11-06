@@ -36,7 +36,7 @@ Réponse : **champs V1.1 conservés à la racine** (copie de `routes[0]`, le plu
     } ]
 }
 ```
-- `maneuver` ∈ `depart, straight, turn-left, turn-right, slight-left, slight-right, sharp-left, sharp-right, uturn, roundabout, exit-left, exit-right, keep-left, keep-right, merge, ferry, waypoint, arrive`. `exit` = numéro de sortie (rond-point) ; `exitNumber` = numéro du panneau (autoroute) ; `angle` = −180..180, positif à droite.
+- `maneuver` ∈ `depart, straight, turn-left, turn-right, slight-left, slight-right, sharp-left, sharp-right, uturn, roundabout, exit-left, exit-right, keep-left, keep-right, merge, ramp, ferry, waypoint, arrive`. `exit` = numéro de sortie (rond-point) ; `exitNumber` = numéro du panneau (autoroute) ; `angle` = −180..180, positif à droite.
 - Indices (`startIndex`, `endIndex`, `pointIndex`) : positions dans `geometry` du même trajet. `magnitude` (TomTom `magnitudeOfDelay`) : 0 inconnu, 1 faible, 2 modéré, 3 fort, 4 fermé/indéfini.
 - `instruction` : texte du fournisseur (balises TomTom retirées), sinon consigne française générée.
 - `cache-control: no-store` ; aucun cache (conditions TomTom).

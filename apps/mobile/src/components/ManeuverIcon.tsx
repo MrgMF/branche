@@ -97,7 +97,9 @@ export function ManeuverIcon(props: { maneuver: Maneuver; exit?: number; angle?:
       </>
     );
   } else {
-    const key = MIRROR[m] ?? (m === 'depart' || m === 'ferry' ? 'straight' : m);
+    // Bretelle : sortie à droite, à gauche si l'angle du fournisseur est négatif.
+    const rampLeft = m === 'ramp' && (props.angle ?? 0) < 0;
+    const key = MIRROR[m] ?? (m === 'depart' || m === 'ferry' ? 'straight' : m === 'ramp' ? 'exit-right' : m);
     const s = SHAPES[key] ?? SHAPES.straight;
     const inner = (
       <>
@@ -107,7 +109,7 @@ export function ManeuverIcon(props: { maneuver: Maneuver; exit?: number; angle?:
         {m === 'depart' ? <Circle cx={50} cy={90} r={9} fill={color} /> : null}
       </>
     );
-    body = MIRROR[m] ? <G transform="translate(100,0) scale(-1,1)">{inner}</G> : inner;
+    body = MIRROR[m] || rampLeft ? <G transform="translate(100,0) scale(-1,1)">{inner}</G> : inner;
   }
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100" accessibilityRole="image" accessibilityLabel={props.label}>

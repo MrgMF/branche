@@ -331,6 +331,7 @@ export const nl: Dict = {
       'keep-left': 'links aanhouden',
       'keep-right': 'rechts aanhouden',
       merge: 'invoegen',
+      ramp: 'oprit',
       ferry: 'veerpont',
       waypoint: 'tussenstop',
       arrive: 'aankomst',
@@ -380,6 +381,7 @@ export const nl: Dict = {
   voice: {
     go: (dest: string, trafficMin: number | null, first: string | null) => `We gaan naar ${dest}${trafficMin ? `, waarvan ${trafficMin} minuten verkeer` : ''}.${first ? ` ${first}` : ''}`,
     newRoute: 'Nieuwe route.',
+    rerouting: 'Route wordt herberekend.',
     viaReached: (n: string) => `Je hebt je tussenstop bereikt, ${n}.`,
     arrivingIn: (d: string) => `Over ${d} ben je aangekomen.`,
     dangerZone: 'Gevarenzone.',
@@ -446,6 +448,7 @@ export const nl: Dict = {
     'keep-left': (p: InstrParts) => `Houd links aan${toward(p) || onto(p)}`,
     'keep-right': (p: InstrParts) => `Houd rechts aan${toward(p) || onto(p)}`,
     merge: (p: InstrParts) => (p.street ? `Voeg in op ${p.street}` : 'Voeg in'),
+    ramp: (p: InstrParts) => `Neem de oprit${toward(p) || onto(p)}`,
     ferry: (p: InstrParts) => `Neem de veerpont${onto(p)}`,
     waypoint: (_p: InstrParts) => 'Je hebt je tussenstop bereikt',
     arrive: (_p: InstrParts) => 'Je bent op je bestemming aangekomen',

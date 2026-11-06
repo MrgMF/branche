@@ -137,6 +137,7 @@ export default function Recharger() {
     [point, vehicle, soc, tariff],
   );
   const options = useMemo(() => (station ? payOptions(station, point, ops, { portals, wallet }) : []), [station, point, ops, portals, wallet, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  const readerOk = options.some((o) => o.id === 'reader' && o.available && !o.speculative);
   const portal = station?.ok ? portals[station.ok] : undefined;
   const accountConnected = !!station?.ok && wallet.accounts.some((a) => a.operatorKey === station.ok);
   // Rien de payable ici depuis Branché : alternative la plus proche qui l'est (méthode déclarée, pas un QR « éventuel »).
@@ -461,7 +462,7 @@ export default function Recharger() {
               {preparing ? <Text style={styles.small}>{R.prepNote}</Text> : null}
               {/* Non confirmé : action secondaire dans la carte (l'action principale reste « Y aller ») */}
               {blocked && unconfirmed && !preparing ? <Button label={chosen.cta} variant="secondary" onPress={() => go(chosen)} disabled={!chosen.available} /> : null}
-              {blocked && offline ? <Notice tone="error">{t.common.noNetwork}</Notice> : null}
+              {blocked && offline ? <Notice tone="error">{readerOk ? t.common.noNetworkReader : t.common.noNetwork}</Notice> : null}
             </View>
           ) : null}
 
@@ -505,7 +506,7 @@ export default function Recharger() {
           <View style={styles.footerIn}>
             {offline ? (
               <View accessibilityLiveRegion="assertive" role="alert" style={{ marginBottom: 8 }}>
-                <Notice tone="error">{t.common.noNetwork}</Notice>
+                <Notice tone="error">{readerOk ? t.common.noNetworkReader : t.common.noNetwork}</Notice>
               </View>
             ) : null}
             <Button label={preparing ? R.saveForArrival : chosen.cta} onPress={() => go(chosen)} disabled={!chosen.available} hint={chosen.id === 'reader' ? R.hintReader : R.hintQr} />
