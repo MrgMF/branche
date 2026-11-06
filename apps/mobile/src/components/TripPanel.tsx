@@ -103,7 +103,7 @@ export function TripPanel({ nav }: { nav: TripApi }) {
               );
             })}
           </View>
-          {!trip.traffic ? <Text style={styles.small}>{t.trip.noTraffic}</Text> : null}
+          {!trip.traffic ? <Text style={[styles.small, trip.client && styles.staticNote]}>{trip.client ? t.navx.noTrafficStatic : t.trip.noTraffic}</Text> : null}
 
           {trip.via.map((v) => (
             <View key={v.id} style={styles.via}>
@@ -148,7 +148,7 @@ export function TripPanel({ nav }: { nav: TripApi }) {
           ) : null}
 
           <Text style={styles.section}>{t.trip.onRoute}</Text>
-          {trip.feedOk === false ? <Notice>{t.trip.feedDown}</Notice> : null}
+          {trip.feedOk === false ? trip.client ? <Text style={styles.muted}>{t.navx.noFeedStatic}</Text> : <Notice>{t.trip.feedDown}</Notice> : null}
           {trip.incidents.length === 0 && trip.zones.length === 0 && trip.feedOk !== false ? <Text style={styles.muted}>{t.trip.noIncidents}</Text> : null}
           {trip.incidents.slice(0, 4).map((i) => (
             <View key={i.id} style={styles.inc}>
@@ -171,15 +171,14 @@ export function TripPanel({ nav }: { nav: TripApi }) {
             </Text>
           ) : null}
 
-          <Button label={t.trip.start} onPress={nav.start} disabled={trip.loading} hint={t.trip.startHint} />
           <View style={styles.row}>
             {navigationLinks(trip.dest).map((l) => (
               <Button key={l.label} label={l.label} variant="ghost" style={{ flex: 1, minHeight: 48 }} onPress={() => Linking.openURL(l.url)} />
             ))}
           </View>
           <Text style={styles.small}>
-            {trip.provider === 'tomtom' ? t.trip.attrTomtom : t.trip.attrOsm}
-            {t.trip.attrFeed(trip.feedUpdatedAt ? clock(Date.parse(trip.feedUpdatedAt)) : null)}
+            {trip.client ? t.navx.attrStatic : trip.provider === 'tomtom' ? t.trip.attrTomtom : t.trip.attrOsm}
+            {trip.client ? '' : t.trip.attrFeed(trip.feedUpdatedAt ? clock(Date.parse(trip.feedUpdatedAt)) : null)}
             {trip.battery ? t.trip.attrBattery : ''}
           </Text>
         </>
@@ -188,7 +187,34 @@ export function TripPanel({ nav }: { nav: TripApi }) {
   );
 }
 
+/**
+ * Pied de la feuille d'itinéraire, hors du défilement : « Démarrer » reste visible quelle que soit la hauteur
+ * d'écran (320 × 640 compris), avec la durée du trajet choisi.
+ */
+export function TripFooter({ nav }: { nav: TripApi }) {
+  const t = useT();
+  const trip = nav.trip;
+  if (!trip || trip.guiding || !trip.route) return null;
+  const r = trip.route;
+  return (
+    <View style={styles.footer} testID="trip-footer">
+      <View style={{ flexShrink: 1 }}>
+        <Text style={styles.footDur} numberOfLines={1}>
+          {durationText(r.durationS)}
+        </Text>
+        <Text style={styles.small} numberOfLines={1}>
+          {t.trip.arrival(etaClock(r.durationS))} · {distText(r.distanceM)}
+        </Text>
+      </View>
+      <Button label={t.trip.start} onPress={nav.start} disabled={trip.loading} hint={t.trip.startHint} style={{ flex: 1, minWidth: 140 }} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, marginTop: 4 },
+  footDur: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
+  staticNote: { color: colors.ink, fontFamily: fonts.semibold },
   wrap: { gap: 12 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   kicker: { fontFamily: fonts.semibold, fontSize: 12, color: colors.inkMuted, textTransform: 'uppercase', letterSpacing: 0.5 },

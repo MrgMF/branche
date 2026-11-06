@@ -1,42 +1,52 @@
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Dimensions, Platform } from 'react-native';
 import type { MapHandle } from '../components/MapView';
 import type { MapOut } from '../components/mapHtml';
-import { apiEnabled } from './api';
 import {
   announcementText,
   arrivalSoc,
   chargersOnRoute,
+  checkFresh,
   deltaText,
-  fasterRoute,
+  instructionOf,
   LOW_SOC,
+  liveArrivalSoc,
   maneuverOf,
   nextStepIndex,
+  offerDefault,
   pickAnnouncement,
   remainingLine,
+  remapAnnounced,
+  socNowEstimate,
   speedKmh as computeSpeed,
   speedLimitAt,
   spokenDist,
   stepsAlong,
   tileProbes,
   trafficSegments,
+  trafficSegmentsFrom,
   type ChargerSuggestion,
 } from './guidance';
-import { watchGeo } from './geoWatch';
+import { backgroundConsent, declineBackground, requestBackground, watchGeo, watchGeoBackground } from './geoWatch';
 import { keepScreenOn } from './keepAwake';
 import {
   alongRoute,
+  angleDiff,
   bboxOf,
   bearing,
   circle,
+  cumulative,
   distText,
   getIncidents,
   getRoute,
   incidentLabel,
   loadDangerZones,
   metersBetween,
+  progressNear,
   progressOnRoute,
   routeOptions,
+  segmentBearing,
   type DangerZone,
   type Incident,
   type LonLat,
@@ -47,10 +57,9 @@ import {
 } from './navigation';
 import { displayName, loadAround, type Station } from './stations';
 import { loadVehicle, socAfter, type Vehicle } from './vehicle';
-import { loadVoicePref, speak, stopSpeaking } from './voice';
+import { announce, loadVoicePref, speak, stopSpeaking, type Part } from './voice';
 import { getSettings } from './settings';
 import { tr } from '../i18n';
-import { instructionOf } from './guidance';
 
 type Pos = { lat: number; lon: number };
 export type RouteIncident = Incident & { alongM: number };
@@ -69,12 +78,22 @@ export const placeDest = (p: Place): Destination => ({ id: `p:${p.lat.toFixed(5)
 
 export type GpsState = 'ok' | 'waiting' | 'lost' | 'unavailable';
 
+/** Trajet plus rapide proposé pendant le guidage (décompte de 10 s, choix par défaut). */
+export interface FasterOffer {
+  route: RouteOption;
+  gainS: number;
+  deadline: number;
+  def: 'take' | 'keep';
+}
+
 export interface Trip {
   dest: Destination;
   via: Destination[];
   options: RouteOptions;
   provider: 'tomtom' | 'valhalla' | null;
   traffic: boolean;
+  /** Itinéraire calculé par l'app (site statique, Valhalla public, sans trafic). */
+  client: boolean;
   routes: RouteOption[];
   selected: number;
   route: RouteOption | null;
@@ -98,19 +117,31 @@ export interface Trip {
   gps: GpsState;
   arrived: boolean;
   arrivedAtVia: Destination | null;
-  /** Batterie estimée à l'arrivée par trajet (id → %), si un véhicule est enregistré. */
+  /** Batterie estimée à l'arrivée par trajet (id → %), si un véhicule est enregistré. En guidage : estimation continue. */
   battery: Record<string, number> | null;
   vehicleName: string | null;
   /** Batterie estimée en arrivant à l'étape de recharge. */
   viaSoc?: number | null;
   chargers: ChargerSuggestion[];
   rerouting: boolean;
+  /** Le conducteur a choisi une alternative (pas le plus rapide) avant de démarrer. */
+  driverChose: boolean;
+  offer: FasterOffer | null;
+  /** Guidage : batterie faible prévue à l'arrivée (sous LOW_SOC). */
+  lowSoc: number | null;
+  /** Natif : écran d'explication avant la permission « toujours » (guidage écran verrouillé). */
+  bgAsk: boolean;
+  /** Suivi en arrière-plan actif (natif). */
+  background: boolean;
 }
 
 const NO_OPTIONS: RouteOptions = { avoidTolls: false, avoidMotorways: false };
 const ALERT_AHEAD_M = 2000;
 const FASTER_CHECK_MS = 120_000;
 const GPS_LOST_MS = 12_000;
+const OFFER_MS = 10_000;
+const WRONG_WAY_DEG = 120;
+const DANGER_INCIDENTS = new Set(['accident', 'fermeture', 'obstacle']);
 
 const blank = (dest: Destination, over: Partial<Trip> = {}): Trip => ({
   dest,
@@ -118,6 +149,7 @@ const blank = (dest: Destination, over: Partial<Trip> = {}): Trip => ({
   options: NO_OPTIONS,
   provider: null,
   traffic: false,
+  client: false,
   routes: [],
   selected: 0,
   route: null,
@@ -143,20 +175,34 @@ const blank = (dest: Destination, over: Partial<Trip> = {}): Trip => ({
   vehicleName: null,
   chargers: [],
   rerouting: false,
+  driverChose: false,
+  offer: null,
+  lowSoc: null,
+  bgAsk: false,
+  background: false,
   ...over,
 });
 
 type Fix = { lat: number; lon: number; t: number; speed: number | null; heading: number | null; accuracy: number | null };
+
+/** Décalage vertical du véhicule (px) : plus bas en portrait, modéré en paysage (carte à droite du bandeau). */
+const followOffset = () => {
+  const { width, height } = Dimensions.get('window');
+  return width > height ? Math.round(height * 0.18) : 150;
+};
 
 export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null, sheetH: number) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const tripRef = useRef<Trip | null>(null);
   tripRef.current = trip;
   const along = useRef<number[]>([]);
+  const cum = useRef<number[]>([]);
+  const prevAlong = useRef<number | null>(null);
   const announced = useRef(new Set<string>());
   const lastReroute = useRef(0);
   const inFlight = useRef(false);
   const offCount = useRef(0);
+  const wrongWay = useRef(0);
   const watch = useRef<{ remove: () => void } | null>(null);
   const [fix, setFix] = useState<Fix | null>(null);
   const prevFix = useRef<Fix | null>(null);
@@ -165,9 +211,24 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
   const feed = useRef<{ incidents: Incident[]; zones: DangerZone[] }>({ incidents: [], zones: [] });
   const vehicle = useRef<Vehicle | null>(null);
   const reqId = useRef(0);
+  const driven = useRef(0);
+  const prevArrival = useRef<number | null>(null);
+  const declined = useRef<{ geometry: LonLat[]; gainS: number } | null>(null);
+  const lastDrawAlong = useRef(-1e9);
+  const chargerLoad = useRef(false);
 
   useEffect(() => {
     void loadVoicePref();
+  }, []);
+
+  /** Nouveau tracé suivi : repères de progression remis à zéro (le tracé part de la position). */
+  const resetProgress = useCallback((route: RouteOption | null, fromStart: boolean) => {
+    along.current = route ? stepsAlong(route) : [];
+    cum.current = route ? cumulative(route.geometry) : [];
+    prevAlong.current = fromStart ? 0 : null;
+    offCount.current = 0;
+    wrongWay.current = 0;
+    lastDrawAlong.current = -1e9;
   }, []);
 
   // ---------------------------------------------------------------- carte
@@ -199,6 +260,29 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     [map],
   );
 
+  /** Guidage : tronçon parcouru estompé (gris, sous le tracé), reste du trajet et trafic à venir. */
+  const drawProgress = useCallback(
+    (route: RouteOption, seg: number, alongM: number) => {
+      if (Math.abs(alongM - lastDrawAlong.current) < 25) return;
+      lastDrawAlong.current = alongM;
+      const line = route.geometry;
+      const c = cum.current;
+      const a = line[seg], b = line[seg + 1];
+      if (!a || !b) return;
+      const len = (c[seg + 1] ?? 0) - (c[seg] ?? 0);
+      const k = len > 0 ? Math.max(0, Math.min(1, (alongM - (c[seg] ?? 0)) / len)) : 0;
+      const here: LonLat = [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+      const done = [...line.slice(0, seg + 1), here];
+      map.current?.post({
+        type: 'routes',
+        main: [here, ...line.slice(seg + 1)],
+        segments: trafficSegmentsFrom(route, seg),
+        alts: done.length >= 2 ? [{ id: '__done', coords: done, label: '' }] : [],
+      });
+    },
+    [map],
+  );
+
   /** Perturbations, zones, batterie et bornes pour le trajet sélectionné. */
   const annotate = useCallback(async (t: Trip): Promise<Trip> => {
     const r = t.route;
@@ -208,16 +292,26 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     const zones = alongRoute(feed.current.zones, line, (z) => z.radiusM);
     const v = vehicle.current;
     let battery: Trip['battery'] = null;
-    let chargers: ChargerSuggestion[] = [];
+    let chargers: ChargerSuggestion[] = t.chargers;
+    let viaSoc: number | null = null;
     if (v) {
-      battery = Object.fromEntries(t.routes.map((x) => [x.id, arrivalSoc(v, socAfter, x.distanceM, x.durationS)]));
-      if ((battery[r.id] ?? 100) < LOW_SOC && !t.guiding && !t.via.length) {
+      // En guidage, le trajet recalculé part de la position : batterie actuelle estimée.
+      const vNow = t.guiding ? { ...v, socPercent: socNowEstimate(v, socAfter, driven.current, 90) } : v;
+      battery = Object.fromEntries(t.routes.map((x) => [x.id, arrivalSoc(vNow, socAfter, x.distanceM, x.durationS)]));
+      if (t.guiding) {
+        const live = Math.min(battery[r.id] ?? 100, prevArrival.current ?? 100);
+        battery[r.id] = live;
+      }
+      if ((battery[r.id] ?? 100) < LOW_SOC && !t.via.length) {
         const lists = await Promise.all(tileProbes(line).map((p) => loadAround(p, 0).catch(() => [] as Station[])));
-        chargers = chargersOnRoute(lists.flat(), line, v, socAfter, r.distanceM).filter((c) => !t.via.some((x) => x.id === c.station.id));
+        chargers = chargersOnRoute(lists.flat(), line, vNow, socAfter, r.distanceM).filter((c) => !t.via.some((x) => x.id === c.station.id));
+      } else if (!t.guiding) chargers = [];
+      const via = t.via[0];
+      if (via) {
+        const a = progressOnRoute(via, line).along;
+        viaSoc = arrivalSoc(vNow, socAfter, a, r.durationS * (a / Math.max(1, r.distanceM)));
       }
     }
-    const via = t.via[0];
-    const viaSoc = v && via ? arrivalSoc(v, socAfter, progressOnRoute(via, line).along, r.durationS * (progressOnRoute(via, line).along / Math.max(1, r.distanceM))) : null;
     return { ...t, incidents, zones, battery, viaSoc, vehicleName: v?.name ?? null, chargers, total: progressOnRoute(t.dest, line).total };
   }, []);
 
@@ -236,7 +330,6 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
       const id = ++reqId.current;
       setTrip({ ...base, loading: true, error: null, rerouting: mode === 'reroute' });
       try {
-        if (!apiEnabled()) throw new Error(tr().trip.unconfigured);
         vehicle.current = await loadVehicle().catch(() => null);
         const res = await getRoute(from, base.dest, { via: base.via, options: base.options });
         if (id !== reqId.current) return;
@@ -251,12 +344,16 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
         if (id !== reqId.current) return;
         feed.current = { incidents: f.incidents, zones };
         const route = routes[0] ?? null;
-        if (route) along.current = stepsAlong(route);
-        if (mode === 'reroute') announced.current.clear();
+        resetProgress(route, mode === 'reroute');
+        if (mode === 'reroute') {
+          announced.current = new Set([...announced.current].filter((k) => !/^s\d+:/.test(k)));
+          prevArrival.current = null;
+        }
         const next = await annotate({
           ...base,
           provider: res.provider,
           traffic: res.traffic,
+          client: !!res.client,
           routes,
           selected: 0,
           route,
@@ -264,6 +361,9 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
           rerouting: false,
           feedOk: f.feedOk,
           feedUpdatedAt: f.updatedAt,
+          offer: null,
+          driverChose: mode === 'reroute' ? false : base.driverChose,
+          chargers: mode === 'reroute' ? [] : base.chargers,
           toast: mode === 'reroute' ? { text: tr().guidance.newRoute, tone: 'info', at: Date.now() } : base.toast,
         });
         if (id !== reqId.current) return;
@@ -277,13 +377,14 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
         inFlight.current = false;
       }
     },
-    [annotate, commit, map, sheetH],
+    [annotate, commit, map, sheetH, resetProgress],
   );
 
   const plan = useCallback(
     (d: Station | Destination) => {
       const dest = 'station' in d || 'name' in d ? (d as Destination) : stationDest(d as Station);
       announced.current.clear();
+      declined.current = null;
       const prev = tripRef.current;
       const set = getSettings();
       const base = blank(dest, { options: prev?.options ?? { avoidTolls: set.avoidTolls, avoidMotorways: set.avoidMotorways }, routes: prev?.dest.id === dest.id ? prev.routes : [] });
@@ -312,17 +413,24 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
       const i = typeof idOrIndex === 'number' ? idOrIndex : t.routes.findIndex((r) => r.id === idOrIndex);
       const route = t.routes[i];
       if (!route || i === t.selected) return;
-      along.current = stepsAlong(route);
-      commit(await annotate({ ...t, selected: i, route }));
+      resetProgress(route, false);
+      commit(await annotate({ ...t, selected: i, route, driverChose: i !== 0 }));
     },
-    [annotate, commit],
+    [annotate, commit, resetProgress],
   );
 
   const addVia = useCallback(
     (s: Station) => {
       const t = tripRef.current;
-      if (!t || !user) return;
-      void compute({ ...t, via: [stationDest(s)], chargers: [] }, user, 'preview');
+      const p = prevFix.current ?? user;
+      if (!t || !p) return;
+      if (t.guiding) {
+        lastReroute.current = Date.now();
+        inFlight.current = true;
+        void compute({ ...t, via: [stationDest(s)], chargers: [], lowSoc: null }, p, 'reroute');
+        return;
+      }
+      void compute({ ...t, via: [stationDest(s)], chargers: [] }, p, 'preview');
     },
     [user, compute],
   );
@@ -347,6 +455,10 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     tripRef.current = null;
     setFix(null);
     prevFix.current = null;
+    driven.current = 0;
+    prevArrival.current = null;
+    declined.current = null;
+    chargerLoad.current = false;
     map.current?.post({ type: 'route', coords: [] });
     map.current?.post({ type: 'dest' });
     map.current?.post({ type: 'pins', items: [] });
@@ -363,7 +475,15 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
         const asked = await Location.requestForegroundPermissionsAsync();
         if (asked.status !== 'granted') throw new Error('refusé');
       }
-      watch.current = await watchGeo(setFix, (code) => code === 'denied' && setTrip((t) => (t ? { ...t, gps: 'unavailable' } : t)));
+      // Natif avec accord « toujours » : suivi en arrière-plan (voix écran verrouillé), sinon premier plan.
+      const n = tr().navx;
+      const bg = Platform.OS === 'web' ? null : await watchGeoBackground(setFix, { title: n.bgNotifTitle, body: n.bgNotifBody }).catch(() => null);
+      if (!tripRef.current?.guiding) {
+        bg?.remove();
+        return;
+      }
+      watch.current = bg ?? (await watchGeo(setFix, (code) => code === 'denied' && setTrip((t) => (t ? { ...t, gps: 'unavailable' } : t))));
+      setTrip((t) => (t ? { ...t, background: !!bg } : t));
     } catch {
       setTrip((t) => (t ? { ...t, gps: 'unavailable' } : t));
     }
@@ -373,14 +493,33 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     const t = tripRef.current;
     if (!t?.route) return;
     lastFixAt.current = Date.now();
-    const g = { ...t, guiding: true, gps: 'waiting' as GpsState, toast: null };
+    driven.current = 0;
+    prevArrival.current = null;
+    chargerLoad.current = false;
+    resetProgress(t.route, false);
+    const web = Platform.OS === 'web';
+    const g: Trip = { ...t, guiding: true, gps: 'waiting', driverChose: t.selected !== 0, toast: web ? { text: tr().navx.webBackground, tone: 'info', at: Date.now() } : null };
     commit(g);
     void keepScreenOn(true);
     const first = t.route.steps.find((s) => maneuverOf(s) !== 'depart') ?? t.route.steps[0];
     const delay = t.traffic && t.route.trafficDelayS > 60 ? Math.round(t.route.trafficDelayS / 60) : null;
-    speak(tr().voice.go(t.dest.name, delay, first ? instructionOf(first) : null));
+    announce([{ text: tr().voice.go(t.dest.name, delay, first ? instructionOf(first) : null), priority: 'maneuver' }]);
     await startWatch();
-  }, [commit, startWatch]);
+    // Permission « toujours » demandée seulement ici, après un écran d'explication (jamais d'office).
+    if (!web && (await backgroundConsent()) === 'ask' && tripRef.current?.guiding) setTrip((x) => (x ? { ...x, bgAsk: true } : x));
+  }, [commit, startWatch, resetProgress]);
+
+  const allowBackground = useCallback(async () => {
+    setTrip((x) => (x ? { ...x, bgAsk: false } : x));
+    const ok = await requestBackground();
+    if (ok && tripRef.current?.guiding) await startWatch();
+    else setTrip((x) => (x ? { ...x, toast: { text: tr().navx.bgDenied, tone: 'info', at: Date.now() } } : x));
+  }, [startWatch]);
+
+  const refuseBackground = useCallback(() => {
+    void declineBackground();
+    setTrip((x) => (x ? { ...x, bgAsk: false, toast: { text: tr().navx.bgDenied, tone: 'info', at: Date.now() } } : x));
+  }, []);
 
   /** Arrivé à une étape (borne) : reprendre vers la destination finale. */
   const resumeAfterVia = useCallback(() => {
@@ -388,10 +527,48 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     const p = fix ?? user;
     if (!t || !p) return;
     lastReroute.current = Date.now();
-    void compute({ ...t, via: t.via.slice(1), arrivedAtVia: null, guiding: true }, p, 'reroute');
+    // Recharge faite à l'étape : la batterie repart du niveau enregistré (mis à jour après la recharge).
+    driven.current = 0;
+    prevArrival.current = null;
+    void compute({ ...t, via: t.via.slice(1), arrivedAtVia: null, guiding: true, lowSoc: null }, p, 'reroute');
     if (!watch.current) void startWatch();
     void keepScreenOn(true);
   }, [compute, fix, user, startWatch]);
+
+  /** Trajet proposé accepté (bouton « Prendre » ou fin du décompte). */
+  const takeOffer = useCallback(async () => {
+    const t = tripRef.current;
+    const o = t?.offer;
+    if (!t || !o || !t.route) return;
+    const min = Math.round(o.gainS / 60);
+    announced.current = remapAnnounced(t.route.steps, o.route.steps, announced.current);
+    resetProgress(o.route, true);
+    prevArrival.current = null;
+    declined.current = null;
+    speak(tr().voice.faster(min));
+    commit(
+      await annotate({
+        ...t,
+        routes: [o.route],
+        selected: 0,
+        route: o.route,
+        offer: null,
+        driverChose: false,
+        remainingS: o.route.durationS,
+        remainingM: o.route.distanceM,
+        toast: { text: tr().guidance.faster(min), tone: 'success', at: Date.now() },
+      }),
+    );
+  }, [annotate, commit, resetProgress]);
+
+  /** Trajet proposé refusé : le conducteur garde son trajet (pas re-proposé sauf gain nettement meilleur). */
+  const keepOffer = useCallback(() => {
+    const t = tripRef.current;
+    const o = t?.offer;
+    if (!t || !o) return;
+    declined.current = { geometry: o.route.geometry, gainS: o.gainS };
+    setTrip((x) => (x ? { ...x, offer: null, toast: { text: tr().navx.kept, tone: 'info', at: Date.now() } } : x));
+  }, []);
 
   const onMapMessage = useCallback(
     (m: MapOut) => {
@@ -404,6 +581,20 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     [selectRoute, addVia],
   );
 
+  /** Bornes rapides sur le reste du trajet, depuis la batterie actuelle estimée (alerte batterie en guidage). */
+  const loadChargers = useCallback(async () => {
+    const t = tripRef.current;
+    const v = vehicle.current;
+    if (!t?.route || !v || chargerLoad.current) return;
+    chargerLoad.current = true;
+    const vNow = { ...v, socPercent: socNowEstimate(v, socAfter, driven.current, 90) };
+    const line = t.route.geometry;
+    const lists = await Promise.all(tileProbes(line).map((p) => loadAround(p, 0).catch(() => [] as Station[])));
+    const from = t.along;
+    const list = chargersOnRoute(lists.flat(), line, vNow, socAfter, t.route.distanceM, 6).filter((c) => c.alongM > from + 300);
+    setTrip((x) => (x && x.route === t.route ? { ...x, chargers: list } : x));
+  }, []);
+
   // ---------------------------------------------------------------- guidage
   useEffect(() => {
     const p = fix;
@@ -412,37 +603,51 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     lastFixAt.current = Date.now();
     const route = t.route;
     const line = route.geometry;
-    const prog = progressOnRoute(p, line);
+    if (cum.current.length !== line.length) resetProgress(route, false);
     const prev = prevFix.current;
     const speed = computeSpeed(p.speed, prev, p);
-    if (p.heading !== null && p.heading >= 0 && (speed ?? 0) > 5) lastBearing.current = p.heading;
-    else if (prev && metersBetween(prev, p) > 4) lastBearing.current = bearing(prev, p);
+    // Recalage dans une fenêtre autour de la progression précédente (portée selon la vitesse).
+    const ahead = Math.max(1500, ((speed ?? 50) / 3.6) * 45);
+    const prog = progressNear(p, line, cum.current, prevAlong.current, 150, ahead);
+    const moved = prev ? metersBetween(prev, p) : 0;
+    if (prev && p.t - prev.t < 30_000 && moved < 500) driven.current += moved;
+    let course: number | null = null;
+    if (p.heading !== null && p.heading >= 0 && (speed ?? 0) > 5) course = p.heading;
+    else if (prev && moved > 6) course = bearing(prev, p);
+    if (course !== null) lastBearing.current = course;
     prevFix.current = p;
     const zoom = (speed ?? 0) > 80 ? 15 : (speed ?? 0) > 45 ? 16 : 17;
     map.current?.post({ type: 'user', lat: p.lat, lon: p.lon, bearing: lastBearing.current, nav: true });
-    map.current?.post({ type: 'follow', lat: p.lat, lon: p.lon, bearing: lastBearing.current, zoom, offsetY: 150 });
+    map.current?.post({ type: 'follow', lat: p.lat, lon: p.lon, bearing: lastBearing.current, zoom, offsetY: followOffset() });
 
     // Hors trajet : 2 positions consécutives au-delà de la tolérance (précision GPS comprise).
     const tol = Math.max(45, Math.min(p.accuracy ?? 20, 60) + 30);
     if ((p.accuracy ?? 0) <= 100) offCount.current = prog.off > tol ? offCount.current + 1 : 0;
-    if (offCount.current >= 2 && !inFlight.current && Date.now() - lastReroute.current > 10_000) {
+    if (prog.off <= tol) prevAlong.current = prog.along;
+    // Contresens : cap opposé (> 120°) au sens du trajet sur 2 positions, en roulant.
+    const segB = segmentBearing(line, prog.seg);
+    if (segB !== null && course !== null && (speed ?? 0) > 8 && prog.off <= tol) wrongWay.current = angleDiff(course, segB) > WRONG_WAY_DEG ? wrongWay.current + 1 : 0;
+    if ((offCount.current >= 2 || wrongWay.current >= 2) && !inFlight.current && Date.now() - lastReroute.current > 10_000) {
       lastReroute.current = Date.now();
       offCount.current = 0;
+      wrongWay.current = 0;
       inFlight.current = true;
       speak(tr().voice.newRoute);
-      void compute({ ...t }, p, 'reroute');
+      void compute({ ...t, offer: null }, p, 'reroute');
       return;
     }
 
     // Étape (borne) atteinte
     const via = t.via[0];
     if (via && metersBetween(p, via) < 50) {
-      speak(tr().voice.viaReached(via.name));
-      setTrip((x) => (x ? { ...x, arrivedAtVia: via, speedKmh: speed } : x));
-      map.current?.post({ type: 'unfollow' });
+      announce([{ text: tr().voice.viaReached(via.name), priority: 'maneuver' }]);
+      setTrip((x) => (x ? { ...x, arrivedAtVia: via, speedKmh: speed, offer: null } : x));
+      map.current?.post({ type: 'follow', lat: via.lat, lon: via.lon, bearing: 0, pitch: 0, zoom: 17, offsetY: -120, duration: 1200 });
       return;
     }
 
+    // Une seule annonce par position : manœuvre, puis dangers, puis informations.
+    const parts: Part[] = [];
     const idx = nextStepIndex(along.current, route.steps, prog.along);
     const step = idx >= 0 ? route.steps[idx] : null;
     const inM = step ? Math.max(0, along.current[idx] - prog.along) : 0;
@@ -451,8 +656,8 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     if (step) {
       const legM = idx > 0 ? along.current[idx] - along.current[idx - 1] : along.current[idx];
       const level = pickAnnouncement(idx, inM, legM, speed, announced.current);
-      if (level && maneuverOf(step) !== 'arrive') speak(announcementText(level, inM, step, after ?? undefined));
-      else if (level && maneuverOf(step) === 'arrive' && level !== 'near') speak(tr().voice.arrivingIn(spokenDist(inM)));
+      if (level && maneuverOf(step) !== 'arrive') parts.push({ text: announcementText(level, inM, step, after ?? undefined), priority: 'maneuver' });
+      else if (level && maneuverOf(step) === 'arrive' && level !== 'near') parts.push({ text: tr().voice.arrivingIn(spokenDist(inM)), priority: 'maneuver' });
     }
 
     let alert: Trip['alert'] = null;
@@ -461,28 +666,57 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
       alert = { text: tr().guidance.dangerZone, tone: 'danger' };
       if (!announced.current.has(`z${zone.id}`)) {
         announced.current.add(`z${zone.id}`);
-        speak(tr().voice.dangerZone);
+        parts.push({ text: tr().voice.dangerZone, priority: 'danger' });
       }
     }
-    const ahead = t.incidents.find((i) => i.alongM > prog.along && i.alongM - prog.along < ALERT_AHEAD_M);
-    if (ahead) {
-      const label = incidentLabel(ahead.type) ?? tr().incident.autre;
-      alert = alert ?? { text: tr().guidance.incidentIn(label, distText(ahead.alongM - prog.along)), tone: 'incident' };
-      if (!announced.current.has(`i${ahead.id}`)) {
-        announced.current.add(`i${ahead.id}`);
-        speak(tr().voice.incident(label, spokenDist(ahead.alongM - prog.along)));
+    const inc = t.incidents.find((i) => i.alongM > prog.along && i.alongM - prog.along < ALERT_AHEAD_M);
+    if (inc) {
+      const label = incidentLabel(inc.type) ?? tr().incident.autre;
+      alert = alert ?? { text: tr().guidance.incidentIn(label, distText(inc.alongM - prog.along)), tone: 'incident' };
+      if (!announced.current.has(`i${inc.id}`)) {
+        announced.current.add(`i${inc.id}`);
+        parts.push({ text: tr().navx.incidentVoice(inc.type, label, spokenDist(inc.alongM - prog.along)), priority: DANGER_INCIDENTS.has(inc.type) ? 'danger' : 'info' });
       }
     }
     const total = prog.total || route.distanceM;
     const remainingM = Math.max(0, total - prog.along);
     const remainingS = route.durationS * (total ? remainingM / total : 1);
+
+    // Batterie : actuelle estimée − consommation du reste, jamais remontante ; alerte sous LOW_SOC.
+    const v = vehicle.current;
+    let battery = t.battery;
+    let viaSoc = t.viaSoc ?? null;
+    let lowSoc: number | null = null;
+    if (v) {
+      const avg = route.durationS > 0 ? route.distanceM / 1000 / (route.durationS / 3600) : 50;
+      const socNow = socNowEstimate(v, socAfter, driven.current, avg);
+      const live = liveArrivalSoc(v, socAfter, socNow, remainingM, remainingS, prevArrival.current);
+      prevArrival.current = live;
+      battery = { ...(t.battery ?? {}), [route.id]: live };
+      if (via) {
+        const toVia = Math.max(0, progressOnRoute(via, line).along - prog.along);
+        viaSoc = liveArrivalSoc(v, socAfter, socNow, toVia, remainingS * (toVia / Math.max(1, remainingM)), t.viaSoc ?? null);
+      } else if (live < LOW_SOC) {
+        lowSoc = live;
+        if (!announced.current.has('lowsoc')) {
+          announced.current.add('lowsoc');
+          const c = t.chargers.find((x) => x.alongM > prog.along + 300);
+          parts.push({ text: tr().navx.lowSocVoice(Math.max(0, live), c ? displayName(c.station) : null), priority: 'danger' });
+          if (!c) void loadChargers();
+        }
+      }
+    }
+
     const arrived = remainingM < 30 || metersBetween(p, t.dest) < 40;
     if (arrived) {
-      speak(t.dest.station ? tr().voice.arrivedStation(t.dest.name) : tr().voice.arrived(t.dest.name));
+      parts.length = 0;
+      parts.push({ text: t.dest.station ? tr().voice.arrivedStation(t.dest.name) : tr().voice.arrived(t.dest.name), priority: 'maneuver' });
       stopWatch();
       void keepScreenOn(false);
-      map.current?.post({ type: 'unfollow' });
-    }
+      // Recentrage sur la destination, vue du dessus, au-dessus de la fiche d'arrivée.
+      map.current?.post({ type: 'follow', lat: t.dest.lat, lon: t.dest.lon, bearing: 0, pitch: 0, zoom: 17, offsetY: -120, duration: 1200 });
+    } else drawProgress(route, prog.seg, prog.along);
+    announce(parts);
     setTrip((x) =>
       x
         ? {
@@ -498,52 +732,67 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
             alert,
             arrived,
             gps: 'ok',
+            battery,
+            viaSoc,
+            lowSoc,
+            offer: arrived ? null : x.offer,
           }
         : x,
     );
   }, [fix]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Perte du signal GPS
+  // Perte du signal GPS (annoncée une fois, bandeau en région live)
   useEffect(() => {
     if (!trip?.guiding || trip.arrived) return;
     const timer = setInterval(() => {
       const t = tripRef.current;
       if (!t?.guiding || t.arrived || t.gps === 'unavailable') return;
       const lost = Date.now() - lastFixAt.current > GPS_LOST_MS;
-      if (lost && t.gps !== 'lost') setTrip((x) => (x ? { ...x, gps: 'lost' } : x));
+      if (lost && t.gps !== 'lost') {
+        speak(tr().navx.gpsLostVoice);
+        setTrip((x) => (x ? { ...x, gps: 'lost' } : x));
+      }
     }, 3000);
     return () => clearInterval(timer);
   }, [trip?.guiding, trip?.arrived]);
 
-  // Trajet plus rapide : nouvelle vérification toutes les 2 minutes pendant le guidage.
+  // Toutes les 2 minutes : perturbations du reste du trajet, heure d'arrivée avec la durée fraîche du même trajet,
+  // et trajet nettement plus rapide proposé (jamais imposé). Repli client sans trafic : rien (serveur public ménagé).
   useEffect(() => {
-    if (!trip?.guiding || trip.arrived) return;
+    if (!trip?.guiding || trip.arrived || trip.client) return;
     const timer = setInterval(async () => {
       const t = tripRef.current;
       const p = prevFix.current;
-      if (!t?.guiding || !t.route || t.arrived || t.arrivedAtVia || !p || inFlight.current || t.remainingM < 2000) return;
+      if (!t?.guiding || !t.route || t.arrived || t.arrivedAtVia || !p || inFlight.current || t.offer) return;
       inFlight.current = true;
       const id = reqId.current;
       try {
-        const res = await getRoute(p, t.dest, { via: t.via, options: t.options });
+        const seg = progressNear(p, t.route.geometry, cum.current, prevAlong.current).seg;
+        const rest = remainingLine(t.route.geometry, seg, p);
+        const [res, f] = await Promise.all([
+          t.remainingM >= 1500 ? getRoute(p, t.dest, { via: t.via, options: t.options }).catch(() => null) : Promise.resolve(null),
+          getIncidents(bboxOf(rest)).catch(() => null),
+        ]);
         const cur = tripRef.current;
-        if (id !== reqId.current || !cur?.route || !cur.guiding) return;
-        const seg = progressOnRoute(p, cur.route.geometry).seg;
-        const better = fasterRoute(remainingLine(cur.route.geometry, seg, p), cur.remainingS, routeOptions(res));
-        if (!better) return;
-        const min = Math.round(better.gainS / 60);
-        along.current = stepsAlong(better.route);
-        announced.current.clear();
-        speak(tr().voice.faster(min));
-        commit(
-          await annotate({
-            ...cur,
-            routes: [better.route],
-            selected: 0,
-            route: better.route,
-            toast: { text: tr().guidance.faster(min), tone: 'success', at: Date.now() },
-          }),
-        );
+        if (id !== reqId.current || !cur?.route || !cur.guiding || cur.arrived || cur.route !== t.route) return;
+        if (f) feed.current = { ...feed.current, incidents: f.incidents };
+        let next: Trip = { ...cur, ...(f ? { feedOk: f.feedOk, feedUpdatedAt: f.updatedAt } : {}) };
+        if (res) {
+          const chk = checkFresh(rest, cur.remainingS, routeOptions(res), declined.current);
+          if (chk.same) {
+            // Même trajet, durée et trafic frais depuis la position : l'heure d'arrivée suit.
+            announced.current = remapAnnounced(cur.route.steps, chk.same.steps, announced.current);
+            resetProgress(chk.same, true);
+            next = { ...next, routes: [chk.same], selected: 0, route: chk.same, remainingS: chk.same.durationS, remainingM: chk.same.distanceM, traffic: res.traffic, provider: res.provider };
+          }
+          if (chk.faster) {
+            const def = offerDefault(cur.driverChose);
+            const min = Math.max(1, Math.round(chk.faster.gainS / 60));
+            next = { ...next, offer: { route: chk.faster.route, gainS: chk.faster.gainS, deadline: Date.now() + OFFER_MS, def } };
+            speak(tr().navx.offerVoice(min, def === 'take'));
+          }
+        }
+        commit(await annotate(next));
       } catch {
         /* nouvel essai dans 2 min */
       } finally {
@@ -551,7 +800,15 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
       }
     }, FASTER_CHECK_MS);
     return () => clearInterval(timer);
-  }, [trip?.guiding, trip?.arrived, annotate, commit]);
+  }, [trip?.guiding, trip?.arrived, trip?.client, annotate, commit, resetProgress]);
+
+  // Décompte de la proposition : choix par défaut à l'échéance.
+  useEffect(() => {
+    const o = trip?.offer;
+    if (!o) return;
+    const timer = setTimeout(() => (o.def === 'take' ? void takeOffer() : keepOffer()), Math.max(0, o.deadline - Date.now()));
+    return () => clearTimeout(timer);
+  }, [trip?.offer, takeOffer, keepOffer]);
 
   // Toasts éphémères
   useEffect(() => {
@@ -570,7 +827,24 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
   );
 
   const position: Pos | null = fix ?? user;
-  return { trip, plan, start, clear, setOption, selectRoute, addVia, removeVia, resumeAfterVia, onMapMessage, position, gpsPos: fix };
+  return {
+    trip,
+    plan,
+    start,
+    clear,
+    setOption,
+    selectRoute,
+    addVia,
+    removeVia,
+    resumeAfterVia,
+    onMapMessage,
+    takeOffer,
+    keepOffer,
+    allowBackground,
+    refuseBackground,
+    position,
+    gpsPos: fix,
+  };
 }
 
 export type TripApi = ReturnType<typeof useTrip>;

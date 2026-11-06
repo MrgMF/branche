@@ -7,8 +7,8 @@ import { MapView, type MapHandle } from '../components/MapView';
 import type { MapOut } from '../components/mapHtml';
 import { StationDetail } from '../components/StationDetail';
 import { ChargeShortcuts, HereBanner } from '../components/HereBanner';
-import { TripPanel } from '../components/TripPanel';
-import { Guidance } from '../components/Guidance';
+import { TripFooter, TripPanel } from '../components/TripPanel';
+import { Guidance, guidanceSide } from '../components/Guidance';
 import { SearchBar } from '../components/SearchBar';
 import { useRechargeHere } from '../lib/useRechargeHere';
 import { Button, Chip, Notice } from '../components/ui';
@@ -22,6 +22,7 @@ import { applyFilters, displayName, distanceKm, loadAround, loadOperators, neare
 import { store } from '../lib/store';
 import { placeDest, stationDest, useTrip } from '../lib/useTrip';
 import { useUserLocation } from '../lib/useLocation';
+import { useGoParam } from '../lib/useGoParam';
 import { MapControls, useMapControls } from '../components/MapControls';
 import { AppMenu, chargeState, MenuButton, type ChargeState } from '../components/AppMenu';
 import { Icon } from '../components/Icon';
@@ -157,6 +158,8 @@ export default function MapScreen() {
   const selected = selectedId ? byId.get(selectedId) ?? null : null;
   const nav = useTrip(map, geo.fix ?? user, Math.round(height * 0.55));
   const { trip, plan } = nav;
+  // « Y aller » depuis une borne non payable (/?go=<station>) : itinéraire vers la borne payable la plus proche
+  useGoParam({ byId, setById, ready: !!user || loc === 'denied', plan, setSelectedId });
   const rechargeHere = useRechargeHere();
   const [searching, setSearching] = useState(false);
   const controls = useMapControls(map, geo, { guiding: !!trip?.guiding, offsetY: wide ? 0 : -height * 0.18 });
@@ -227,7 +230,10 @@ export default function MapScreen() {
 
   return (
     <View style={styles.root}>
-      <MapView ref={map} onMessage={onMap} />
+      {/* Guidage en paysage : bandeau à gauche, carte (et flèche du véhicule) à droite. */}
+      <View style={[StyleSheet.absoluteFill, trip?.guiding ? { left: guidanceSide(width, height) } : null]}>
+        <MapView ref={map} onMessage={onMap} />
+      </View>
 
       <View
         style={[styles.top, { paddingTop: insets.top + 10 }, trip?.guiding ? { display: 'none' } : null, { flexDirection: 'column', alignItems: 'stretch', zIndex: 5 }, wide && { right: undefined, width: PANEL + 32, paddingHorizontal: 16 }]}
@@ -383,6 +389,7 @@ export default function MapScreen() {
             </>
           )}
         </ScrollView>
+        {trip ? <TripFooter nav={nav} /> : null}
       </View>
       <AppMenu open={menu} onClose={closeMenu} />
     </View>

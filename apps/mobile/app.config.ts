@@ -15,7 +15,8 @@ const config: ExpoConfig = {
   slug: 'branche',
   scheme: 'branche',
   version: '1.0.0',
-  orientation: 'portrait',
+  // Portrait et paysage (support voiture) : le guidage a une mise en page paysage (bandeau à gauche, carte à droite).
+  orientation: 'default',
   icon: './assets/icon.png',
   userInterfaceStyle: 'light',
   ios: {
@@ -25,6 +26,8 @@ const config: ExpoConfig = {
       NSLocationWhenInUseUsageDescription:
         'Branché utilise votre position pour trouver la borne la plus proche, sur votre appareil. Elle n’est envoyée à nos serveurs que si vous demandez un itinéraire ou faites un signalement.',
       ITSAppUsesNonExemptEncryption: false,
+      // Guidage écran verrouillé (avec accord explicite, pendant un guidage seulement) : position et voix en arrière-plan.
+      UIBackgroundModes: ['location', 'audio'],
     },
   },
   android: {
@@ -49,7 +52,15 @@ const config: ExpoConfig = {
     ['expo-camera', { cameraPermission: CAMERA_TEXT, recordAudioAndroid: false }],
     [
       'expo-location',
-      { locationWhenInUsePermission: 'Branché utilise votre position pour trouver la borne la plus proche, sur votre appareil. Elle n’est envoyée à nos serveurs que si vous demandez un itinéraire ou faites un signalement.' },
+      {
+        locationWhenInUsePermission: 'Branché utilise votre position pour trouver la borne la plus proche, sur votre appareil. Elle n’est envoyée à nos serveurs que si vous demandez un itinéraire ou faites un signalement.',
+        // Demandée seulement au démarrage d'un guidage, après un écran d'explication.
+        locationAlwaysAndWhenInUsePermission:
+          'Pendant un guidage seulement, Branché utilise votre position écran verrouillé pour continuer à vous guider à la voix, jusqu’à l’arrivée. Elle n’est pas enregistrée.',
+        isIosBackgroundLocationEnabled: true,
+        isAndroidBackgroundLocationEnabled: true,
+        isAndroidForegroundServiceEnabled: true,
+      },
     ],
   ],
   experiments: { typedRoutes: false, ...(baseUrl ? { baseUrl } : {}) },

@@ -129,7 +129,7 @@ a:hover { text-decoration-thickness: 2px; }
 .site-nav a:not(.btn):hover { background: var(--surface-alt); }
 .site-nav a { white-space: nowrap; }
 .site-nav .lang-short { display: none; }
-@media (max-width: 639px) { .site-nav .nav-optional { display: none; } }
+@media (max-width: 639px) { .site-nav a.nav-optional { display: none; } }
 @media (max-width: 479px) {
   .site-header__inner { gap: 4px; padding-left: 16px; padding-right: 16px; }
   .site-nav { gap: 0; min-width: 0; }

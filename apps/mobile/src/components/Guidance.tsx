@@ -1,8 +1,10 @@
 // Guidage plein écran : lisible d'un coup d'œil (manœuvre, distance, rue, voies, vitesse, limitation, arrivée).
 import { useEffect, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navigationLinks } from '../lib/charge';
+import { kw } from '../lib/format';
+import { displayName } from '../lib/stations';
 import { bigDist, etaClock, instructionOf, isOverSpeed, LOW_SOC, maneuverOf } from '../lib/guidance';
 import { useT } from '../i18n';
 import { speedUnit, speedValue } from '../i18n/format';
@@ -17,6 +19,9 @@ import { Button } from './ui';
 
 const REPORTS: IncidentType[] = ['accident', 'bouchon', 'travaux', 'obstacle', 'borne_hs'];
 
+/** Paysage : largeur du bandeau de guidage à gauche (la carte occupe le reste, à droite). 0 en portrait. */
+export const guidanceSide = (width: number, height: number) => (width > height ? Math.min(420, Math.max(300, Math.round(width * 0.42))) : 0);
+
 export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: Station) => void }) {
   const t = useT();
   const insets = useSafeAreaInsets();
@@ -24,7 +29,17 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
   const [muted, setMutedState] = useState(isMuted());
   const [reporting, setReporting] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [, setTick] = useState(0);
+  const { width, height } = useWindowDimensions();
+  const side = guidanceSide(width, height);
   useEffect(() => onMutedChange(setMutedState), []);
+  // Décompte de la proposition de trajet plus rapide (rafraîchi chaque seconde).
+  const offerAt = trip?.offer?.deadline;
+  useEffect(() => {
+    if (!offerAt) return;
+    const i = setInterval(() => setTick((x) => x + 1), 1000);
+    return () => clearInterval(i);
+  }, [offerAt]);
   useEffect(() => {
     if (!note) return;
     const t = setTimeout(() => setNote(null), 4000);
@@ -35,7 +50,19 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
   const next = trip.next;
   const m = next ? maneuverOf(next.step) : 'straight';
   const d = bigDist(next?.inM ?? 0);
-  const street = next ? next.step.street ?? next.step.towards ?? instructionOf(next.step) : t.guidance.follow;
+  // Sortie / bifurcation : la direction des panneaux en ligne principale ; arrivée : le nom de la destination.
+  const signpost = m.startsWith('exit-') || m.startsWith('keep-');
+  const street = !next
+    ? t.guidance.follow
+    : m === 'arrive'
+      ? trip.dest.name
+      : signpost
+        ? next.step.towards ?? next.step.street ?? instructionOf(next.step)
+        : next.step.street ?? next.step.towards ?? instructionOf(next.step);
+  const exitBadge = next && signpost && next.step.exitNumber ? t.navx.exitBadge(next.step.exitNumber) : null;
+  const offer = trip.offer;
+  const offerLeft = offer ? Math.max(0, Math.ceil((offer.deadline - Date.now()) / 1000)) : 0;
+  const lowCharger = trip.lowSoc !== null && !trip.via.length ? trip.chargers.find((c) => c.alongM > trip.along + 300) ?? null : null;
   const lanes = next && next.inM < 1500 ? next.step.lanes : undefined;
   const over = isOverSpeed(trip.speedKmh, trip.limitKmh);
   const remainingS = trip.remainingS || trip.route.durationS;
@@ -69,13 +96,18 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
       accessible
       accessibilityRole="summary"
       accessibilityLiveRegion="polite"
-      accessibilityLabel={next ? t.guidance.bannerA11y(distText(next.inM), what, exitTxt, instructionOf(next.step)) : t.guidance.follow}
+      accessibilityLabel={next ? t.guidance.bannerA11y(distText(next.inM), what, exitTxt, m === 'arrive' ? `${instructionOf(next.step)} : ${trip.dest.name}` : instructionOf(next.step)) : t.guidance.follow}
     >
       <View style={styles.bannerRow}>
         <View testID="maneuver-icon" accessibilityLabel={t.guidance.maneuverA11y(what, exitTxt)}>
           <ManeuverIcon maneuver={m} exit={next?.step.exit} angle={next?.step.angle} size={84} />
         </View>
         <View style={{ flex: 1 }}>
+          {exitBadge ? (
+            <Text style={styles.exitBadge} testID="exit-badge">
+              {exitBadge}
+            </Text>
+          ) : null}
           <Text style={styles.dist}>
             {d.value}
             <Text style={styles.unit}> {d.unit}</Text>
@@ -105,9 +137,34 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+      <View style={[styles.top, { paddingTop: insets.top + 8 }, side ? { right: undefined, width: side, paddingLeft: insets.left + 10 } : null]} pointerEvents="box-none">
         {banner}
-        {trip.gps === 'lost' ? <Text style={[styles.pill, styles.pillWarn]}>{t.guidance.gpsLost}</Text> : null}
+        {offer ? (
+          <View style={styles.offer} accessibilityLiveRegion="assertive" testID="faster-offer">
+            <Text style={styles.offerTitle} accessibilityRole="header">
+              {t.navx.offerTitle(Math.max(1, Math.round(offer.gainS / 60)))}
+            </Text>
+            <Text style={styles.offerMeta}>{t.navx.offerCountdown(offerLeft, offer.def === 'take')}</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Button label={t.navx.offerTake} variant={offer.def === 'take' ? 'primary' : 'secondary'} style={{ flex: 1, minHeight: 52 }} onPress={() => void nav.takeOffer()} />
+              <Button label={t.navx.offerKeep} variant={offer.def === 'keep' ? 'primary' : 'secondary'} style={{ flex: 1, minHeight: 52 }} onPress={nav.keepOffer} />
+            </View>
+          </View>
+        ) : null}
+        {trip.lowSoc !== null && !trip.via.length && !trip.arrived ? (
+          <View style={[styles.offer, styles.lowSoc]} accessibilityLiveRegion="polite" testID="low-soc">
+            <Text style={styles.offerTitle}>{t.navx.lowSocTitle(Math.max(0, trip.lowSoc))}</Text>
+            <Text style={styles.offerMeta} numberOfLines={2}>
+              {lowCharger ? t.navx.lowSocCharger(displayName(lowCharger.station), kw(lowCharger.station.kw), distText(lowCharger.alongM - trip.along)) : t.navx.lowSocSearching}
+            </Text>
+            {lowCharger ? <Button label={t.trip.addVia} style={{ minHeight: 52 }} onPress={() => nav.addVia(lowCharger.station)} /> : null}
+          </View>
+        ) : null}
+        {trip.gps === 'lost' ? (
+          <Text accessibilityLiveRegion="assertive" accessibilityRole="alert" style={[styles.pill, styles.pillWarn]}>
+            {t.guidance.gpsLost}
+          </Text>
+        ) : null}
         {trip.gps === 'unavailable' ? (
           <View style={[styles.pill, styles.pillWarn, { gap: 8 }]}>
             <Text style={styles.pillText}>{t.guidance.gpsUnavailable}</Text>
@@ -133,7 +190,7 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
       </View>
 
       {!trip.arrived && !trip.arrivedAtVia ? (
-        <View style={[styles.side, { bottom: 150 + insets.bottom }]} pointerEvents="box-none">
+        <View style={[styles.side, { bottom: 150 + insets.bottom }, side ? { left: side + 12, bottom: 12 + insets.bottom } : null]} pointerEvents="box-none">
           <View style={styles.speedBox} accessible accessibilityLabel={t.guidance.speedA11y(trip.speedKmh === null ? null : `${speedValue(trip.speedKmh)} ${speedUnit()}`, trip.limitKmh ? `${speedValue(trip.limitKmh)} ${speedUnit()}` : null, over)}>
             {trip.limitKmh ? (
               <View style={styles.limit} testID="speed-limit">
@@ -159,7 +216,7 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
         </View>
       ) : null}
 
-      <View style={[styles.bottom, { paddingBottom: insets.bottom + 12 }]}>
+      <View style={[styles.bottom, { paddingBottom: insets.bottom + 12 }, side ? { right: undefined, width: side, borderTopRightRadius: radius.xl, borderTopLeftRadius: 0 } : null]}>
         {trip.arrived || trip.arrivedAtVia ? (
           <View style={{ gap: 10 }} accessibilityLiveRegion="polite">
             <Text style={styles.kicker}>{trip.arrivedAtVia ? t.guidance.viaReached : t.guidance.arrived}</Text>
@@ -185,10 +242,25 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
           </View>
         )}
         <Text style={styles.small}>
-          {trip.provider === 'tomtom' ? t.guidance.attrTomtom : t.guidance.attrOsm}
-          {t.guidance.attrTail}
+          {!trip.traffic ? `${t.navx.noTrafficShort} · ` : ''}
+          {trip.client ? t.navx.attrStatic : trip.provider === 'tomtom' ? t.guidance.attrTomtom : t.guidance.attrOsm}
+          {trip.client ? '' : t.guidance.attrTail}
         </Text>
       </View>
+
+      {trip.bgAsk ? (
+        <View style={styles.scrim}>
+          <View style={[styles.reportSheet, { paddingBottom: insets.bottom + 16 }]} accessibilityViewIsModal testID="bg-consent">
+            <Text style={styles.arrTitle} accessibilityRole="header">
+              {t.navx.bgTitle}
+            </Text>
+            <Text style={styles.smallDark}>{t.navx.bgBody}</Text>
+            {Platform.OS === 'android' ? <Text style={styles.smallDark}>{t.navx.bgSystem}</Text> : null}
+            <Button label={t.navx.bgAllow} onPress={() => void nav.allowBackground()} />
+            <Button label={t.navx.bgLater} variant="ghost" onPress={nav.refuseBackground} />
+          </View>
+        </View>
+      ) : null}
 
       {reporting ? (
         <View style={styles.scrim}>
@@ -233,6 +305,12 @@ const styles = StyleSheet.create({
   dist: { fontFamily: fonts.display, fontSize: 44, lineHeight: 50, color: '#FFFFFF' },
   unit: { fontFamily: fonts.displayMedium, fontSize: 24, color: '#FFFFFF' },
   street: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 25, color: '#E8EEEC' },
+  // Panneau de sortie (vert autoroute français : texte blanc, contraste AA).
+  exitBadge: { alignSelf: 'flex-start', backgroundColor: '#0B6E3A', color: '#FFFFFF', fontFamily: fonts.bold, fontSize: 16, borderRadius: 6, borderWidth: 2, borderColor: '#FFFFFF', paddingHorizontal: 8, paddingVertical: 2, marginBottom: 4, overflow: 'hidden' },
+  offer: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 12, gap: 8, borderWidth: 2, borderColor: colors.accent, ...shadow },
+  lowSoc: { borderColor: colors.danger },
+  offerTitle: { fontFamily: fonts.display, fontSize: 19, color: colors.ink },
+  offerMeta: { fontFamily: fonts.semibold, fontSize: 14, color: colors.inkMuted },
   lanes: { flexDirection: 'row', alignSelf: 'center', backgroundColor: colors.nightCard, borderRadius: radius.md, paddingHorizontal: 6, paddingVertical: 4 },
   lane: { paddingHorizontal: 8, paddingVertical: 2 },
   laneSep: { borderLeftWidth: 2, borderLeftColor: 'rgba(255,255,255,0.25)', borderStyle: 'dashed' },

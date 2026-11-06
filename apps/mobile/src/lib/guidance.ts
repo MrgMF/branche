@@ -114,6 +114,14 @@ export type TrafficLevel = 'slow' | 'jam' | 'closed';
 export const trafficLevel = (magnitude: number): TrafficLevel | null =>
   magnitude >= 4 ? 'closed' : magnitude === 3 ? 'jam' : magnitude >= 1 ? 'slow' : null;
 
+/** Segments colorés restant à parcourir (le tronçon parcouru n'est plus coloré). */
+export function trafficSegmentsFrom(route: Pick<RouteOption, 'geometry' | 'trafficSections'>, seg: number): { coords: LonLat[]; level: TrafficLevel }[] {
+  return trafficSegments({
+    geometry: route.geometry,
+    trafficSections: route.trafficSections.filter((s) => s.endIndex > seg).map((s) => ({ ...s, startIndex: Math.max(s.startIndex, seg) })),
+  });
+}
+
 /** Segments colorés à superposer au tracé principal. */
 export function trafficSegments(route: Pick<RouteOption, 'geometry' | 'trafficSections'>): { coords: LonLat[]; level: TrafficLevel }[] {
   const out: { coords: LonLat[]; level: TrafficLevel }[] = [];
@@ -175,6 +183,48 @@ export function fasterRoute(currentRest: LonLat[], currentRemainingS: number, fr
   return gainS >= FASTER_MIN_GAIN_S ? { route: best, gainS } : null;
 }
 
+export interface FreshCheck {
+  /** Le trajet suivi, recalculé depuis la position (durée et trafic frais), s'il figure dans la réponse. */
+  same: RouteOption | null;
+  /** Trajet nettement plus rapide que le trajet suivi recalculé. */
+  faster: { route: RouteOption; gainS: number } | null;
+}
+
+/**
+ * Vérification périodique : `fresh` = trajets recalculés depuis la position (le plus rapide d'abord).
+ * Référence = le trajet suivi recalculé (même trafic), sinon l'estimation restante.
+ * `declined` : tracé déjà refusé par le conducteur (re-proposé seulement si le gain progresse de 3 min).
+ */
+export function checkFresh(
+  currentRest: LonLat[],
+  currentRemainingS: number,
+  fresh: RouteOption[],
+  declined?: { geometry: LonLat[]; gainS: number } | null,
+): FreshCheck {
+  const same = fresh.find((r) => sameRoute(currentRest, r.geometry)) ?? null;
+  const ref = same ? same.durationS : currentRemainingS;
+  const best = fresh.filter((r) => r !== same).sort((a, b) => a.durationS - b.durationS)[0];
+  if (!best) return { same, faster: null };
+  const gainS = ref - best.durationS;
+  if (gainS < FASTER_MIN_GAIN_S) return { same, faster: null };
+  if (declined && sameRoute(declined.geometry, best.geometry, 60) && gainS < declined.gainS + 180) return { same, faster: null };
+  return { same, faster: { route: best, gainS } };
+}
+
+/** Choix par défaut à la fin du décompte : garder si le conducteur avait choisi une alternative, prendre sinon. */
+export const offerDefault = (driverChose: boolean): 'take' | 'keep' => (driverChose ? 'keep' : 'take');
+
+/** Reporte les annonces déjà faites sur les étapes équivalentes (même point à 25 m) d'un trajet rafraîchi. */
+export function remapAnnounced(oldSteps: RouteStep[], newSteps: RouteStep[], done: Set<string>): Set<string> {
+  const out = new Set<string>([...done].filter((k) => !/^s\d+:/.test(k)));
+  newSteps.forEach((n, j) => {
+    const i = oldSteps.findIndex((o) => maneuverOf(o) === maneuverOf(n) && metersBetween(o, n) < 25);
+    if (i < 0) return;
+    for (const l of ['far', 'mid', 'near']) if (done.has(`s${i}:${l}`)) out.add(`s${j}:${l}`);
+  });
+  return out;
+}
+
 // ---------------------------------------------------------------- VE
 
 export interface VehicleLike {
@@ -190,6 +240,28 @@ export function arrivalSoc(v: VehicleLike, socAfter: (v: VehicleLike, soc: numbe
   const avgKmh = durationS > 0 ? distanceM / 1000 / (durationS / 3600) : 0;
   const factor = avgKmh > 110 ? 1.15 : 1.05;
   return Math.round(socAfter(v, v.socPercent, distanceM * factor));
+}
+
+/** Batterie actuelle estimée (%) : niveau saisi au départ moins la consommation de la distance parcourue. */
+export function socNowEstimate(v: VehicleLike, socAfter: (v: VehicleLike, soc: number, m: number) => number, drivenM: number, avgKmh: number): number {
+  return socAfter(v, v.socPercent, drivenM * (avgKmh > 110 ? 1.15 : 1.05));
+}
+
+/**
+ * Batterie à l'arrivée en guidage = batterie actuelle estimée − consommation du reste du trajet (marge comprise),
+ * jamais remontante d'une position à l'autre (`prev`), arrondie.
+ */
+export function liveArrivalSoc(
+  v: VehicleLike,
+  socAfter: (v: VehicleLike, soc: number, m: number) => number,
+  socNow: number,
+  remainingM: number,
+  remainingS: number,
+  prev: number | null,
+): number {
+  const avg = remainingS > 0 ? remainingM / 1000 / (remainingS / 3600) : 0;
+  const x = Math.round(socAfter(v, socNow, remainingM * (avg > 110 ? 1.15 : 1.05)));
+  return prev === null ? x : Math.min(prev, x);
 }
 
 export const LOW_SOC = 10;

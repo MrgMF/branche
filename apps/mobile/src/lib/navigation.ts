@@ -1,6 +1,7 @@
 // Itinéraire le plus rapide (trafic), perturbations et zones de danger.
 import { API_URL, DATA_URL } from './config';
 import { searchPhoton } from './photon';
+import { FOSSGIS_ATTRIBUTION, QuotaError, routeFossgis } from './valhallaClient';
 import { tr } from '../i18n';
 import { distText as distTextFmt, durationText as durationTextFmt } from '../i18n/format';
 
@@ -73,6 +74,8 @@ export interface Route {
   hasTolls?: boolean;
   routes?: RouteOption[];
   options?: RouteOptions;
+  /** Calculé par l'app elle-même (site statique sans API) : serveur Valhalla public, sans trafic. */
+  client?: boolean;
 }
 
 /** Liste des trajets d'une réponse (V2 : routes[] ; V1.1 : le trajet racine seul). */
@@ -118,7 +121,7 @@ async function get<T>(url: string, ms = 20000, init?: RequestInit): Promise<T> {
 }
 
 // POST : les coordonnées ne figurent pas dans les URL (journaux serveur).
-export const getRoute = (
+const getRouteApi = (
   from: { lat: number; lon: number },
   to: { lat: number; lon: number },
   extra: { via?: { lat: number; lon: number }[]; options?: RouteOptions } = {},
@@ -133,6 +136,34 @@ export const getRoute = (
       ...(extra.options ? { options: extra.options } : {}),
     }),
   });
+
+/** Site statique (aucune API) : itinéraire calculé par l'app via le Valhalla public FOSSGIS, sans trafic. */
+async function getRouteClient(
+  from: { lat: number; lon: number },
+  to: { lat: number; lon: number },
+  extra: { via?: { lat: number; lon: number }[]; options?: RouteOptions },
+): Promise<Route> {
+  const options = extra.options ?? { avoidTolls: false, avoidMotorways: false };
+  let routes: RouteOption[];
+  try {
+    routes = await routeFossgis({ from, to, via: extra.via ?? [], options });
+  } catch (e) {
+    if (e instanceof QuotaError) throw new Error(tr().navx.quota);
+    throw new Error(tr().trip.unreachable);
+  }
+  const best = routes[0]!;
+  return { provider: 'valhalla', traffic: false, client: true, durationS: best.durationS, trafficDelayS: 0, distanceM: best.distanceM, geometry: best.geometry, steps: best.steps, hasTolls: best.hasTolls, routes, options, attribution: FOSSGIS_ATTRIBUTION };
+}
+
+/** Itinéraire : API Branché si configurée, sinon repli client (site statique). */
+export const getRoute = (
+  from: { lat: number; lon: number },
+  to: { lat: number; lon: number },
+  extra: { via?: { lat: number; lon: number }[]; options?: RouteOptions } = {},
+): Promise<Route> => (API_URL ? getRouteApi(from, to, extra) : getRouteClient(from, to, extra));
+
+/** Itinéraire calculé sans serveur Branché (site statique) ? */
+export const clientRouting = () => !API_URL;
 
 export interface Place {
   label: string;
@@ -160,10 +191,12 @@ export async function searchPlaces(q: string, near?: { lat: number; lon: number 
     });
   } catch (e) {
     if (e instanceof Error && e.name === 'AbortError') throw e;
-    throw new Error(tr().search.unavailableNet);
+    // API injoignable (réseau, service endormi) : recherche directe chez Photon.
+    return searchPhoton(q, near, signal);
   }
   const body = (await res.json().catch(() => ({}))) as Partial<SearchResponse> & { error?: { message?: string } };
-  if (res.status === 503) return searchPhoton(q, near, signal);
+  // Fournisseur de l'API indisponible (502/503/504) ou erreur interne : repli Photon.
+  if (res.status >= 500) return searchPhoton(q, near, signal);
   if (!res.ok) throw new Error(body.error?.message ?? tr().search.unavailableNow);
   return { provider: body.provider ?? 'photon', attribution: body.attribution ?? '', results: body.results ?? [] };
 }
@@ -173,8 +206,10 @@ export interface IncidentFeed {
   feedOk: boolean;
   updatedAt: string | null;
 }
-export const getIncidents = (b: [number, number, number, number]) =>
-  get<Partial<IncidentFeed>>(`${API_URL}/v1/incidents?bbox=${b.map((x) => x.toFixed(4)).join(',')}`).then(
+export const getIncidents = (b: [number, number, number, number]): Promise<IncidentFeed> =>
+  !API_URL
+    ? Promise.resolve({ incidents: [], feedOk: false, updatedAt: null })
+    : get<Partial<IncidentFeed>>(`${API_URL}/v1/incidents?bbox=${b.map((x) => x.toFixed(4)).join(',')}`).then(
     (r): IncidentFeed => ({ incidents: r.incidents ?? [], feedOk: r.feedOk !== false, updatedAt: r.updatedAt ?? null }),
   );
 
@@ -236,6 +271,48 @@ export function progressOnRoute(p: { lat: number; lon: number }, line: LonLat[])
   }
   return { ...best, total: acc };
 }
+
+/** Distances cumulées (m) de chaque point de la ligne. */
+export function cumulative(line: LonLat[]): number[] {
+  const out = [0];
+  for (let i = 1; i < line.length; i++) out.push(out[i - 1] + metersBetween({ lon: line[i - 1][0], lat: line[i - 1][1] }, { lon: line[i][0], lat: line[i][1] }));
+  return out;
+}
+
+/**
+ * Recalage dans une fenêtre autour de la progression précédente (de `prevAlong − backM` à `prevAlong + aheadM`) :
+ * un tracé qui repasse au même endroit (aller-retour, échangeur) ne fait pas sauter la progression.
+ * Si rien n'est proche dans la fenêtre (écart > `maxOffM`), recherche sur tout le tracé.
+ */
+export function progressNear(p: { lat: number; lon: number }, line: LonLat[], cum: number[], prevAlong: number | null, backM = 150, aheadM = 1500, maxOffM = 60) {
+  const total = cum[cum.length - 1] ?? 0;
+  if (prevAlong === null || line.length < 2) return { ...progressOnRoute(p, line), windowed: false };
+  const lo = prevAlong - backM;
+  const hi = prevAlong + aheadM;
+  let best = { off: Infinity, along: 0, seg: 0 };
+  for (let i = 0; i < line.length - 1; i++) {
+    if (cum[i + 1] < lo) continue;
+    if (cum[i] > hi) break;
+    const { d, t } = projectOnSegment(p, line[i], line[i + 1]);
+    if (d < best.off) best = { off: d, along: cum[i] + t * (cum[i + 1] - cum[i]), seg: i };
+  }
+  if (best.off > maxOffM) {
+    const g = progressOnRoute(p, line);
+    // Hors fenêtre : on ne retient la recherche globale que si elle est nettement meilleure.
+    if (g.off + 20 < best.off) return { ...g, windowed: false };
+  }
+  return { ...best, total, windowed: true };
+}
+
+/** Cap (°) du segment `seg` de la ligne. */
+export const segmentBearing = (line: LonLat[], seg: number): number | null => {
+  const a = line[seg], b = line[seg + 1];
+  if (!a || !b) return null;
+  return bearing({ lon: a[0], lat: a[1] }, { lon: b[0], lat: b[1] });
+};
+
+/** Écart angulaire (0..180°). */
+export const angleDiff = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
 
 /** Points d'intérêt (incidents, zones) situés sur l'itinéraire, triés par distance le long du trajet. */
 export function alongRoute<T extends { lat: number; lon: number }>(items: T[], line: LonLat[], maxOffM: number | ((x: T) => number)) {

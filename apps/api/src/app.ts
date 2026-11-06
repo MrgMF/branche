@@ -23,7 +23,7 @@ import { CheckinStore } from './checkins/store.js';
 import { featureRoutes, vehicleRoutes } from './routes/vehicle.js';
 import { AnthropicVehicleIdentifier, type VehicleIdentifier } from './vehicles/identify.js';
 import { IncidentService, ReportStore } from './incidents/service.js';
-import { TomTomRouteProvider, ValhallaRouteProvider, type RouteProvider } from './navigation/route.js';
+import { FallbackRouteProvider, TomTomRouteProvider, ValhallaRouteProvider, type RouteProvider } from './navigation/route.js';
 import { reqSerializer } from './lib/logRedact.js';
 import type { FetchLike } from './lib/ttlCache.js';
 import { SessionService } from './sessions/service.js';
@@ -47,9 +47,14 @@ export interface AppDeps {
 }
 
 function buildRouter(config: Config, fetchFn: FetchLike): RouteProvider | null {
-  if (config.tomtomApiKey) return new TomTomRouteProvider(config.tomtomApiKey, fetchFn);
-  if (config.valhallaUrl) return new ValhallaRouteProvider(config.valhallaUrl, fetchFn);
-  return null;
+  // Valhalla seulement si la configuration l'autorise (en production : VALHALLA_URL explicite, jamais FOSSGIS public).
+  const valhalla = config.valhallaUrl ? new ValhallaRouteProvider(config.valhallaUrl, fetchFn) : null;
+  if (config.tomtomApiKey) {
+    const tomtom = new TomTomRouteProvider(config.tomtomApiKey, fetchFn);
+    // TomTom en panne → repli Valhalla sans trafic (traffic:false dans la réponse).
+    return valhalla ? new FallbackRouteProvider(tomtom, valhalla) : tomtom;
+  }
+  return valhalla;
 }
 
 /** Journaux sans corps, sans IP ni coordonnées précises (voir lib/logRedact.ts). */

@@ -782,3 +782,32 @@ export class ValhallaRouteProvider implements RouteProvider {
     return result('valhalla', routes, req.options, '© contributeurs OpenStreetMap, Valhalla');
   }
 }
+
+// ---------------------------------------------------------------- Repli
+
+/**
+ * TomTom d'abord ; en cas de panne (RouteProviderError : HTTP 5xx, délai, réponse inexploitable), repli Valhalla
+ * `traffic:false`. Le repli n'existe que si une instance Valhalla est autorisée par la configuration (en production,
+ * jamais le serveur public FOSSGIS : VALHALLA_URL explicite requise, voir config.ts).
+ */
+export class FallbackRouteProvider implements RouteProvider {
+  readonly name: RouteResult['provider'];
+
+  constructor(
+    private readonly primary: RouteProvider,
+    private readonly fallback: RouteProvider,
+    private readonly onFallback?: (err: RouteProviderError) => void,
+  ) {
+    this.name = primary.name;
+  }
+
+  async route(req: RouteRequest): Promise<RouteResult> {
+    try {
+      return await this.primary.route(req);
+    } catch (err) {
+      if (!(err instanceof RouteProviderError)) throw err;
+      this.onFallback?.(err);
+      return this.fallback.route(req);
+    }
+  }
+}
