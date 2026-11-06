@@ -14,6 +14,7 @@ import { compatible, loadVehicle, type Vehicle } from '../lib/vehicle';
 import { nearbyStation } from '../lib/proximity';
 import { applyFilters, displayName, distanceKm, loadAround, nearest, NO_FILTERS, type Filters, type Station } from '../lib/stations';
 import { autoFinish, departed } from '../lib/autoEnd';
+import { allDown, nearestFree } from '../lib/nearestFree';
 import { store, type DirectCharge } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { Button } from './ui';
@@ -34,7 +35,9 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
   const [hidden, setHidden] = useState<string | null>(null);
   const [prepared, setPrepared] = useState<Prepared | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [pick, setPick] = useState<{ s: Station; d: number; free: number; known: number } | null>(null);
+  const [pick, setPick] = useState<{ s: Station; d: number; free: number; known: number; down: boolean } | null>(null);
+  // Borne où l'on se trouve entièrement hors service : borne libre la plus proche (undefined = recherche en cours).
+  const [hitDown, setHitDown] = useState<{ id: string; alt: { s: Station; d: number } | null | undefined } | null>(null);
 
   useEffect(() => {
     if (user) setPos(user);
@@ -87,16 +90,36 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
     if (!cands.length) return setPick(null);
     getAvailability(cands.flatMap(({ s }) => (s.pdc ?? []).map(([id]) => id))).then((items) => {
       if (!alive) return;
-      const scored = cands.map(({ s, d }) => ({ s, d, ...stationSummary(s, items) }));
-      const first = scored[0];
+      const scored = cands.map(({ s, d }) => {
+        const sum = stationSummary(s, items);
+        return { s, d, ...sum, down: allDown(sum) };
+      });
+      // Jamais une borne entièrement hors service quand une autre est possible.
+      const first = scored.find((x) => !x.down) ?? scored[0];
       const freeOne = scored.find((x) => x.free > 0 && x.d <= first.d * 1.5 + 0.3);
       const best = first.known && !first.free && freeOne ? freeOne : first;
-      setPick({ s: best.s, d: best.d, free: best.free, known: best.known });
+      setPick({ s: best.s, d: best.d, free: best.free, known: best.known, down: best.down });
     });
     return () => {
       alive = false;
     };
   }, [around, vehicle, pos?.lat, pos?.lon, filters]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const hitId = hit?.station.id ?? null;
+  useEffect(() => {
+    setHitDown(null);
+    if (!hit) return;
+    let alive = true;
+    const s = hit.station;
+    getAvailability((s.pdc ?? []).map(([id]) => id)).then((items) => {
+      if (!alive || !allDown(stationSummary(s, items))) return;
+      setHitDown({ id: s.id, alt: undefined });
+      nearestFree(s, around.length ? around : store.stations(), s.id).then((alt) => alive && setHitDown({ id: s.id, alt }));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [hitId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Borne conseillée réellement affichée (cas 3 ci-dessous), signalée à la carte.
   const preparedHere = !!(hit && prepared && prepared.station.id === hit.station.id);
@@ -139,24 +162,30 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
   // 2. À moins de 60 m d'une station : « Recharger ici »
   if (hit && hidden !== hit.station.id) {
     const s = hit.station;
+    const down = hitDown?.id === s.id;
+    const downAlt = down ? hitDown.alt : undefined;
     return (
-      <View style={styles.card} accessibilityRole="summary" accessibilityLabel={t.here.youAreAtA11y(displayName(s), distText(hit.distanceM))}>
+      <View style={[styles.card, down && styles.cardDown]} accessibilityRole="summary" accessibilityLabel={t.here.youAreAtA11y(displayName(s), distText(hit.distanceM))}>
         <View style={styles.row}>
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={styles.kicker}>{t.here.youAreAt}</Text>
             <Text style={styles.title} numberOfLines={2}>
               {displayName(s)}
             </Text>
-            <Text style={styles.sub} numberOfLines={1}>
+            <Text style={styles.sub} numberOfLines={2}>
               {distText(hit.distanceM)} · {kw(s.kw)} · {s.c.map((c) => plugLabel(c)).join(', ')}
             </Text>
+            {down ? <Text style={styles.down}>{t.station.allDown}</Text> : null}
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel={t.here.hide} onPress={() => setHidden(s.id)} style={styles.close}>
             <Text style={styles.closeX}>×</Text>
           </Pressable>
         </View>
+        {down && downAlt && onPick ? <Button label={t.station.nearestFree} hint={t.station.nearestFreeHint} onPress={() => onPick(downAlt.s)} /> : null}
+        {down && downAlt === null ? <Text style={styles.small}>{t.station.noFreeNearby}</Text> : null}
         <Button
           label={t.here.rechargeHere}
+          variant={down ? 'secondary' : 'primary'}
           onPress={() => {
             store.setCurrent(s);
             router.push({ pathname: '/recharger', params: { station: s.id } });
@@ -168,7 +197,7 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
   }
 
   // 3. Recharge préparée ailleurs, ou borne conseillée (aucun geste requis pour la voir)
-  const target = prepared ? { s: prepared.station, d: pos ? distanceKm(pos, prepared.station) : null, free: 0, known: 0 } : pick;
+  const target = prepared ? { s: prepared.station, d: pos ? distanceKm(pos, prepared.station) : null, free: 0, known: 0, down: false } : pick;
   if (!target || !onPick) return null;
   return (
     <View style={[styles.card, styles.soft]} accessibilityRole="summary">
@@ -177,11 +206,11 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
         {displayName(target.s)}
       </Text>
       <Text style={styles.sub} numberOfLines={2}>
-        {[target.d != null ? km(target.d) : null, kw(target.s.kw), target.known ? (target.free ? t.here.freeNow(target.free) : t.here.busy) : null]
+        {[target.d != null ? km(target.d) : null, kw(target.s.kw), target.known ? (target.free ? t.here.freeNow(target.free) : target.down ? t.here.down : t.here.busy) : null]
           .filter(Boolean)
           .join(' · ')}
       </Text>
-      <Button label={t.here.see} variant="secondary" onPress={() => onPick(target.s)} hint={t.here.seeHint} />
+      <Button label={t.here.see} onPress={() => onPick(target.s)} hint={t.here.seeHint} />
     </View>
   );
 }
@@ -189,6 +218,8 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
 const styles = StyleSheet.create({
   soft: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
   small: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17, color: colors.inkMuted },
+  cardDown: { backgroundColor: colors.dangerSoft, borderColor: colors.danger },
+  down: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 18, color: colors.danger, marginTop: 2 },
   card: { backgroundColor: colors.accentSoft, borderRadius: radius.lg, padding: 14, gap: 10, borderWidth: 2, borderColor: colors.accent },
   row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   kicker: { fontFamily: fonts.semibold, fontSize: 12, color: colors.accentPressed, textTransform: 'uppercase', letterSpacing: 0.5 },

@@ -10,6 +10,9 @@ import { displayName, type Station } from '../lib/stations';
 import { store } from '../lib/store';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { TariffLines } from './Pricing';
+import { freeCredible } from '../lib/tariff';
+import { allDown, nearestFree } from '../lib/nearestFree';
+import { useLargeText } from '../lib/useLargeText';
 import { Button, Notice, Stat, Tag } from './ui';
 import { useT } from '../i18n';
 import { dateNum } from '../i18n/format';
@@ -23,6 +26,8 @@ export function StationDetail(props: {
   operatorName: string;
   onRoute: () => void;
   onClose: () => void;
+  /** Ouvre une autre borne (borne libre la plus proche quand celle-ci est hors service). */
+  onPick?: (s: Station) => void;
 }) {
   const t = useT();
   const { station: s, distance, api } = props;
@@ -37,6 +42,19 @@ export function StationDetail(props: {
   const live = stationSummary(s, avail);
   const near = distance != null && distance < 0.3;
   const tel = s.tel ? phone(s.tel) : null;
+  const large = useLargeText();
+  // Borne entièrement hors service (temps réel) : on oriente vers la borne libre la plus proche.
+  const down = allDown(live);
+  const [alt, setAlt] = useState<{ s: Station; d: number } | null | undefined>(undefined);
+  useEffect(() => {
+    setAlt(undefined);
+    if (!down) return;
+    let alive = true;
+    nearestFree(s, store.stations(), s.id).then((r) => alive && setAlt(r));
+    return () => {
+      alive = false;
+    };
+  }, [down, s.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let alive = true;
     setCommunity(null);
@@ -73,15 +91,31 @@ export function StationDetail(props: {
         </Pressable>
       </View>
 
-      <View style={styles.stats}>
-        <Stat label={t.station.maxPower} value={kw(s.kw)} />
-        <Stat label={t.station.points} value={String(s.p)} />
-        <Stat label={t.station.access} value={reserved ? t.station.reserved : t.station.open} />
+      <View style={[styles.stats, large && { flexDirection: 'column' }]}>
+        <Stat wrap={large} label={t.station.maxPower} value={kw(s.kw)} />
+        <Stat wrap={large} label={t.station.points} value={String(s.p)} />
+        <Stat wrap={large} label={t.station.access} value={reserved ? t.station.reserved : t.station.open} />
       </View>
 
       {/* Action principale juste sous les chiffres clés : visible sans défiler, même en 320 px. */}
+      {down ? (
+        <View style={styles.cta} testID="station-down">
+          <Notice tone="error">{t.station.allDown}</Notice>
+          {alt ? (
+            <Button
+              label={t.station.nearestFree}
+              hint={t.station.nearestFreeHint}
+              onPress={() => props.onPick?.(alt.s)}
+              style={{ marginTop: 8 }}
+            />
+          ) : alt === null ? (
+            <Text style={[styles.small, { marginTop: 6 }]}>{t.station.noFreeNearby}</Text>
+          ) : null}
+        </View>
+      ) : null}
       <View style={styles.cta}>
         <Button
+          variant={down ? 'secondary' : 'primary'}
           label={near ? t.here.rechargeHere : t.station.prepare}
           onPress={() => {
             store.setCurrent(s);
@@ -103,7 +137,7 @@ export function StationDetail(props: {
         ) : null}
       </View>
 
-      {live.known ? (
+      {live.known && !down ? (
         <Text style={[styles.live, { color: live.free ? colors.accentPressed : colors.busy }]}>
           {live.free ? t.station.liveFree(live.free, live.total) : t.station.liveNone}{t.station.liveSuffix}{live.down ? t.station.liveDown(live.down) : ''}
         </Text>
@@ -114,7 +148,8 @@ export function StationDetail(props: {
           <Tag key={c}>{plugLabel(c)}</Tag>
         ))}
         {s.h ? <Tag>{s.h === '24/7' ? t.station.h24 : s.h.length > 32 ? t.station.restricted : s.h}</Tag> : null}
-        {s.free ? <Tag>{t.station.free}</Tag> : null}
+        {/* Gratuité affichée seulement si crédible (même règle que le tarif : sinon « à vérifier » dans le bloc prix). */}
+        {s.free && freeCredible(s) ? <Tag>{t.station.free}</Tag> : null}
       </View>
 
       {reserved ? <Notice tone="demo">{t.station.reservedNotice}</Notice> : null}

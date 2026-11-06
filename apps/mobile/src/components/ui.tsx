@@ -28,7 +28,7 @@ export function Button(props: {
       style={({ pressed }) => [
         styles.btn,
         v === 'primary' && { backgroundColor: pressed ? colors.accentPressed : colors.accent },
-        v === 'secondary' && { borderWidth: 2, borderColor: colors.ink, backgroundColor: pressed ? colors.surfaceAlt : colors.surface },
+        v === 'secondary' && { borderWidth: 2, borderColor: colors.inputBorder, backgroundColor: pressed ? colors.surfaceAlt : colors.surface },
         v === 'ghost' && { backgroundColor: pressed ? colors.border : colors.surfaceAlt },
         v === 'light' && { backgroundColor: pressed ? colors.border : colors.surface },
         // Désactivé : texte inkMuted sur fond gris clair (>= 4,5:1), pas d'opacité.
@@ -61,10 +61,10 @@ export function Chip(props: { label: string; a11y?: string; active: boolean; onP
       <View style={styles.row}>
         {props.active ? (
           <Svg width={14} height={14} viewBox="0 0 24 24" accessibilityElementsHidden importantForAccessibility="no">
-            <Path d="M5 12.5l4.5 4.5L19 7.5" stroke={colors.accentPressed} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M5 12.5l4.5 4.5L19 7.5" stroke={colors.onAccent} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         ) : null}
-        <Text style={[styles.chipText, { color: props.active ? colors.accentPressed : colors.ink }]}>{props.label}</Text>
+        <Text style={[styles.chipText, { color: props.active ? colors.onAccent : colors.ink }]}>{props.label}</Text>
       </View>
     </Pressable>
   );
@@ -95,11 +95,12 @@ export function Tag({ children }: { children: ReactNode }) {
   );
 }
 
-export function Stat({ label, value, dark }: { label: string; value: string; dark?: boolean }) {
+/** `wrap` : texte agrandi, tuiles empilées — la valeur passe à la ligne au lieu d'être réduite ou tronquée. */
+export function Stat({ label, value, dark, wrap }: { label: string; value: string; dark?: boolean; wrap?: boolean }) {
   return (
-    <View style={[styles.stat, dark && { backgroundColor: colors.nightCard }]}>
+    <View style={[styles.stat, dark && { backgroundColor: colors.nightCard }, wrap && { flex: 0 }]}>
       <Text style={[styles.statLabel, dark && { color: colors.nightMuted }]}>{label}</Text>
-      <Text style={[styles.statValue, dark && { color: colors.nightText }]} adjustsFontSizeToFit numberOfLines={1}>
+      <Text style={[styles.statValue, dark && { color: colors.nightText }]} {...(wrap ? null : { adjustsFontSizeToFit: true, numberOfLines: 1 })}>
         {value}
       </Text>
     </View>
@@ -111,8 +112,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   label: { fontFamily: fonts.bold, fontSize: 17 },
   chip: { minHeight: MIN_TOUCH, paddingHorizontal: 16, borderRadius: 22, justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.accentSoft, borderWidth: 2, borderColor: colors.accent, paddingHorizontal: 13 },
-  chipOff: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong },
+  chipOn: { backgroundColor: colors.accent, borderWidth: 1, borderColor: colors.accent },
+  chipOff: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.inputBorder },
   chipText: { fontFamily: fonts.semibold, fontSize: 13 },
   notice: { borderRadius: radius.md, paddingVertical: 10, paddingHorizontal: 12 },
   noticeText: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 },

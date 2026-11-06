@@ -25,7 +25,7 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
   var map=new maplibregl.Map({container:'m',style:'https://tiles.openfreemap.org/styles/liberty',center:[2.3522,48.8566],zoom:12,attributionControl:false,pitchWithRotate:false,dragRotate:true,touchPitch:false,cooperativeGestures:false,scrollZoom:true,doubleClickZoom:true,keyboard:true});
   // Attribution toujours affichée en entier (pas de bouton « i ») ; « OpenStreetMap » s'efface derrière celle du style si elle la contient.
   map.addControl(new maplibregl.AttributionControl({compact:false,customAttribution:['<a href="https://maplibre.org/" target="_blank">MapLibre</a>','<a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>']}),'bottom-left');
-  function pad(m){var el=document.querySelector('.maplibregl-ctrl-bottom-left');if(el){el.style.bottom=(m.bottom||0)+'px';el.style.left=(m.left||0)+'px'}}
+  function pad(m){var el=document.querySelector('.maplibregl-ctrl-bottom-left');if(el){if(m.top!=null){el.style.top=m.top+'px';el.style.bottom='auto'}else{el.style.top='auto';el.style.bottom=(m.bottom||0)+'px'}el.style.left=(m.left||0)+'px'}}
   var lastB=0;map.on('rotate',function(){var b=Math.round(map.getBearing());if(b!==lastB){lastB=b;send({type:'camera',bearing:b})}});
   var empty={type:'FeatureCollection',features:[]};var pending=[];var ready=false;var selected=null;
   map.on('load',function(){
@@ -136,7 +136,7 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
 
 export type MapIn =
   | { type: 'stations'; stations: { id: string; lat: number; lon: number; kw: number; r: boolean; label: string; st?: 'free' | 'busy' | 'down' }[] }
-  | { type: 'pad'; bottom: number; left: number }
+  | { type: 'pad'; bottom: number; left: number; top?: number }
   | { type: 'user'; lat: number; lon: number; bearing?: number; nav?: boolean; accuracy?: number | null; heading?: number | null }
   | { type: 'zoom'; by: number }
   | { type: 'north' }

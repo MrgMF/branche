@@ -63,7 +63,7 @@ export default function Historique() {
         <View style={{ gap: 8 }}>
           <Text style={styles.h2}>{H.thisMonth(m.month)}</Text>
           <View style={styles.stats}>
-            <Stat label={H.spent} value={euros(Math.round(m.total * 100))} />
+            <Stat label={H.spent} value={m.paidCount ? euros(Math.round(m.total * 100)) : '—'} />
             <Stat label={H.charges} value={String(m.count)} />
             <Stat label={H.avgKwh} value={perKwh(m.avgPerKwh)} />
           </View>

@@ -107,7 +107,7 @@ export function AppMenu({ open, onClose }: { open: boolean; onClose: () => void 
     <View style={[StyleSheet.absoluteFill, { zIndex: 50, elevation: 50 }]} testID="app-menu">
       <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel={t.menu.close} accessibilityRole="button" />
       <View
-        style={[styles.panel, { width: Math.min(360, width * 0.88), paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}
+        style={[styles.panel, { width: Math.min(340, width - 24), paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}
         accessibilityViewIsModal
         role="dialog"
         aria-modal
@@ -136,18 +136,18 @@ export function AppMenu({ open, onClose }: { open: boolean; onClose: () => void 
                 <Icon name={it.icon} size={22} color={it.key === 'charge' && charge ? colors.accentPressed : colors.ink} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.label} numberOfLines={1}>
+                <Text style={styles.label} numberOfLines={2}>
                   {it.label}
                 </Text>
                 {it.sub ? (
-                  <Text style={styles.sub} numberOfLines={1}>
+                  <Text style={styles.sub} numberOfLines={2}>
                     {it.sub}
                   </Text>
                 ) : null}
               </View>
               {it.badge ? (
                 <View style={[styles.badge, charge === 'prepared' && { backgroundColor: colors.warnSoft }]}>
-                  <Text style={[styles.badgeText, charge === 'prepared' && { color: '#7A3E06' }]}>{it.badge}</Text>
+                  <Text style={[styles.badgeText, charge === 'prepared' && { color: colors.warnText }]}>{it.badge}</Text>
                 </View>
               ) : null}
               {it.to ? <Icon name="chevron" size={18} color={colors.inkMuted} /> : null}
@@ -161,7 +161,7 @@ export function AppMenu({ open, onClose }: { open: boolean; onClose: () => void 
 
 const shadow = { shadowColor: '#0F1A17', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 };
 const styles = StyleSheet.create({
-  menuBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#C9D3D0', ...shadow },
+  menuBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.borderStrong, ...shadow },
   dot: { position: 'absolute', top: 9, right: 9, width: 12, height: 12, borderRadius: 6, backgroundColor: colors.accent, borderWidth: 2, borderColor: colors.surface },
   scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,26,23,0.45)' },
   panel: { position: 'absolute', top: 0, bottom: 0, left: 0, backgroundColor: colors.surface, paddingHorizontal: 12, borderTopRightRadius: radius.xl, borderBottomRightRadius: radius.xl, ...shadow, elevation: 16 },

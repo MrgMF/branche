@@ -127,7 +127,7 @@ export default function VehiculeScreen() {
           </Pressable>
           {PRESETS.map((p) => (
             <Pressable key={p} role="radio" aria-checked={soc === p} accessibilityState={{ checked: soc === p }} accessibilityLabel={`${p} %`} onPress={() => setSoc(p)} style={[styles.chip, soc === p && styles.chipOn]}>
-              <Text style={[styles.chipText, soc === p && { color: '#FFFFFF' }]}>{p}</Text>
+              <Text style={[styles.chipText, soc === p && { color: colors.onAccent }]}>{p}</Text>
             </Pressable>
           ))}
           <Pressable accessibilityRole="button" accessibilityLabel={V.plus} onPress={() => setSoc((x) => Math.min(100, x + 5))} style={styles.chip}>
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   skip: { minHeight: MIN_TOUCH, paddingHorizontal: 16 },
   p: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.inkMuted },
   small: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17, color: colors.inkMuted },
-  input: { minHeight: 50, borderRadius: radius.md, borderWidth: 1, borderColor: '#C9D3D0', paddingHorizontal: 14, fontFamily: fonts.medium, fontSize: 16, color: colors.ink },
+  input: { minHeight: 50, borderRadius: radius.md, borderWidth: 1, borderColor: colors.inputBorder, paddingHorizontal: 14, fontFamily: fonts.medium, fontSize: 16, color: colors.ink },
   brand: { backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: 12, gap: 8 },
   brandText: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20, color: colors.ink },
   brandRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   footer: { gap: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
   label: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
   presets: { flexDirection: 'row', gap: 6, justifyContent: 'space-between' },
-  chip: { flex: 1, minHeight: MIN_TOUCH, borderRadius: radius.sm, borderWidth: 1, borderColor: '#C9D3D0', alignItems: 'center', justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chip: { flex: 1, minHeight: MIN_TOUCH, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.inputBorder, alignItems: 'center', justifyContent: 'center' },
+  chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipText: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
 });

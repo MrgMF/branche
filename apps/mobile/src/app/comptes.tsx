@@ -130,13 +130,13 @@ export default function Comptes() {
           const on = wallet.badges.includes(b);
           return (
             <Pressable key={b} role="checkbox" aria-checked={on} accessibilityState={{ checked: on }} accessibilityLabel={b} onPress={() => toggleBadge(b)} style={[styles.chip, on && styles.chipOn]}>
-              <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>{b}</Text>
+              <Text style={[styles.chipText, on && { color: colors.onAccent }]}>{b}</Text>
             </Pressable>
           );
         })}
       </View>
       <View style={styles.row}>
-        <TextInput value={other} onChangeText={setOther} placeholder={A.otherPh} placeholderTextColor="#6B7773" aria-label={A.otherA11y} style={[styles.input, { flex: 1 }]} />
+        <TextInput value={other} onChangeText={setOther} placeholder={A.otherPh} placeholderTextColor="#6B7773" aria-label={A.otherA11y} style={[styles.input, { flex: 1, minWidth: 0, flexShrink: 1 }]} />
         <Button
           label={A.add}
           variant="ghost"
@@ -145,7 +145,7 @@ export default function Comptes() {
             setWallet(await setBadges([...wallet.badges, other]));
             setOther('');
           }}
-          style={{ minHeight: 50, paddingHorizontal: 16 }}
+          style={{ minHeight: 50, paddingHorizontal: 14, flexShrink: 0 }}
         />
       </View>
     </ScrollView>
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
   small: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17, color: colors.inkMuted },
   cardTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.ink },
   confirm: { borderWidth: 2, borderColor: colors.accent, borderRadius: radius.lg, padding: 14, gap: 8 },
-  input: { minHeight: 50, borderRadius: radius.md, borderWidth: 1, borderColor: '#C9D3D0', paddingHorizontal: 14, fontFamily: fonts.medium, fontSize: 16, color: colors.ink },
+  input: { minHeight: 50, borderRadius: radius.md, borderWidth: 1, borderColor: colors.inputBorder, paddingHorizontal: 14, fontFamily: fonts.medium, fontSize: 16, color: colors.ink },
   item: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 64, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   itemOn: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   itemTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
@@ -171,8 +171,8 @@ const styles = StyleSheet.create({
   linkText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.accent },
   linkDanger: { fontFamily: fonts.semibold, fontSize: 15, color: colors.danger },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { minHeight: MIN_TOUCH, paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderColor: '#C9D3D0', justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chip: { minHeight: MIN_TOUCH, paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderColor: colors.inputBorder, justifyContent: 'center' },
+  chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
   row: { flexDirection: 'row', gap: 8 },
 });

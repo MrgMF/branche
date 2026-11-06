@@ -22,6 +22,7 @@ export default function Reglages() {
   const [voice, setVoice] = useState(!isMuted());
   const [confirm, setConfirm] = useState(false);
   const [done, setDone] = useState(false);
+  const [resetErr, setResetErr] = useState(false);
   useEffect(() => onMutedChange((m) => setVoice(!m)), []);
   const dev = deviceLang().lang;
 
@@ -93,6 +94,7 @@ export default function Reglages() {
         <View style={{ padding: 14, gap: 10 }}>
           <Text style={styles.sub}>{S.dataBody}</Text>
           {done ? <Notice>{S.resetDone}</Notice> : null}
+          {resetErr ? <Notice tone="error">{S.resetError}</Notice> : null}
           {confirm ? (
             <View style={{ gap: 8 }} accessibilityLiveRegion="polite">
               <Notice tone="error">{S.resetQ}</Notice>
@@ -102,16 +104,22 @@ export default function Reglages() {
                   variant="secondary"
                   style={{ flex: 1, minHeight: 48, borderColor: colors.danger }}
                   onPress={async () => {
-                    await resetLocalData();
+                    setResetErr(false);
+                    try {
+                      await resetLocalData();
+                      setDone(true);
+                    } catch {
+                      // Historique non effacé (stockage indisponible) : le reste l'est ; on le dit.
+                      setResetErr(true);
+                    }
                     setConfirm(false);
-                    setDone(true);
                   }}
                 />
                 <Button label={t.common.cancel} variant="ghost" style={{ flex: 1, minHeight: 48 }} onPress={() => setConfirm(false)} />
               </View>
             </View>
           ) : (
-            <Pressable accessibilityRole="button" testID="reset" onPress={() => { setDone(false); setConfirm(true); }} style={styles.danger}>
+            <Pressable accessibilityRole="button" testID="reset" onPress={() => { setDone(false); setResetErr(false); setConfirm(true); }} style={styles.danger}>
               <Text style={styles.dangerText}>{S.reset}</Text>
             </Pressable>
           )}
@@ -236,7 +244,7 @@ const styles = StyleSheet.create({
   knobOn: { alignSelf: 'flex-end' },
   segment: { flexDirection: 'row', padding: 4, gap: 4 },
   segBtn: { flex: 1, minHeight: MIN_TOUCH + 4, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  segOn: { backgroundColor: colors.ink },
+  segOn: { backgroundColor: colors.accent },
   segText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
   danger: { minHeight: MIN_TOUCH, justifyContent: 'center', alignSelf: 'flex-start' },
   dangerText: { fontFamily: fonts.semibold, fontSize: 15, color: colors.danger },
