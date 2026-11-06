@@ -424,6 +424,7 @@ export const nl: Dict = {
     bgAllow: 'Toestaan',
     bgLater: 'Niet nu',
     kept: 'U houdt uw route.',
+    offerMissed: 'Voorgestelde route gemist.',
     offerTitle: (min: number) => `Snellere route: −${min} min`,
     offerTake: 'Nemen',
     offerKeep: 'Mijn route houden',

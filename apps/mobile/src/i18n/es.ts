@@ -430,6 +430,7 @@ export const es: Dict = {
     bgAllow: 'Permitir',
     bgLater: 'Ahora no',
     kept: 'Mantiene su ruta.',
+    offerMissed: 'Ruta propuesta perdida.',
     offerTitle: (min: number) => `Ruta más rápida: −${min} min`,
     offerTake: 'Tomarla',
     offerKeep: 'Mantener mi ruta',

@@ -127,21 +127,33 @@ export function displayName(s: Pick<Station, 'n' | 'o' | 'a'>): string {
 }
 
 const SMALL_WORDS = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'et', 'en', 'sur', 'sous', 'au', 'aux', 'à', 'd', 'l']);
+/** Sigles courants (IRVE) contenant une voyelle : conservés en capitales là où la règle « sans voyelle » ne suffit pas. */
+const ACRONYMS = new Set(['ZA', 'ZAC', 'ZAE', 'SDE', 'SDEA', 'SDEC', 'SDEY', 'EDF', 'RTE']);
+const VOWEL = /[aeiouyàâäéèêëïîôöùûüÿ]/i;
+/** Majuscule sur la première lettre minuscule d'un segment (article de commune : « la Seyne… » → « La Seyne… »). */
+const capFirst = (m: string, head: string, c: string) => head + c.toUpperCase();
+
 /**
  * Nom saisi tout en capitales (IRVE brut : « L'HAY LES ROSES ») → casse de titre (« L'Hay les Roses ») ; un nom déjà en
- * minuscules/majuscules mêlées est gardé tel quel. Sigles sans voyelle (« SDE », « ZI ») conservés.
+ * minuscules/majuscules mêlées est gardé tel quel. Sigles ≤ 4 lettres tout en majuscules conservés : sans voyelle
+ * (« SDCC », « ZI ») ou sigle connu (« ZAC », « SDE », « EDF »), sauf petits mots de liaison (« de », « sur »…).
+ * L'article de commune en tête (ou après un séparateur « - ») reçoit une capitale.
  */
 export function tidyCaps(n: string): string {
-  if (/\p{Ll}/u.test(n) || !/\p{Lu}{3}/u.test(n)) return n;
   let first = true;
-  return n.replace(/\p{L}+/gu, (w) => {
-    const lw = w.toLowerCase();
-    const isFirst = first;
-    first = false;
-    if (!isFirst && SMALL_WORDS.has(lw)) return lw;
-    if (w.length <= 4 && !/[aeiouyàâäéèêëïîôöùûüÿ]/i.test(w)) return w;
-    return lw.charAt(0).toUpperCase() + lw.slice(1);
-  });
+  const titled =
+    /\p{Ll}/u.test(n) || !/\p{Lu}{3}/u.test(n)
+      ? n
+      : n.replace(/\p{L}+/gu, (w) => {
+          const lw = w.toLowerCase();
+          const isFirst = first;
+          first = false;
+          if (!isFirst && SMALL_WORDS.has(lw)) return lw;
+          if (w.length <= 4 && w === w.toUpperCase() && (!VOWEL.test(w) || ACRONYMS.has(w))) return w;
+          return lw.charAt(0).toUpperCase() + lw.slice(1);
+        });
+  // Article de commune en tête (« la Seyne-sur-Mer ») ou après un séparateur « - » : capitale.
+  return titled.replace(/^(\s*)(\p{Ll})/u, capFirst).replace(/( - )(\p{Ll})/gu, capFirst);
 }
 
 /** Nom d'une borne pour le guidage (bandeau, voix, partage) : jamais le nom IRVE brut en capitales. */

@@ -431,6 +431,7 @@ export const pt: Dict = {
     bgAllow: 'Permitir',
     bgLater: 'Agora não',
     kept: 'Mantém o seu trajeto.',
+    offerMissed: 'Trajeto sugerido perdido.',
     offerTitle: (min: number) => `Trajeto mais rápido: −${min} min`,
     offerTake: 'Seguir',
     offerKeep: 'Manter o meu trajeto',

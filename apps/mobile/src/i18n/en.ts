@@ -426,6 +426,7 @@ export const en: Dict = {
     bgAllow: 'Allow',
     bgLater: 'Not now',
     kept: 'You are keeping your route.',
+    offerMissed: 'Suggested route missed.',
     offerTitle: (min: number) => `Faster route: −${min} min`,
     offerTake: 'Take it',
     offerKeep: 'Keep my route',

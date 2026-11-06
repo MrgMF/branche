@@ -430,6 +430,7 @@ export const fr = {
     bgAllow: 'Autoriser',
     bgLater: 'Pas maintenant',
     kept: 'Vous gardez votre trajet.',
+    offerMissed: 'Trajet proposé dépassé.',
     offerTitle: (min: number) => `Trajet plus rapide : −${min} min`,
     offerTake: 'Prendre',
     offerKeep: 'Garder mon trajet',

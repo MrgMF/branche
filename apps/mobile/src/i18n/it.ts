@@ -431,6 +431,7 @@ export const it: Dict = {
     bgAllow: 'Consenti',
     bgLater: 'Non ora',
     kept: 'Mantieni il tuo percorso.',
+    offerMissed: 'Percorso proposto superato.',
     offerTitle: (min: number) => `Percorso più rapido: −${min} min`,
     offerTake: 'Prendilo',
     offerKeep: 'Mantieni il mio percorso',

@@ -135,8 +135,9 @@ export function decodePolyline(s: string, precision = 6): [number, number][] {
 
 const VALHALLA_MANEUVER: Record<number, VhManeuver> = {
   1: 'depart', 2: 'depart', 3: 'depart', 4: 'arrive', 5: 'arrive', 6: 'arrive', 7: 'straight', 8: 'straight', 9: 'slight-right',
-  10: 'turn-right', 11: 'sharp-right', 12: 'uturn', 13: 'uturn', 14: 'sharp-left', 15: 'turn-left', 16: 'slight-left', 17: 'straight',
-  18: 'keep-right', 19: 'keep-left', 20: 'exit-right', 21: 'exit-left', 22: 'straight', 23: 'keep-right', 24: 'keep-left', 25: 'merge',
+  10: 'turn-right', 11: 'sharp-right', 12: 'uturn', 13: 'uturn', 14: 'sharp-left', 15: 'turn-left', 16: 'slight-left',
+  // 17 kRampStraight, 18 kRampRight, 19 kRampLeft : bretelle (l'angle fixe le côté de l'icône).
+  17: 'ramp', 18: 'ramp', 19: 'ramp', 20: 'exit-right', 21: 'exit-left', 22: 'straight', 23: 'keep-right', 24: 'keep-left', 25: 'merge',
   26: 'roundabout', 28: 'ferry', 29: 'straight', 37: 'merge', 38: 'merge',
 };
 const valhallaManeuver = (t: unknown): VhManeuver => (typeof t === 'number' && VALHALLA_MANEUVER[t]) || 'straight';

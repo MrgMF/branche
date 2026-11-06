@@ -45,20 +45,45 @@ if (Platform.OS === 'web' && typeof window !== 'undefined') (window as unknown a
 /** Options audio de guidage passées à chaque annonce (iOS : session système, atténuation de la musique). */
 export const SPEECH_AUDIO: Pick<Speech.SpeechOptions, 'useApplicationAudioSession'> = { useApplicationAudioSession: false };
 
+// Jeton de la dernière annonce passée à la synthèse (même rôle que le jeton interne de SpeechQueue) : une annonce qui se
+// termine alors qu'une plus récente a déjà redemandé le focus ne doit pas le rendre (sinon la musique repasse à plein
+// volume pendant la consigne suivante). Garde-fou propre : si la synthèse ne signale jamais sa fin, le focus est rendu.
+let speakToken = 0;
+let guard: ReturnType<typeof setTimeout> | null = null;
+const clearGuard = () => {
+  if (guard) clearTimeout(guard);
+  guard = null;
+};
+/** Garde-fou de fin (ms) : moteur muet → on rend quand même le focus. Calé sur SpeechQueue (2500 + 90/caractère). */
+const guardMs = (text: string) => 2500 + text.length * 90;
+
 const queue = new SpeechQueue({
   speak(text, done) {
     const entry = [...voiceLog].reverse().find((e) => e.text === text && e.spokenAt === undefined);
     if (entry) entry.spokenAt = Date.now();
     // Voix de la langue de l'app (région de l'appareil si elle correspond : fr-FR, en-US, de-DE…)
-    // Android : musique atténuée pendant l'annonce (focus audio rendu à la fin, quelle qu'elle soit).
+    // Android : musique atténuée pendant l'annonce (focus audio rendu seulement si l'annonce est encore la courante).
+    const token = ++speakToken;
     duckOthers();
+    let settled = false;
     const end = () => {
-      releaseFocus();
+      if (settled) return;
+      settled = true;
+      // Encore la courante (aucune annonce plus récente n'a redemandé le focus) : nettoyer le garde-fou et, s'il ne
+      // reste rien en file, rendre le focus. La suivante éventuelle garde la musique atténuée (pas de va-et-vient).
+      if (token === speakToken) {
+        clearGuard();
+        if (queue.pending.length === 0) releaseFocus();
+      }
       done();
     };
+    // Garde-fou : si onDone/onStopped/onError n'arrive jamais, rendre le focus et débloquer la file.
+    clearGuard();
+    guard = setTimeout(end, guardMs(text));
     Speech.speak(text, { ...SPEECH_AUDIO, language: localeTag(), rate: 1.0, onDone: end, onStopped: end, onError: end });
   },
   stop() {
+    clearGuard();
     try {
       Speech.stop();
     } catch {

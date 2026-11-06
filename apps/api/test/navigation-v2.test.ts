@@ -188,7 +188,7 @@ describe('POST /v1/route v2 — Valhalla (alternates, rond-point, voies, limitat
   it('rond-point 26+27 fusionnés (3e sortie, rue de sortie, angle), bretelle, sortie 4, voies (masque)', () => {
     const body = JSON.parse(VALHALLA);
     const r = parseValhallaTrip(body.alternates[0].trip);
-    expect(r.steps.map((s) => s.maneuver)).toEqual(['depart', 'turn-right', 'roundabout', 'keep-right', 'exit-right', 'arrive']);
+    expect(r.steps.map((s) => s.maneuver)).toEqual(['depart', 'turn-right', 'roundabout', 'ramp', 'exit-right', 'arrive']);
     const rb = r.steps[2]!;
     expect(rb).toMatchObject({ exit: 3, street: 'Cours la Reine', angle: -90, pointIndex: 2 });
     expect(rb.distanceM).toBe(Math.round(body.alternates[0].trip.legs[0].maneuvers[2].length * 1000) + Math.round(body.alternates[0].trip.legs[0].maneuvers[3].length * 1000));

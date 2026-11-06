@@ -644,10 +644,11 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     const t = tripRef.current;
     const o = t?.offer;
     if (!t || !o || !t.route) return;
-    // Bifurcation dépassée depuis la proposition : plus sur le trajet proposé, l'offre disparaît sans annonce.
+    // Bifurcation dépassée depuis la proposition : plus sur le trajet proposé, l'offre disparaît avec un court message.
     const here = prevFix.current;
     if (here && !offerStillValid(here, o)) {
       dropOffer();
+      setTrip((x) => (x ? { ...x, toast: { text: tr().navx.offerMissed, tone: 'info', at: Date.now() } } : x));
       return;
     }
     const min = Math.round(o.gainS / 60);
@@ -752,6 +753,14 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
     const segB = segmentBearing(line, prog.seg);
     if (segB !== null && course !== null && (speed ?? 0) > 8 && prog.off <= tol) wrongWay.current = angleDiff(course, segB) > WRONG_WAY_DEG ? wrongWay.current + 1 : 0;
     if ((offCount.current >= 2 || wrongWay.current >= 2) && !inFlight.current && Date.now() - lastReroute.current > 10_000) {
+      // Hors du trajet actuel mais déjà engagé sur le trajet proposé : on le prend sans recalcul ni « Recalcul »
+      // (takeOffer annonce le gain et bascule le guidage sur le trajet proposé).
+      if (t.offer && offerStillValid(p, t.offer)) {
+        offCount.current = 0;
+        wrongWay.current = 0;
+        void takeOffer();
+        return;
+      }
       lastReroute.current = Date.now();
       offCount.current = 0;
       wrongWay.current = 0;

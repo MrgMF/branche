@@ -571,9 +571,10 @@ const VALHALLA_MANEUVER: Record<number, Maneuver> = {
   14: 'sharp-left',
   15: 'turn-left',
   16: 'slight-left',
-  17: 'straight',
-  18: 'keep-right',
-  19: 'keep-left',
+  // 17 kRampStraight, 18 kRampRight, 19 kRampLeft : bretelle (l'angle fixe le côté de l'icône).
+  17: 'ramp',
+  18: 'ramp',
+  19: 'ramp',
   20: 'exit-right',
   21: 'exit-left',
   22: 'straight',
