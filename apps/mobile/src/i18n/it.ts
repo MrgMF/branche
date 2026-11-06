@@ -575,12 +575,12 @@ export const it: Dict = {
       const pt = ptOf(c);
       const cable = cableOf(c);
       return {
-        label: `Avvia nell’app ${c.op}`,
+        label: `Avvia nell’app ${diOp(c.op)}`,
         why: `${c.op} accetta solo la sua app. Branché ti ci porta con un tocco: avvii la ricarica nell’app ufficiale, dove restano il tuo account e la tua carta. Branché non effettua il pagamento.`,
         steps: c.dc
-          ? [`Collega ${cable} alla tua auto.`, `Apri l’app ${c.op} (o installala) e avvia la ricarica su ${pt}${targeted ? '' : ' (sceglilo nell’app)'}.`, 'Torna su Branché: parte il monitoraggio.']
-          : [`Apri l’app ${c.op} (o installala) e avvia la ricarica su ${pt}${targeted ? '' : ' (sceglilo nell’app)'}.`, `Collega ${cable}.`, 'Torna su Branché: parte il monitoraggio.'],
-        cta: `Apri l’app ${c.op}`,
+          ? [`Collega ${cable} alla tua auto.`, `Apri l’app ${diOp(c.op)} (o installala) e avvia la ricarica su ${pt}${targeted ? '' : ' (sceglilo nell’app)'}.`, 'Torna su Branché: parte il monitoraggio.']
+          : [`Apri l’app ${diOp(c.op)} (o installala) e avvia la ricarica su ${pt}${targeted ? '' : ' (sceglilo nell’app)'}.`, `Collega ${cable}.`, 'Torna su Branché: parte il monitoraggio.'],
+        cta: `Apri l’app ${diOp(c.op)}`,
       };
     },
     account: (c: MethodCtx, connected: string | null): MethodTexts => {
@@ -775,9 +775,9 @@ export const it: Dict = {
     stateAccount: (op: string) => `Avvio con il tuo account ${op}`,
     stateReader: 'Paga sul lettore della colonnina',
     statePage: (op: string) => `Pagamento ${aOp(op)}`,
-    stateApp: (op: string) => `Avvio nell’app ${op}`,
-    bodyApp: (op: string) => `Avvia la ricarica nell’app ${op}, poi torna qui. Branché non effettua il pagamento: il tuo account e la tua carta restano nell’app.`,
-    reopenApp: (op: string) => `Riapri l’app ${op}`,
+    stateApp: (op: string) => `Avvio nell’app ${diOp(op)}`,
+    bodyApp: (op: string) => `Avvia la ricarica nell’app ${diOp(op)}, poi torna qui. Branché non effettua il pagamento: il tuo account e la tua carta restano nell’app.`,
+    reopenApp: (op: string) => `Riapri l’app ${diOp(op)}`,
     bodyBadge: 'Passa la tessera sul lettore, segui lo schermo se presente, poi collega. Branché segue la ricarica qui.',
     bodyAccount: (op: string) => `Avvia la ricarica sulla pagina ${diOp(op)}, collega se non l’hai già fatto, poi torna qui.`,
     bodyReader: (short: string | null) => `Paga con carta sul lettore${short ? ` (punto …${short}, sull’etichetta o sullo schermo)` : ''}, poi collega. Branché segue la ricarica qui.`,
