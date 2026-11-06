@@ -2,7 +2,7 @@
 // Modèle volontairement simple et annoncé comme tel : puissance = min(point, véhicule) ; en courant continu,
 // la puissance baisse au-delà de 50 % (45 % de la puissance max à 80 %). Pertes de charge incluses dans les kWh facturés.
 import type { Plug } from './stations';
-import { ttcFactor, type Tariff } from './tariff';
+import { tariffAtMinute, ttcFactor, type Tariff, type TariffBand } from './tariff';
 import { GENERIC_VEHICLE, type VehicleModel } from './vehicle';
 import { durationMin } from '../i18n/format';
 
@@ -16,6 +16,43 @@ export interface EstimateInput {
   pointKw: number;
   plugs: Plug[];
   tariff: Tariff;
+  /** Heure de début prévue (ms) pour les tarifs à plages horaires ; maintenant par défaut. */
+  startAt?: number;
+}
+
+/**
+ * Tarif applicable à une recharge à plages horaires : `flat` (pas de plages analysées), `band` (une seule plage),
+ * `overlap` (la recharge chevauche plusieurs plages : la plus chère pour cette recharge, dit à l'écran), `fallback`
+ * (heure non couverte par les plages publiées : tarif le plus élevé, dit à l'écran).
+ */
+export type BandMode = 'flat' | 'band' | 'overlap' | 'fallback';
+
+const minuteOfDay = (ms: number) => {
+  const d = new Date(ms);
+  return d.getHours() * 60 + d.getMinutes();
+};
+
+/** Tarifs (distincts) rencontrés entre `startAt` et `startAt + minutes` (pas de 5 min) ; null = une heure non couverte. */
+function tariffsDuring(t: Tariff, startAt: number, minutes: number): (Tariff | null)[] {
+  const seen: (Tariff | null)[] = [];
+  const steps = Math.max(1, Math.ceil(minutes / 5));
+  for (let k = 0; k <= steps; k++) {
+    const at = startAt + Math.min(minutes, k * 5) * 60_000;
+    const x = tariffAtMinute(t, minuteOfDay(at));
+    if (!seen.includes(x)) seen.push(x);
+  }
+  return seen;
+}
+
+/** Choix du tarif applicable (voir BandMode) pour une énergie et une durée données. */
+export function applicableTariff(t: Tariff, startAt: number, kWhBilled: number, minutes: number): { tariff: Tariff; mode: BandMode } {
+  if (!t.bands) return { tariff: t, mode: 'flat' };
+  const during = tariffsDuring(t, startAt, minutes);
+  if (during.includes(null)) return { tariff: t, mode: 'fallback' };
+  const list = during as Tariff[];
+  if (list.length === 1) return { tariff: list[0], mode: 'band' };
+  const cost = (x: Tariff) => costOf(x, kWhBilled, minutes)?.total ?? Infinity;
+  return { tariff: list.reduce((a, b) => (cost(b) > cost(a) ? b : a)), mode: 'overlap' };
 }
 
 export interface Estimate {
@@ -41,6 +78,9 @@ export interface Estimate {
   free: boolean;
   /** Gratuité déclarée mais non crédible (≥ 50 kW ou moyen de paiement) : coût inconnu, « à vérifier ». */
   freeDoubtful: boolean;
+  /** Tarif réellement appliqué (plage de l'heure de début) et façon dont il a été choisi. */
+  applied: Tariff;
+  bandMode: BandMode;
 }
 
 export const DEFAULT_SOC = 20;
@@ -98,8 +138,8 @@ export function estimateCharge(i: EstimateInput): Estimate {
   }
   const kWh = (s.v.batteryKWh * (s.to - s.from)) / 100;
   const kWhBilled = kWh * s.loss;
-  const c = costOf(i.tariff, kWhBilled, minutes);
-  const t = i.tariff;
+  const { tariff: t, mode } = applicableTariff(i.tariff, i.startAt ?? Date.now(), kWhBilled, minutes);
+  const c = costOf(t, kWhBilled, minutes);
   return {
     assumedVehicle: !i.vehicle,
     assumedSoc: i.socPercent == null,
@@ -117,6 +157,8 @@ export function estimateCharge(i: EstimateInput): Estimate {
     unknownPrice: !c,
     free: t.kind === 'free',
     freeDoubtful: !!t.freeDoubtful,
+    applied: t,
+    bandMode: mode,
   };
 }
 
@@ -147,9 +189,10 @@ export function progressAt(i: EstimateInput, elapsedMin: number): Progress {
     soc += step;
   }
   const done = soc >= s.to - 1e-9;
-  const total = estimateCharge(i).minutes;
+  const full = estimateCharge(i);
+  const total = full.minutes;
   const kWh = (s.v.batteryKWh * (soc - s.from)) / 100;
-  const c = costOf(i.tariff, kWh * s.loss, Math.max(t, elapsedMin));
+  const c = costOf(full.applied, kWh * s.loss, Math.max(t, elapsedMin));
   return {
     soc: Math.round(soc),
     kWh: round1(kWh),
@@ -178,6 +221,9 @@ export const STAY_MIN: Record<Exclude<Stay, 'charge'>, number> = { '1h': 60, '2h
 export const stayMinutes = (s: Stay): number | null => (s === 'charge' ? null : STAY_MIN[s]);
 
 export interface TotalCost {
+  /** Tarif appliqué (plage de l'heure de début) et mode de choix. */
+  applied: Tariff;
+  bandMode: BandMode;
   /** Énergie facturée (kWh, pertes incluses). */
   kWh: number;
   /** Minutes de charge réelles (écourtées si l'on repart avant la fin). */
@@ -210,7 +256,7 @@ export interface TotalCost {
 
 export function totalCost(i: EstimateInput & { stayMin?: number | null }): TotalCost {
   const est = estimateCharge(i);
-  const t = i.tariff;
+  const t = est.applied;
   const wanted = i.stayMin ?? est.minutes;
   const cutShort = wanted < est.minutes;
   const chargeMin = cutShort ? wanted : est.minutes;
@@ -218,7 +264,7 @@ export function totalCost(i: EstimateInput & { stayMin?: number | null }): Total
   const stayMin = Math.max(chargeMin, wanted);
   const f = ttcFactor(t);
   const idleFromMin = t.kind === 'priced' && t.idle ? est.minutes + t.idle.afterMin : null;
-  const base = { kWh, chargeMin, fromSoc: est.fromSoc, toSoc: est.toSoc, stayMin, cutShort, idleFromMin, perKwh: t.kind === 'priced' && t.perKwh !== undefined ? round4(t.perKwh * f) : null, free: t.kind === 'free' };
+  const base = { applied: t, bandMode: est.bandMode, kWh, chargeMin, fromSoc: est.fromSoc, toSoc: est.toSoc, stayMin, cutShort, idleFromMin, perKwh: t.kind === 'priced' && t.perKwh !== undefined ? round4(t.perKwh * f) : null, free: t.kind === 'free' };
   // Seulement une occupation publiée (estimation partielle) : coût de la recharge inconnu.
   // Recharge complète : mêmes montants que estimateCharge (kWh non arrondis) ; écourtée : kWh atteints au départ.
   const c = est.partial ? null : !cutShort && est.cost != null && est.parts ? { total: est.cost, ...est.parts } : costOf(t, kWh, chargeMin);
@@ -256,7 +302,9 @@ export const TRAP_TIME_RATIO = 1.3;
  * Honnête : rien sans tarif publié ; « minute » seulement s'il y a réellement une part au temps facturée pour cette recharge
  * (`worse` : effectif > 1,3 × le prix au kWh publié).
  */
-export function priceTraps(t: Tariff, c: TotalCost, plugAt: number | null = null): PriceTrap[] {
+export function priceTraps(_published: Tariff, c: TotalCost, plugAt: number | null = null): PriceTrap[] {
+  // Évaluées sur la seule plage applicable (jamais sur la somme des plages)
+  const t = c.applied;
   const out: PriceTrap[] = [];
   if (t.kind !== 'priced') return out;
   if (c.charge != null && c.kWh > 0) {
@@ -273,3 +321,11 @@ export function priceTraps(t: Tariff, c: TotalCost, plugAt: number | null = null
 export const IDLE_ALERT_LEAD_MIN = 10;
 
 const round4 = (x: number) => Math.round(x * 10000) / 10000;
+
+/** Coût de cette recharge plage par plage (« 06:00–18:00 ≈ 12,10 € · par défaut ≈ 9,90 € ») ; vide sans plages. */
+export function bandCosts(i: EstimateInput): { band: Pick<TariffBand, 'from' | 'to'> | null; cost: number | null }[] {
+  const b = i.tariff.bands;
+  if (!b) return [];
+  const one = (tariff: Tariff) => estimateCharge({ ...i, tariff }).cost;
+  return [...b.list.map((x) => ({ band: { from: x.from, to: x.to }, cost: one(x.tariff) })), ...(b.default ? [{ band: null, cost: one(b.default) }] : [])];
+}

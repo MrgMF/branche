@@ -36,6 +36,86 @@ export interface Tariff {
   raw: string;
   /** Gratuité déclarée (champ IRVE `gratuit` ou texte) mais contredite par la borne : ≥ 50 kW ou moyen de paiement déclaré. */
   freeDoubtful?: true;
+  /**
+   * Plages horaires analysées : chaque plage est un tarif complet distinct (composantes rattachées à leur plage), jamais
+   * additionnées. `default` : tarif hors plages (« par défaut », ou clause sans horaire). Absent : texte non analysable par
+   * plage (on garde alors les champs ci-dessus, au plus élevé).
+   */
+  bands?: { list: TariffBand[]; default?: Tariff };
+}
+
+/** Plage horaire [from, to[ en minutes depuis minuit (heure locale) ; to ≤ from : passe minuit. */
+export interface TariffBand {
+  from: number;
+  to: number;
+  tariff: Tariff;
+}
+
+/** La plage contient-elle cette minute de la journée ? */
+export const bandHas = (b: Pick<TariffBand, 'from' | 'to'>, m: number) => (b.from === b.to ? true : b.from < b.to ? m >= b.from && m < b.to : m >= b.from || m < b.to);
+/** « 06:00–18:00 ». */
+export const bandLabel = (b: Pick<TariffBand, 'from' | 'to'>) => {
+  const f = (x: number) => `${String(Math.floor(x / 60) % 24).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`;
+  return `${f(b.from)}–${f(b.to)}`;
+};
+
+const HEADER = /(?:entre (\d{1,2}):(\d{2}) et (\d{1,2}):(\d{2})|par d[ée]faut)\s*:/gi;
+const LEAD = /^\s*(?:de\s*)?(\d{1,2})\s*h\s*(\d{2})?\s*(?:à|a|-)\s*(\d{1,2})\s*h\s*(\d{2})?/i;
+const TRAIL = /(?:entre|de)\s*(\d{1,2})\s*h\s*(\d{2})?\s*(?:et|à|a|-)\s*(\d{1,2})\s*h\s*(\d{2})?/i;
+
+/**
+ * Découpe un texte à plages horaires en tarifs distincts. Deux formes réelles (IRVE) :
+ * - « entre 08:00 et 20:00 : <composantes>, entre 20:00 et 08:00 : <composantes>, par défaut : … » (en-têtes) ;
+ * - « 0,35€/kWh + 0,03€/min entre 6h et 18h, 15€ la session entre 18h et 6h » (plage en fin de clause ; clause sans
+ *   horaire = tarif des autres heures).
+ * Une plage répétée est fusionnée (même texte analysé ensemble). Rien si moins de deux tarifs publiés distincts.
+ */
+function splitBands(src: string): { key: string; from: number; to: number; text: string }[] | null {
+  const parts: { key: string; from: number; to: number; text: string }[] = [];
+  const heads = [...src.matchAll(HEADER)];
+  if (heads.length >= 2 && heads.some((h) => h[1] !== undefined)) {
+    const pre = src.slice(0, heads[0].index).trim();
+    if (pre.replace(/[,;\s]/g, '')) parts.push({ key: 'default', from: 0, to: 0, text: pre });
+    heads.forEach((h, i) => {
+      const text = src.slice((h.index ?? 0) + h[0].length, heads[i + 1]?.index ?? src.length).replace(/[,;\s]+$/, '');
+      if (h[1] === undefined) parts.push({ key: 'default', from: 0, to: 0, text });
+      else {
+        const from = Number(h[1]) * 60 + Number(h[2]);
+        const to = Number(h[3]) * 60 + Number(h[4]);
+        parts.push({ key: `${from}-${to}`, from, to, text });
+      }
+    });
+  } else {
+    // « 8h à 22h = … . De 22h à 8h = 20€ » : plage en tête de phrase, phrases séparées par un point
+    const lead = LEAD.test(src);
+    const chunks = (lead ? src.split(/\.\s+(?=(?:de\s*)?\d{1,2}\s*h)/i) : src.split(/,\s+|;\s*/)).map((c) => c.trim()).filter(Boolean);
+    if (chunks.length < 2) return null;
+    let banded = 0;
+    for (const c of chunks) {
+      const m = (lead ? LEAD : TRAIL).exec(c);
+      if (m) {
+        banded++;
+        const from = Number(m[1]) * 60 + Number(m[2] ?? 0);
+        const to = Number(m[3]) * 60 + Number(m[4] ?? 0);
+        parts.push({ key: `${from}-${to}`, from, to, text: c.replace(lead ? LEAD : TRAIL, ' ').replace(/^\s*=\s*/, '') });
+      } else parts.push({ key: 'default', from: 0, to: 0, text: c });
+    }
+    if (!banded) return null;
+  }
+  const merged = new Map<string, { key: string; from: number; to: number; text: string }>();
+  for (const p of parts) {
+    const m = merged.get(p.key);
+    if (m) m.text = `${m.text}, ${p.text}`;
+    else merged.set(p.key, { ...p });
+  }
+  return [...merged.values()];
+}
+
+/** Tarif applicable à une minute de la journée : sa plage, sinon le tarif par défaut, sinon null (heure non couverte). */
+export function tariffAtMinute(t: Tariff, m: number): Tariff | null {
+  if (!t.bands) return t;
+  const b = t.bands.list.find((x) => bandHas(x, m));
+  return b ? b.tariff : t.bands.default ?? null;
 }
 
 /** Données de la borne qui permettent de juger une gratuité déclarée. */
@@ -115,9 +195,88 @@ function likelyHt(values: { v: number; dec: number }[], text: string): boolean {
   return long.length > 0 && long.every((a) => htRound(a.v, a.dec));
 }
 
-export function parseTariff(raw: string | null | undefined, opts: FreeContext = {}): Tariff {
-  const src = (raw ?? '').trim();
-  const out: Tariff = { kind: 'unknown', ht: false, varies: false, guessedUnit: false, notes: [], raw: src };
+/** Plages analysées une à une (chaque plage : tarif complet ; HT hérité du texte entier, publié de façon homogène). */
+function attachBands(out: Tariff, src: string, opts: FreeContext) {
+  const parts = splitBands(src.replace(/https?:\/\/[^\s,;)]+/gi, ' '));
+  if (!parts) return;
+  const parse = (text: string) => {
+    let b = parseTariff(text, { ...opts, noBands: true });
+    // Plage au prix fixe seul (« De 22h à 8h = 20€ ») : forfait de la recharge sur cette plage
+    const flat = text.match(/^\s*(\d+(?:[.,]\d+)?)\s*(?:€|eur)\s*\.?\s*$/i);
+    if (b.kind !== 'priced' && flat) b = parseTariff(`${flat[1]} € par session`, { ...opts, noBands: true });
+    if (b.kind !== 'priced') return null;
+    return { ...b, ht: out.ht, htLikely: out.htLikely, varies: false, perKwhMin: undefined } as Tariff;
+  };
+  const list: TariffBand[] = [];
+  let def: Tariff | undefined;
+  for (const p of parts) {
+    const t = parse(p.text);
+    if (!t) continue;
+    if (p.key === 'default') def = t;
+    else list.push({ from: p.from, to: p.to, tariff: t });
+  }
+  if (list.length + (def ? 1 : 0) >= 2 && list.length >= 1) out.bands = { list, ...(def ? { default: def } : {}) };
+}
+
+// ——— Tarifs alternatifs non horaires : jamais additionnés, on garde celui qui s'applique ———
+const AMOUNT = /\d+(?:[.,]\d+)?\s*(?:€|e\b|eur|cts?|c€)/i;
+const SUBSCRIBER = /abonn/i;
+const NON_SUBSCRIBER = /non[\s-]?abonn|sans abonnement|paiement direct|ad[\s-]?hoc|sans compte|\bcb\b|carte bancaire/i;
+
+/** Plage de puissance d'une clause (« ≤ 22 kW », « > 50 kW », « bornes rapides »…), null si aucune. */
+function powerRange(c: string): { min: number; max: number } | null {
+  const t = c.toLowerCase();
+  let m = t.match(/(?:<=?|≤|jusqu.?[àa]|moins de|inf[ée]rieure? [àa])\s*(\d+(?:[.,]\d+)?)\s*kw\b/);
+  if (m) return { min: 0, max: Number(m[1].replace(',', '.')) };
+  m = t.match(/(?:>=?|≥|plus de|au[\s-]del[àa] de|[àa] partir de|sup[ée]rieure? [àa])\s*(\d+(?:[.,]\d+)?)\s*kw\b/);
+  if (m) return { min: Number(m[1].replace(',', '.')) + (/^>|plus de|au[\s-]del|sup/.test(m[0]) ? 0.01 : 0), max: Infinity };
+  m = t.match(/(\d+(?:[.,]\d+)?)\s*(?:à|a|-)\s*(\d+(?:[.,]\d+)?)\s*kw\b/);
+  if (m) return { min: Number(m[1].replace(',', '.')), max: Number(m[2].replace(',', '.')) };
+  if (/\bdc\b|courant continu/.test(t)) return { min: 25, max: Infinity };
+  if (/\bac\b|courant alternatif/.test(t)) return { min: 0, max: 43 };
+  if (/ultra[\s-]?rapide/.test(t)) return { min: 150, max: Infinity };
+  if (/\brapide/.test(t)) return { min: 43.01, max: Infinity };
+  if (/\b(?:normale|lente|acc[ée]l[ée]r[ée]e|standard)\b/.test(t)) return { min: 0, max: 43 };
+  return null;
+}
+
+/**
+ * Tarifs alternatifs dans un même texte (abonné / non abonné, AC / DC, par puissance) : on ne garde que les clauses qui
+ * s'appliquent au paiement direct (non abonné) et à la puissance du point. Rien n'est filtré si une seule clause chiffrée
+ * porte une étiquette (pas d'alternative) ou si le filtre ne laisse aucun montant.
+ */
+export function pickAlternative(src: string, kw?: number): string {
+  const clauses = src.split(/\s*(?:[;|\n]|\.\s+(?=\D)|,\s+(?=\D)|\s+\/\s+(?=\D))\s*/).filter((c) => c.trim());
+  const priced = clauses.filter((c) => AMOUNT.test(c));
+  if (priced.length < 2) return src;
+  let keep = clauses;
+  // Abonné vs non abonné : prix sans compte (paiement direct)
+  const sub = priced.filter((c) => SUBSCRIBER.test(c) && !NON_SUBSCRIBER.test(c));
+  const nonSub = priced.filter((c) => NON_SUBSCRIBER.test(c) || !SUBSCRIBER.test(c));
+  if (sub.length && nonSub.length) keep = keep.filter((c) => !sub.includes(c));
+  // Par puissance (AC/DC, ≤ 22 kW / > 50 kW, normale / rapide) : la plage qui contient la puissance du point
+  const ranged = keep.filter((c) => AMOUNT.test(c) && powerRange(c));
+  if (kw && kw > 0 && ranged.length >= 2) {
+    const fits = ranged.filter((c) => {
+      const r = powerRange(c)!;
+      return kw >= r.min && kw <= r.max;
+    });
+    // Plusieurs plages valables (« rapide » et « ultra rapide » pour 300 kW) : la plus précise (bornes les plus serrées)
+    const narrower = (a: string, b: string) => {
+      const x = powerRange(a)!;
+      const y = powerRange(b)!;
+      return y.max < x.max || (y.max === x.max && y.min > x.min);
+    };
+    const best = fits.length ? fits.reduce((a, b) => (narrower(a, b) ? b : a)) : null;
+    if (best) keep = keep.filter((c) => !ranged.includes(c) || c === best);
+  }
+  if (keep.length === clauses.length || !keep.some((c) => AMOUNT.test(c))) return src;
+  return keep.join(', ');
+}
+
+export function parseTariff(raw: string | null | undefined, opts: FreeContext & { noBands?: boolean; pointKw?: number } = {}): Tariff {
+  const src = pickAlternative((raw ?? '').trim(), opts.pointKw ?? opts.kw);
+  const out: Tariff = { kind: 'unknown', ht: false, varies: false, guessedUnit: false, notes: [], raw: (raw ?? '').trim() };
   const url = src.match(/https?:\/\/[^\s,;)]+/i)?.[0];
   if (url) out.url = url;
   let t = normalize(src.replace(/https?:\/\/[^\s,;)]+/gi, ' '));
@@ -246,6 +405,7 @@ export function parseTariff(raw: string | null | undefined, opts: FreeContext = 
     if (!out.ht && likelyHt(amounts, t)) out.htLikely = true;
     const kinds = [kwh, charging.map(perMinOf), sessions];
     out.varies = bands > 0 && (kinds.some((k) => new Set(k).size > 1) || amounts.some((a) => a.kind === 'session') && bands > 1);
+    if (bands > 0 && !opts.noBands) attachBands(out, src, opts);
     return out;
   }
   if (opts.free || /^(gratuit|gratuite|free|0 ?€|recharge gratuite)\.?$/.test(t)) {
@@ -299,17 +459,17 @@ export function describeTariff(t: Tariff, opts: DescribeOptions = {}): string[] 
     const [v, unit] = t.perKwh !== undefined ? [t.perKwh, '€/kWh'] : t.session ? [t.session, '€'] : [t.perMin ?? t.idle?.perMin ?? 0, '€/min'];
     lines.push(T.htLikely(`${num(v, 5, 2)} ${unit}`, `${num(v * VAT, 3, 2)} ${unit}`));
   }
-  if (t.varies) lines.push(T.varies);
+  if (t.varies) lines.push(t.bands ? T.variesBands : T.varies);
   return lines;
 }
 
 /** Tarif d'une station (texte IRVE + gratuité jugée avec sa puissance et ses moyens de paiement). */
-export const stationTariff = (s: { prix?: string | null; free?: boolean; kw?: number; pay?: readonly string[] }) =>
-  parseTariff(s.prix, { free: s.free, kw: s.kw, pay: s.pay });
+export const stationTariff = (s: { prix?: string | null; free?: boolean; kw?: number; pay?: readonly string[] }, pointKw?: number) =>
+  parseTariff(s.prix, { free: s.free, kw: s.kw, pay: s.pay, pointKw });
 
 /** Tarif repris dans le suivi d'une recharge (plan enregistré au paiement). */
 export const planTariff = (p: { tariffRaw?: string; free?: boolean; stationKw?: number; pointKw?: number; pay?: readonly string[] } | null | undefined) =>
-  parseTariff(p?.tariffRaw, { free: p?.free, kw: p?.stationKw ?? p?.pointKw, pay: p?.pay });
+  parseTariff(p?.tariffRaw, { free: p?.free, kw: p?.stationKw ?? p?.pointKw, pay: p?.pay, pointKw: p?.pointKw });
 
 /** Multiplicateur TTC (les prix HT, annoncés ou probables, sont majorés de la TVA à 20 %). */
 export const ttcFactor = (t: Pick<Tariff, 'ht' | 'htLikely'>) => (t.ht || t.htLikely ? VAT : 1);

@@ -45,6 +45,8 @@ function inputOf(d: DirectCharge): EstimateInput {
     pointKw: p?.pointKw ?? 0,
     plugs: p?.plugs ?? ['t2'],
     tariff: planTariff(p),
+    // Tarif à plages horaires : plage de l'heure de branchement (maintenant tant que la recharge n'a pas démarré)
+    startAt: d.chargeStartedAt ?? undefined,
   };
 }
 
@@ -150,7 +152,8 @@ export default function Recharge() {
 
   const input = useMemo(() => (d ? inputOf(d) : null), [d]);
   const est = useMemo(() => (input ? estimateCharge(input) : null), [input]);
-  const tariff = input?.tariff;
+  // Tarif appliqué (plage horaire de l'heure de début) : occupation et paliers de cette plage seulement
+  const tariff = est?.applied;
 
   const update = (patch: Partial<DirectCharge> | null) => {
     const next = patch && d ? { ...d, ...patch } : null;

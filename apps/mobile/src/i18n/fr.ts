@@ -266,6 +266,10 @@ export const fr = {
     reliability: (r: string) => `Fiabilité : ${r}`,
   },
   price: {
+    bands: (parts: string) => `Selon l’heure de début\u00A0: ${parts}`,
+    bandOther: 'autres heures',
+    bandOverlap: 'Votre recharge chevauche deux plages horaires\u00A0: estimation au tarif le plus cher des deux.',
+    bandFallback: 'Heure non couverte par les plages publiées\u00A0: estimation au tarif le plus élevé.',
     cheap: 'Moins cher',
     cheapA11y: 'Moins cher\u00A0: trier par coût total estimé de ma recharge',
     cheapTitle: 'Le moins cher près de moi',
@@ -303,6 +307,7 @@ export const fr = {
     idleSoon: (clock: string) => `Frais d’occupation à partir de ${clock}\u00A0: débranchez maintenant pour les éviter.`,
   },
   tariff: {
+    variesBands: 'Le tarif varie selon l’heure : estimation au tarif de l’heure de début.',
     free: 'Gratuit selon l’opérateur.',
     freeDoubtful: 'Gratuit selon la base nationale, à confirmer sur la borne.',
     energyRange: (a: string, b: string) => `Énergie : ${a} à ${b} selon l’heure`,

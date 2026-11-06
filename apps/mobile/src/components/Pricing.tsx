@@ -3,12 +3,12 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { lastPriceText, reliabilityText, type Community } from '../lib/community';
 import type { ChargePoint } from '../lib/evse';
-import { durationLabel, estimateCharge, priceTraps, STAYS, stayMinutes, totalCost, type PriceTrap, type Stay, type TotalCost } from '../lib/estimate';
+import { bandCosts, durationLabel, estimateCharge, priceTraps, STAYS, stayMinutes, totalCost, type PriceTrap, type Stay, type TotalCost } from '../lib/estimate';
 import { euros, NBSP, withUnit } from '../lib/format';
 import type { Operator } from '../lib/qr';
 import { loadPortals, portalPaid } from '../lib/portals';
 import { loadOperators, type Station } from '../lib/stations';
-import { describeTariff, safeTariffUrl, stationTariff, type Tariff } from '../lib/tariff';
+import { bandLabel, describeTariff, safeTariffUrl, stationTariff, type Tariff } from '../lib/tariff';
 import type { Vehicle } from '../lib/vehicle';
 import { clock, eur, kwhText, perKwh } from '../i18n/format';
 import { Chip } from './ui';
@@ -106,7 +106,7 @@ export function PriceSummary({
 }) {
   const T = useT();
   const R = T.recharger;
-  const tariff = stationTariff(station);
+  const tariff = stationTariff(station, point.kw);
   const paidNetwork = usePaidNetwork(station.ok);
   const fresh = vehicle && Date.now() - vehicle.socUpdatedAt < 3 * 3600_000 ? vehicle.socPercent : null;
   const est = estimateCharge({ vehicle, socPercent: fresh, pointKw: point.kw, plugs: point.plugs, tariff });
@@ -171,6 +171,15 @@ export function breakdownText(c: TotalCost): string | null {
   return shown.length > 1 ? withUnit(P.breakdown(shown.join(' · '))) : null;
 }
 
+/** « Selon l'heure de début : 06:00–18:00 ≈ 12,13 € · 18:00–06:00 ≈ 15,00 € » (null sans plages analysées). */
+export function bandsText(i: Parameters<typeof bandCosts>[0]): string | null {
+  const P = tr().price;
+  const list = bandCosts(i);
+  if (list.length < 2 || list.every((x) => x.cost == null)) return null;
+  const parts = list.map((x) => `${x.band ? bandLabel(x.band) : P.bandOther} ${x.cost != null ? `≈ ${euros(Math.round(x.cost * 100))}` : tr().recharger.unknown}`);
+  return withUnit(P.bands(parts.join(' · ')));
+}
+
 /**
  * Coût total réel de MA recharge selon la durée de stationnement (« Je reste ~1 h / 2 h / la nuit ») et pièges tarifaires.
  * `plugAt` : heure de branchement (sur place : maintenant ; préparation : null, l'alerte d'occupation donne un délai).
@@ -187,6 +196,7 @@ export function MyChargeCost({ tariff, input, plugAt, paidNetwork }: {
   const c = totalCost({ ...input, tariff, stayMin: stayMinutes(stay) });
   const traps = priceTraps(tariff, c, plugAt);
   const detail = breakdownText(c);
+  const bands = bandsText({ ...input, tariff });
   return (
     <View style={styles.wrap} testID="my-charge-cost">
       <PriceTrapLines traps={traps} avg={!input.vehicle} />
@@ -199,6 +209,8 @@ export function MyChargeCost({ tariff, input, plugAt, paidNetwork }: {
       <Text style={styles.total} testID="total-cost">{totalText(c, paidNetwork, !!tariff.freeDoubtful)}</Text>
       {detail ? <Text style={styles.src}>{detail}</Text> : null}
       {c.cutShort ? <Text style={styles.src}>{P.cutShort}</Text> : null}
+      {bands ? <Text style={styles.src} testID="band-costs">{bands}</Text> : null}
+      {c.bandMode === 'overlap' ? <Text style={styles.src}>{P.bandOverlap}</Text> : c.bandMode === 'fallback' ? <Text style={styles.src}>{P.bandFallback}</Text> : null}
     </View>
   );
 }

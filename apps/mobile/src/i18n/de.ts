@@ -267,6 +267,10 @@ export const de: Dict = {
     reliability: (r: string) => `Zuverlässigkeit: ${r}`,
   },
   price: {
+    bands: (parts: string) => `Je nach Startzeit: ${parts}`,
+    bandOther: 'übrige Zeiten',
+    bandOverlap: 'Ihre Ladung reicht über zwei Zeitfenster: Schätzung zum teureren Tarif.',
+    bandFallback: 'Uhrzeit nicht von den veröffentlichten Zeitfenstern abgedeckt: Schätzung zum höchsten Tarif.',
     cheap: 'Günstigste',
     cheapA11y: 'Günstigste: nach geschätzten Gesamtkosten meiner Ladung sortieren',
     cheapTitle: 'Am günstigsten in meiner Nähe',
@@ -304,6 +308,7 @@ export const de: Dict = {
     idleSoon: (clock: string) => `Standgebühr ab ${clock}: jetzt abstecken, um sie zu vermeiden.`,
   },
   tariff: {
+    variesBands: 'Der Tarif hängt von der Uhrzeit ab: Schätzung zum Tarif der Startzeit.',
     free: 'Laut Betreiber kostenlos.',
     freeDoubtful: 'Laut nationaler Datenbank kostenlos, an der Säule zu bestätigen.',
     energyRange: (a: string, b: string) => `Energie: ${a} bis ${b} je nach Uhrzeit`,

@@ -69,8 +69,8 @@ export function StationDetail(props: {
     };
   }, []);
   // Pièges tarifaires pour MON véhicule (point compatible le plus puissant) ; pas encore branché : délai, pas d'heure.
-  const tariff = stationTariff(s);
   const pt = bestPoint(s, vehicle);
+  const tariff = stationTariff(s, pt.kw);
   const fresh = vehicle && Date.now() - vehicle.socUpdatedAt < 3 * 3600_000 ? vehicle.socPercent : null;
   const traps = priceTraps(tariff, totalCost({ vehicle, socPercent: fresh, pointKw: pt.kw, plugs: pt.plugs, tariff }));
   // Source du prix affiché : base nationale (tarif publié) et/ou prix constaté par la communauté

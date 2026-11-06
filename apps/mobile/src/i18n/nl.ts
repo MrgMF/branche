@@ -261,6 +261,10 @@ export const nl: Dict = {
     reliability: (r: string) => `Betrouwbaarheid: ${r}`,
   },
   price: {
+    bands: (parts: string) => `Volgens starttijd: ${parts}`,
+    bandOther: 'overige uren',
+    bandOverlap: 'Uw laadbeurt valt in twee tijdvakken: schatting tegen het duurste.',
+    bandFallback: 'Tijdstip niet gedekt door de gepubliceerde tijdvakken: schatting tegen het hoogste tarief.',
     cheap: 'Goedkoopst',
     cheapA11y: 'Goedkoopst: sorteren op geschatte totale kosten van mijn laadbeurt',
     cheapTitle: 'Goedkoopst bij mij in de buurt',
@@ -298,6 +302,7 @@ export const nl: Dict = {
     idleSoon: (clock: string) => `Blokkeertarief vanaf ${clock}: koppel nu los om het te vermijden.`,
   },
   tariff: {
+    variesBands: 'Het tarief hangt af van het tijdstip: schatting tegen het tarief van de starttijd.',
     free: 'Gratis volgens de exploitant.',
     freeDoubtful: 'Gratis volgens de nationale database, te bevestigen bij de laadpaal.',
     energyRange: (a: string, b: string) => `Energie: ${a} tot ${b} afhankelijk van het tijdstip`,

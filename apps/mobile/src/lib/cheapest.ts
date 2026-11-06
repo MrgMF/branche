@@ -49,6 +49,8 @@ export interface RankOptions {
   /** Itinéraires connus par borne (distance m, durée s). */
   routes?: Record<string, { distanceM: number; durationS: number }>;
   stayMin?: number | null;
+  /** Heure de début prévue (ms) pour les tarifs à plages horaires ; maintenant par défaut. */
+  at?: number;
   /** Rayon maximal (km) autour de `from` ; 20 km par défaut. */
   maxKm?: number;
   /** Nombre de bornes candidates (les plus proches) avant classement ; 60 par défaut. */
@@ -69,7 +71,7 @@ export function rankCheapest(list: Station[], o: RankOptions): Ranked[] {
     .slice(0, o.pool ?? 60);
   const out = near.map(({ s, k }): Ranked => {
     const pt = bestPoint(s, v);
-    const cost = totalCost({ vehicle: v, socPercent: o.socPercent, pointKw: pt.kw, plugs: pt.plugs, tariff: stationTariff(s), stayMin: o.stayMin });
+    const cost = totalCost({ vehicle: v, socPercent: o.socPercent, pointKw: pt.kw, plugs: pt.plugs, tariff: stationTariff(s, pt.kw), stayMin: o.stayMin, startAt: o.at });
     const d = o.user ? distanceKm(o.user, s) : null;
     let detour: Detour | null = null;
     if (o.includeDetour) {

@@ -137,7 +137,8 @@ export default function Recharger() {
   const point: ChargePoint | null = (pointId && station ? pointById(station, pointId) : null) ?? (choosing ? null : autoPoint);
   const step: 'point' | 'pay' = !point || choosing ? 'point' : 'pay';
 
-  const tariff = useMemo(() => stationTariff(station ?? {}), [station]);
+  // Tarif du point choisi (alternatives AC/DC ou par puissance : celle du point)
+  const tariff = useMemo(() => stationTariff(station ?? {}, point?.kw), [station, point?.kw]);
   const est = useMemo(
     () => (point ? estimateCharge({ vehicle: vehicle ?? null, socPercent: soc, pointKw: point.kw, plugs: point.plugs, tariff }) : null),
     [point, vehicle, soc, tariff],
@@ -422,9 +423,9 @@ export default function Recharger() {
                 </>
               ) : null}
             </View>
-            {tariff.idle ? (
+            {est.applied.idle ? (
               <Notice tone="demo">
-                {R.idle(tariff.idle.afterMin)}
+                {R.idle(est.applied.idle.afterMin)}
               </Notice>
             ) : null}
           </View>

@@ -268,6 +268,10 @@ export const it: Dict = {
     reliability: (r: string) => `Affidabilità: ${r}`,
   },
   price: {
+    bands: (parts: string) => `In base all’ora di inizio: ${parts}`,
+    bandOther: 'altre ore',
+    bandOverlap: 'La ricarica copre due fasce orarie: stima con la più cara.',
+    bandFallback: 'Ora non coperta dalle fasce pubblicate: stima con la tariffa più alta.',
     cheap: 'Più economico',
     cheapA11y: 'Più economico: ordina per costo totale stimato della mia ricarica',
     cheapTitle: 'Il più economico vicino a me',
@@ -305,6 +309,7 @@ export const it: Dict = {
     idleSoon: (clock: string) => `Costi di sosta dalle ${clock}: scollega ora per evitarli.`,
   },
   tariff: {
+    variesBands: 'La tariffa varia in base all’ora: stima con la tariffa dell’ora di inizio.',
     free: 'Gratuito secondo l’operatore.',
     freeDoubtful: 'Gratuita secondo la banca dati nazionale, da confermare alla colonnina.',
     energyRange: (a: string, b: string) => `Energia: da ${a} a ${b} secondo l’orario`,
