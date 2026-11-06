@@ -24,7 +24,24 @@
       ],
       "notes": "Site de paiement en ligne PayNow : saisie de l'identifiant de borne (autocollant, ex. MAT00123 -> 00123). Pas de gabarit d'URL par EVSE documenté. Reçu CB évoqué dans la FAQ mais présence d'un lecteur CB non confirmée.",
       "inRegistry": true,
-      "stations": 7208
+      "stations": 7208,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://izivia.com/questions-frequentes/comment-utiliser-bornes-electriques/utiliser-borne-electrique-sans-carte-de-recharge",
+          "https://izivia.com/questions-frequentes/service-recharge-izivia/quest-ce-que-lempreinte-bancaire"
+        ]
+      }
     },
     "bouygues-energies-services": {
       "name": "Bouygues E&S (alizé, Révéo, Ouest Charge…)",
@@ -47,7 +64,25 @@
       ],
       "notes": "Domaine de la page de paiement non publié. Portail Révéo : https://my.reveocharge.com/fr/login.",
       "inRegistry": true,
-      "stations": 5863
+      "stations": 5863,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": true,
+          "nfcWallets": "probable"
+        },
+        "sources": [
+          "https://toulouse.alizecharge.com/offres-et-tarifs/",
+          "https://alizecharge.com/app/uploads/sites/10/2026/01/ecocharge77_CGV.pdf",
+          "https://support.alizecharge.com/support/solutions/articles/50000042427-vous-tes-pr-lev-en-d-but-de-recharge-via-le-qr-code-quoi-cela-correspond-"
+        ]
+      }
     },
     "freshmile": {
       "name": "Freshmile",
@@ -72,7 +107,23 @@
       ],
       "notes": "Le code xfm.fr est un code autocollant, pas l'identifiant EVSE ; correspondance EVSE->code non documentée.",
       "inRegistry": true,
-      "stations": 3384
+      "stations": 3384,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://www.univ-amu.fr/system/files/2023-12/Se%20charger%20avec%20Freshmile.pdf"
+        ]
+      }
     },
     "50five": {
       "name": "50five",
@@ -91,7 +142,21 @@
       ],
       "notes": "Espace dédié mentionné sans URL ; démarrage via carte/badge.",
       "inRegistry": true,
-      "stations": 2250
+      "stations": 2250,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "easycharge": {
       "name": "Easy Charge (eborn, AVIA Volt)",
@@ -113,7 +178,24 @@
       ],
       "notes": "URL de la page de paiement non publiée.",
       "inRegistry": true,
-      "stations": 2048
+      "stations": 2048,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": true,
+          "nfcWallets": "probable"
+        },
+        "sources": [
+          "https://eborn.fr/foire-aux-questions/",
+          "https://eborn.orios-infos.com/mode-d-emploi"
+        ]
+      }
     },
     "citeos-mobilite-electrique-paris": {
       "name": "Citeos (dont MObiVE)",
@@ -132,7 +214,23 @@
       ],
       "notes": "Seul le sous-réseau MObiVE est documenté : paiement CB via appli ou QR code sur la borne (compte non précisé), TPE actif sur certaines bornes rapides. Autres réseaux Citeos non vérifiés.",
       "inRegistry": true,
-      "stations": 1693
+      "stations": 1693,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://mobive.fr/comment-ca-marche/"
+        ]
+      }
     },
     "modulo": {
       "name": "Modulo",
@@ -152,7 +250,21 @@
       ],
       "notes": "Portail client web fermé ; appli Charge Global (plateforme Virta). Le QR code sert à consulter le tarif. chge.eu (Virta) non confirmé pour Modulo.",
       "inRegistry": true,
-      "stations": 1615
+      "stations": 1615,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "power-dot": {
       "name": "Power Dot",
@@ -173,7 +285,21 @@
       ],
       "notes": "Site officiel inaccessible (robots). Seule source : forum utilisateurs mars 2023 (QR code sur borne, badge Chargemap). À revérifier.",
       "inRegistry": true,
-      "stations": 1189
+      "stations": 1189,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "lidl": {
       "name": "Lidl France",
@@ -192,7 +318,23 @@
       ],
       "notes": "CGU 2024 : démarrage et paiement uniquement via l'appli Lidl Plus (Lidl Pay). Le QR code sert à sélectionner la borne dans l'appli.",
       "inRegistry": true,
-      "stations": 1073
+      "stations": 1073,
+      "payMethods": {
+        "adhoc": {
+          "card": false,
+          "applePay": false,
+          "googlePay": false,
+          "paypal": false,
+          "other": []
+        },
+        "reader": {
+          "contactless": false,
+          "nfcWallets": false
+        },
+        "sources": [
+          "https://www.lidl.fr/static/assets/20241030_CGU_bornes_electriques-1234714.pdf"
+        ]
+      }
     },
     "evzen": {
       "name": "EVzen (larecharge, WiiiZ…)",
@@ -213,7 +355,23 @@
       ],
       "notes": "TPE sur certaines bornes seulement ; domaine de paiement non publié.",
       "inRegistry": true,
-      "stations": 1014
+      "stations": 1014,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://www.evzen.com/en/news/comment-payer-sur-les-bornes-de-recharge-evzen"
+        ]
+      }
     },
     "totalenergies-marketing": {
       "name": "TotalEnergies (Belib’, stations TotalEnergies)",
@@ -239,7 +397,23 @@
       ],
       "notes": "Lecteur CB sur un « totem » commun à une rangée de bornes (L'argus). Page mobility.totalenergies.com non lue (bloquée).",
       "inRegistry": true,
-      "stations": 962
+      "stations": 962,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://services.totalenergies.fr/faq/q/payer-borne-recharge-totalenergies"
+        ]
+      }
     },
     "qovoltis": {
       "name": "Qovoltis",
@@ -261,7 +435,23 @@
       ],
       "notes": "Qobox E : CB sans contact sans compte ; démarrage QR code évoqué sans détail.",
       "inRegistry": true,
-      "stations": 888
+      "stations": 888,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": true,
+          "nfcWallets": "probable"
+        },
+        "sources": [
+          "https://www.qovoltis.com/en/faq"
+        ]
+      }
     },
     "virta": {
       "name": "Virta",
@@ -287,7 +477,24 @@
       ],
       "notes": "Gabarit chge.eu/{id} non documenté : saisie manuelle de l'ID.",
       "inRegistry": true,
-      "stations": 871
+      "stations": 871,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://driver-support.virta.global/hc/en-gb/articles/22125945063069-How-to-charge-with-one-time-payment-step-by-step-video",
+          "https://support.virta.global/hc/en-gb/articles/29672773100445-Enable-frictionless-web-payments-for-ad-hoc-EV-Charging-Apple-Pay-Google-Pay"
+        ]
+      }
     },
     "aldi": {
       "name": "ALDI",
@@ -306,7 +513,21 @@
       ],
       "notes": "Page officielle muette sur le paiement.",
       "inRegistry": true,
-      "stations": 805
+      "stations": 805,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "spie-citynetworks": {
       "name": "SPIE CityNetworks (Métropolis, Oscéa 64, e-Vadea…)",
@@ -330,7 +551,23 @@
       ],
       "notes": "Vérifié pour Métropolis uniquement ; autres réseaux SPIE non vérifiés.",
       "inRegistry": true,
-      "stations": 785
+      "stations": 785,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": true,
+          "nfcWallets": true
+        },
+        "sources": [
+          "https://www.metropolis-recharge.fr/faq/"
+        ]
+      }
     },
     "driveco-partner-network": {
       "name": "Driveco (réseau partenaires)",
@@ -351,7 +588,23 @@
       ],
       "notes": "TPE sur stations équipées. URL de la page non publiée.",
       "inRegistry": true,
-      "stations": 778
+      "stations": 778,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://driveco.com/comment-recharger-borne-de-recharge-driveco/"
+        ]
+      }
     },
     "driveco": {
       "name": "Driveco",
@@ -372,7 +625,23 @@
       ],
       "notes": "TPE sur stations équipées. URL de la page non publiée.",
       "inRegistry": true,
-      "stations": 484
+      "stations": 484,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://driveco.com/comment-recharger-borne-de-recharge-driveco/"
+        ]
+      }
     },
     "e-totem": {
       "name": "e-Totem",
@@ -393,7 +662,23 @@
       ],
       "notes": "Guide : badge ou CB sans contact (bornes rapides). Espace personnel sur e-totem.fr pour factures, URL exacte non relevée.",
       "inRegistry": true,
-      "stations": 686
+      "stations": 686,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://www.e-totem.fr/institution/doc/Guide%20explicatif%20utilisation%20borne.pdf"
+        ]
+      }
     },
     "electric-55-charging": {
       "name": "Electric 55 Charging",
@@ -420,7 +705,23 @@
       ],
       "notes": "Lien publié en http ; forcer https à tester.",
       "inRegistry": true,
-      "stations": 673
+      "stations": 673,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://www.e55c.com/tutoriel-de-recharge/"
+        ]
+      }
     },
     "ze-watt": {
       "name": "Ze-Watt",
@@ -439,7 +740,21 @@
       ],
       "notes": "Pages par borne de forme https://my.ze-watt.com/bornes/{id}/ (contenu JS non lisible) — fonction de paiement non confirmée.",
       "inRegistry": true,
-      "stations": 669
+      "stations": 669,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "engie-vianeo": {
       "name": "ENGIE Vianeo",
@@ -469,7 +784,23 @@
       ],
       "notes": "TPE sans contact « lorsqu'il est présent » ; pré-autorisation 50 €.",
       "inRegistry": true,
-      "stations": 632
+      "stations": 632,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": true,
+          "nfcWallets": "probable"
+        },
+        "sources": [
+          "https://www.engie-vianeo.com/en/?p=8690"
+        ]
+      }
     },
     "load-stations": {
       "name": "Load Stations",
@@ -486,7 +817,21 @@
       "sources": [],
       "notes": "Site officiel non lisible (erreur).",
       "inRegistry": true,
-      "stations": 631
+      "stations": 631,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "allego": {
       "name": "Allego (dont Carrefour Energies by Allego)",
@@ -508,7 +853,23 @@
       ],
       "notes": "Sans contact sur de nombreuses stations rapides. Pour les sites Carrefour, voir carrefour-energies (webapp recharge.carrefour.fr).",
       "inRegistry": true,
-      "stations": 603
+      "stations": 603,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": true,
+          "nfcWallets": true
+        },
+        "sources": [
+          "https://www.allego.eu/faq/"
+        ]
+      }
     },
     "electro-mob": {
       "name": "Electro-Mob",
@@ -525,7 +886,21 @@
       "sources": [],
       "notes": "Aucune info conducteur trouvée (site orienté B2B).",
       "inRegistry": true,
-      "stations": 571
+      "stations": 571,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "stations-e": {
       "name": "Stations-e",
@@ -544,7 +919,23 @@
       ],
       "notes": "Terminal CB intégré ; URL de la plateforme non publiée.",
       "inRegistry": true,
-      "stations": 567
+      "stations": 567,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": true,
+          "nfcWallets": "probable"
+        },
+        "sources": [
+          "https://stations-e.com/fr/blog/comment-recharger-votre-vehicule-electrique-avec-une-carte-bancaire-sur-les-bornes-stations-e"
+        ]
+      }
     },
     "electra": {
       "name": "Electra",
@@ -565,7 +956,24 @@
       ],
       "notes": "Démarrage : appli, QR code du terminal (destination non précisée), CB sans contact, badge sans compte Electra.",
       "inRegistry": true,
-      "stations": 534
+      "stations": 534,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": true,
+          "nfcWallets": "probable"
+        },
+        "sources": [
+          "https://intercom.help/go-electra/en/articles/5802553-how-do-i-start-charging",
+          "https://intercom.help/go-electra/en/articles/7965773-google-pay-and-apple-pay"
+        ]
+      }
     },
     "reveo-syaden": {
       "name": "Révéo (SYADEN)",
@@ -587,7 +995,23 @@
         "https://reveocharge.com/comment-ca-marche/"
       ],
       "inRegistry": true,
-      "stations": 526
+      "stations": 526,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://reveocharge.com/comment-ca-marche/"
+        ]
+      }
     },
     "soregies-mobilites": {
       "name": "Sorégies Mobilités",
@@ -606,7 +1030,21 @@
       ],
       "notes": "Appli (CB dans l'appli) ou badge Sorégies ; pas de QR web mentionné.",
       "inRegistry": true,
-      "stations": 508
+      "stations": 508,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "chargepoint-austria": {
       "name": "ChargeGuru / ChargePoint",
@@ -623,7 +1061,21 @@
       "sources": [],
       "notes": "Une page « Votre paiement ChargeGuru » (payment.chargeguru.com) existe mais redirige vers un autre domaine ; non vérifiée.",
       "inRegistry": true,
-      "stations": 489
+      "stations": 489,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "e-leclerc": {
       "name": "E.Leclerc (Freshmile)",
@@ -642,7 +1094,23 @@
       ],
       "notes": "Registre : domaine freshmile.com (réseau exploité/supervisé par Freshmile). Le parcours web Freshmile (xfm.fr / charge.freshmile.com) n'a pas été vérifié spécifiquement pour ce réseau.",
       "inRegistry": true,
-      "stations": 424
+      "stations": 424,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://www.univ-amu.fr/system/files/2023-12/Se%20charger%20avec%20Freshmile.pdf"
+        ]
+      }
     },
     "qwello": {
       "name": "Qwello France",
@@ -664,7 +1132,21 @@
       ],
       "notes": "Webapp de démarrage par QR ; mode de paiement non lisible (page JS).",
       "inRegistry": true,
-      "stations": 407
+      "stations": 407,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "mobilize-power-solutions": {
       "name": "Mobilize Power Solutions",
@@ -681,7 +1163,21 @@
       "sources": [],
       "notes": "Page Fast Charge non lisible (redirection).",
       "inRegistry": true,
-      "stations": 403
+      "stations": 403,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "yes55": {
       "name": "YES55",
@@ -708,7 +1204,21 @@
       ],
       "notes": "Page « Paiements & applications » : uniquement applis tierces et badges RFID.",
       "inRegistry": true,
-      "stations": 395
+      "stations": 395,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "zephyre": {
       "name": "Zephyre",
@@ -724,7 +1234,21 @@
       "roamingBadgesAccepted": null,
       "sources": [],
       "inRegistry": true,
-      "stations": 368
+      "stations": 368,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "totalenergies-charging-services": {
       "name": "TotalEnergies Charging Services",
@@ -749,7 +1273,23 @@
       ],
       "notes": "FAQ TotalEnergies générique (bornes publiques).",
       "inRegistry": true,
-      "stations": 363
+      "stations": 363,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://services.totalenergies.fr/faq/q/payer-borne-recharge-totalenergies"
+        ]
+      }
     },
     "waat": {
       "name": "WAAT",
@@ -766,7 +1306,21 @@
       "sources": [],
       "notes": "Article d'aide non lisible (erreur).",
       "inRegistry": true,
-      "stations": 341
+      "stations": 341,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "zeborne": {
       "name": "ZEborne",
@@ -782,7 +1336,21 @@
       "roamingBadgesAccepted": null,
       "sources": [],
       "inRegistry": true,
-      "stations": 336
+      "stations": 336,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "groupe-indigo": {
       "name": "Groupe Indigo",
@@ -799,7 +1367,21 @@
       "sources": [],
       "notes": "Page recharge redirigée vers indigoneo.fr, non lue.",
       "inRegistry": true,
-      "stations": 332
+      "stations": 332,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "seolis": {
       "name": "Seolis (AlterBase)",
@@ -818,7 +1400,21 @@
       ],
       "notes": "QR code -> ouvre l'appli avec identifiants de compte.",
       "inRegistry": true,
-      "stations": 331
+      "stations": 331,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "nw-iecharge": {
       "name": "IECharge",
@@ -838,7 +1434,23 @@
         "https://iecharge.io/fr/nouvelle-interface-des-ecrans-de-nos-bornes/"
       ],
       "inRegistry": true,
-      "stations": 314
+      "stations": 314,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://iecharge.io/fr/nouvelle-interface-des-ecrans-de-nos-bornes/"
+        ]
+      }
     },
     "road": {
       "name": "Road (E-Flux)",
@@ -854,7 +1466,23 @@
       "roamingBadgesAccepted": null,
       "sources": [],
       "inRegistry": true,
-      "stations": 307
+      "stations": 307,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": true,
+          "googlePay": true,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": true,
+          "nfcWallets": "probable"
+        },
+        "sources": [
+          "https://help.e-flux.io/en/articles/9188355-how-can-i-pay-at-a-charging-station"
+        ]
+      }
     },
     "ionity": {
       "name": "IONITY",
@@ -881,7 +1509,24 @@
       ],
       "notes": "Pré-autorisation ~40 € ; Chrome/Safari conseillés ; terminaux sans contact sur certains sites. Le portail est un portail de factures NFC, pas un compte. Pas de gabarit {evse} documenté.",
       "inRegistry": true,
-      "stations": 300
+      "stations": 300,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": true,
+          "nfcWallets": true
+        },
+        "sources": [
+          "https://support.ionity.eu/en/payment-billing/what-are-the-payment-methods-for-ad-hoc-charging",
+          "https://support.ionity.eu/en/how-to-charge-at-ionity/how-can-i-pay"
+        ]
+      }
     },
     "tesla": {
       "name": "Tesla Superchargeurs",
@@ -906,7 +1551,23 @@
       ],
       "notes": "appOnly : page Tesla « Supercharging for other EVs » — démarrage et paiement des non-Tesla par l'appli Tesla ; le paiement « à l'acte » IRVE désigne cette appli, pas un QR web. cardReader : terminal CB sur V4 / sites sélectionnés seulement, non confirmé site par site. Sources divergentes sur les badges (Chargemap : compatible depuis 2023 ; Tesla Mag : non).",
       "inRegistry": true,
-      "stations": 288
+      "stations": 288,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": true,
+          "nfcWallets": true
+        },
+        "sources": [
+          "https://www.tesla.com/fr_fr/support/charging/supercharging-other-evs"
+        ]
+      }
     },
     "greenspot": {
       "name": "Greenspot",
@@ -924,7 +1585,21 @@
         "https://www.greenspot.fr/blog/bornes-de-recharge-pour-vhicules-lectriques-en-supermarch--o-comment-et-pourquoi-les-utiliser-"
       ],
       "inRegistry": true,
-      "stations": 282
+      "stations": 282,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "morbihan-energies": {
       "name": "Morbihan Énergies (Freshmile)",
@@ -943,7 +1618,23 @@
       ],
       "notes": "Registre : domaine freshmile.com (réseau exploité/supervisé par Freshmile). Le parcours web Freshmile (xfm.fr / charge.freshmile.com) n'a pas été vérifié spécifiquement pour ce réseau.",
       "inRegistry": true,
-      "stations": 257
+      "stations": 257,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://www.univ-amu.fr/system/files/2023-12/Se%20charger%20avec%20Freshmile.pdf"
+        ]
+      }
     },
     "soregies": {
       "name": "Sorégies",
@@ -961,7 +1652,21 @@
         "https://www.soregies.fr/offre-mobilite-electrique/"
       ],
       "inRegistry": true,
-      "stations": 246
+      "stations": 246,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "syndicat-departemental-energie-aube": {
       "name": "SDEA Aube (Freshmile)",
@@ -980,7 +1685,23 @@
       ],
       "notes": "Registre : domaine freshmile.com (réseau exploité/supervisé par Freshmile). Le parcours web Freshmile (xfm.fr / charge.freshmile.com) n'a pas été vérifié spécifiquement pour ce réseau.",
       "inRegistry": true,
-      "stations": 233
+      "stations": 233,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://www.univ-amu.fr/system/files/2023-12/Se%20charger%20avec%20Freshmile.pdf"
+        ]
+      }
     },
     "federation-departementale-d-energie-de-la-somme": {
       "name": "FDE Somme (Freshmile)",
@@ -999,7 +1720,23 @@
       ],
       "notes": "Registre : domaine freshmile.com (réseau exploité/supervisé par Freshmile). Le parcours web Freshmile (xfm.fr / charge.freshmile.com) n'a pas été vérifié spécifiquement pour ce réseau.",
       "inRegistry": true,
-      "stations": 203
+      "stations": 203,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://www.univ-amu.fr/system/files/2023-12/Se%20charger%20avec%20Freshmile.pdf"
+        ]
+      }
     },
     "atlante": {
       "name": "Atlante",
@@ -1020,7 +1757,23 @@
       ],
       "notes": "CB directe sur stations sélectionnées ; appli myAtlante ; badge Atlante.",
       "inRegistry": true,
-      "stations": 190
+      "stations": 190,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://atlante.energy/drivers/"
+        ]
+      }
     },
     "zunder": {
       "name": "Zunder",
@@ -1039,7 +1792,23 @@
       ],
       "notes": "TPV sans inscription ; appli ; eZCard RFID.",
       "inRegistry": true,
-      "stations": 115
+      "stations": 115,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": true,
+          "nfcWallets": "probable"
+        },
+        "sources": [
+          "https://www.zunder.com/usuario-ve/"
+        ]
+      }
     },
     "fastned": {
       "name": "Fastned",
@@ -1060,7 +1829,23 @@
       ],
       "notes": "Appli, Autocharge, carte de recharge, CB sans contact. Pas de paiement web mentionné.",
       "inRegistry": true,
-      "stations": 66
+      "stations": 66,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": true,
+          "nfcWallets": true
+        },
+        "sources": [
+          "https://fastnedcharging.com/en/how-it-works"
+        ]
+      }
     },
     "shell-recharge": {
       "name": "Shell Recharge",
@@ -1079,7 +1864,21 @@
       ],
       "notes": "Articles d'aide redirigés, non lus. eMSP : démarrage par appli ou carte.",
       "inRegistry": true,
-      "stations": 33
+      "stations": 33,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "electromaps": {
       "name": "Electromaps",
@@ -1098,7 +1897,21 @@
       ],
       "notes": "Webapp avec compte ; démarrage web non confirmé.",
       "inRegistry": true,
-      "stations": 29
+      "stations": 29,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "carrefour-energies": {
       "name": "Carrefour Energies",
@@ -1124,7 +1937,21 @@
       "registryKeys": [
         "allego",
         "driveco"
-      ]
+      ],
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "mobive": {
       "name": "MObiVE (Citeos)",
@@ -1141,7 +1968,23 @@
       "sources": [
         "https://mobive.fr/comment-ca-marche/"
       ],
-      "inRegistry": false
+      "inRegistry": false,
+      "payMethods": {
+        "adhoc": {
+          "card": true,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": [
+          "https://mobive.fr/comment-ca-marche/"
+        ]
+      }
     },
     "chargemap-pass": {
       "name": "Chargemap Pass",
@@ -1160,7 +2003,21 @@
         "https://blog.chargemap.com/?p=12003"
       ],
       "notes": "eMSP : badge + démarrage par appli sur réseaux compatibles ; aucun démarrage web documenté. Accepté sur Superchargeurs Tesla (blog Chargemap).",
-      "inRegistry": false
+      "inRegistry": false,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "bip-and-go": {
       "name": "Bip&Go",
@@ -1179,7 +2036,21 @@
         "https://www.bipandgo.com/actualites/paiement-bornes-recharge-electrique"
       ],
       "notes": "Démarrage depuis l'appli (90 000+ bornes) ou carte de recharge Bip&Go ; pas de démarrage depuis l'espace web documenté.",
-      "inRegistry": false
+      "inRegistry": false,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "ulys": {
       "name": "Ulys (VINCI Autoroutes)",
@@ -1196,7 +2067,21 @@
       "sources": [
         "https://www.vinci-autoroutes.com/fr/actualites/services-et-aires/application-ulys-bornes-recharge-electrique/"
       ],
-      "inRegistry": false
+      "inRegistry": false,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "plugsurfing": {
       "name": "Plugsurfing",
@@ -1215,7 +2100,21 @@
         "https://support.plugsurfing.com/hc/en-us/articles/11002288303005-How-to-start-a-session"
       ],
       "notes": "Portail web : « To register, view charging stations, and start charging, please use the app ».",
-      "inRegistry": false
+      "inRegistry": false,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     },
     "beev": {
       "name": "Beev",
@@ -1232,7 +2131,21 @@
       "sources": [
         "https://www.beev.co/carte-de-recharge-beev/"
       ],
-      "inRegistry": false
+      "inRegistry": false,
+      "payMethods": {
+        "adhoc": {
+          "card": null,
+          "applePay": null,
+          "googlePay": null,
+          "paypal": null,
+          "other": []
+        },
+        "reader": {
+          "contactless": null,
+          "nfcWallets": null
+        },
+        "sources": []
+      }
     }
   }
 }

@@ -9,6 +9,9 @@ import { StationDetail, StationMainAction } from '../components/StationDetail';
 import { ChargeShortcuts, HereBanner } from '../components/HereBanner';
 import { TripFooter, TripPanel } from '../components/TripPanel';
 import { Guidance, guidanceSide } from '../components/Guidance';
+import { SpeedEdge, Speedometer, useSpeedo } from '../components/Speedometer';
+import { limitNear } from '../lib/speedo';
+import type { RouteOption } from '../lib/navigation';
 import { SearchBar } from '../components/SearchBar';
 import { useRechargeHere } from '../lib/useRechargeHere';
 import { Button, Chip, Notice } from '../components/ui';
@@ -195,6 +198,12 @@ export default function MapScreen() {
   const selected = selectedId ? byId.get(selectedId) ?? null : null;
   const nav = useTrip(map, geo.fix ?? user, Math.round(height * 0.55));
   const { trip, plan } = nav;
+  // Compteur hors guidage (dès 5 km/h) : limitation de la dernière route calculée, si l'on roule dessus.
+  const lastRoute = useRef<RouteOption | null>(null);
+  if (trip?.route) lastRoute.current = trip.route;
+  const freeLimit = useMemo(() => (trip?.guiding ? null : limitNear(lastRoute.current, geo.fix)), [geo.fix, trip?.route, trip?.guiding]);
+  const freeSpeedo = useSpeedo({ kmh: geo.speedKmh, sampleT: geo.fix?.t ?? null, limitKmh: freeLimit, guiding: false });
+  const freeSpeedOn = !trip?.guiding && freeSpeedo.show;
   // « Y aller » depuis une borne non payable (/?go=<station>) : itinéraire vers la borne payable la plus proche
   useGoParam({ byId, setById, ready: !!user || loc === 'denied', plan, setSelectedId });
   const rechargeHere = useRechargeHere();
@@ -369,6 +378,13 @@ export default function MapScreen() {
         />
       ) : null}
 
+      {freeSpeedOn && !searching ? (
+        <Speedometer
+          s={freeSpeedo}
+          // À gauche, au-dessus de la fiche (mobile) ou à droite du panneau (large), au-dessus de l'attribution de la carte.
+          style={[styles.speedo, wide ? { left: 16 + PANEL + 12, bottom: 44 } : { bottom: sheetH + 12 + (height - topH - sheetH > 220 ? 0 : 22) }]}
+        />
+      ) : null}
       {trip?.guiding ? <Guidance nav={nav} onRecharge={rechargeHere} /> : null}
       <View
         style={[
@@ -511,6 +527,7 @@ export default function MapScreen() {
         </ScrollView>
         {trip ? <TripFooter nav={nav} /> : selected && large ? <StationMainAction station={selected} distance={user ? distanceKm(user, selected) : null} /> : null}
       </View>
+      <SpeedEdge on={freeSpeedOn && freeSpeedo.alert} />
       <AppMenu open={menu} onClose={closeMenu} />
     </View>
   );
@@ -541,6 +558,7 @@ const styles = StyleSheet.create({
   },
   roundText: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   recenter: { position: 'absolute', right: 16 },
+  speedo: { position: 'absolute', left: 12 },
   target: { width: 18, height: 18, borderRadius: 9, borderWidth: 3, borderColor: colors.position },
   sheet: {
     position: 'absolute',

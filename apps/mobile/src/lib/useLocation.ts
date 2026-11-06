@@ -3,6 +3,7 @@ import * as Location from 'expo-location';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { watchGeo } from './geoWatch';
+import { speedKmh } from './guidance';
 
 export type LocStatus = 'pending' | 'granted' | 'denied' | 'unavailable';
 export interface UserFix {
@@ -29,6 +30,9 @@ export function useUserLocation() {
   /** Position « stable » : ne change qu'après 30 m (évite de relancer chargements et recentrages). */
   const [coarse, setCoarse] = useState<{ lat: number; lon: number } | null>(null);
   const [compass, setCompass] = useState<number | null>(null);
+  /** Vitesse (km/h) : coords.speed du GPS, sinon dérivée des deux dernières positions (compteur hors guidage). */
+  const [kmh, setKmh] = useState<number | null>(null);
+  const prevFix = useRef<UserFix | null>(null);
   const sub = useRef<{ remove: () => void } | null>(null);
   const headSub = useRef<{ remove: () => void } | null>(null);
   const lastCompass = useRef<number | null>(null);
@@ -54,6 +58,8 @@ export function useUserLocation() {
         (p) => {
           setStatus('granted');
           const f: UserFix = { ...p, heading: p.heading !== null && p.heading >= 0 && (p.speed ?? 0) > 1 ? p.heading : null };
+          setKmh(speedKmh(p.speed, prevFix.current, f));
+          prevFix.current = f;
           setFix(f);
           setCoarse((c) => (!c || dist(c, f) > 30 ? { lat: f.lat, lon: f.lon } : c));
         },
@@ -99,7 +105,7 @@ export function useUserLocation() {
   }, [start]);
 
   const heading = compass ?? fix?.heading ?? null;
-  return { status, fix, coarse, heading, retry: start, enableCompass };
+  return { status, fix, coarse, heading, speedKmh: kmh, retry: start, enableCompass };
 }
 
 export type UserLocation = ReturnType<typeof useUserLocation>;

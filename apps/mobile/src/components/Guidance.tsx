@@ -5,9 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navigationLinks } from '../lib/charge';
 import { kw } from '../lib/format';
 import { navName } from '../lib/stations';
-import { bigDist, etaClock, guidanceSide, instructionOf, isOverSpeed, LOW_SOC, maneuverOf, SOC_CHOICES } from '../lib/guidance';
+import { bigDist, etaClock, guidanceSide, instructionOf, LOW_SOC, maneuverOf, SOC_CHOICES } from '../lib/guidance';
 import { useT } from '../i18n';
-import { speedUnit, speedValue } from '../i18n/format';
 import { distText, durationText, incidentLabel, postReport, type IncidentType } from '../lib/navigation';
 import { etaMessage, shareEta } from '../lib/shareEta';
 import type { TripApi } from '../lib/useTrip';
@@ -15,6 +14,7 @@ import { isMuted, onMutedChange, setMuted } from '../lib/voice';
 import type { Station } from '../lib/stations';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { LaneArrow, ManeuverIcon, NavIcon } from './ManeuverIcon';
+import { SpeedEdge, Speedometer, useSpeedo } from './Speedometer';
 import { Button } from './ui';
 
 const REPORTS: IncidentType[] = ['accident', 'bouchon', 'travaux', 'obstacle', 'borne_hs'];
@@ -53,6 +53,8 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
   // Grille équilibrée : 6 boutons (5 types + Annuler) en 3 × 2 sur grand écran, 2 × 3 sinon.
   const reportCols = width >= 600 ? 3 : 2;
   useEffect(() => onMutedChange(setMutedState), []);
+  // Compteur : vitesse et limitation du guidage, rouge (et bords de l'écran) au-delà de la limitation.
+  const speedo = useSpeedo({ kmh: trip?.speedKmh ?? null, sampleT: nav.gpsPos?.t ?? null, limitKmh: trip?.limitKmh ?? null, guiding: true });
   // Décompte de la proposition de trajet plus rapide (rafraîchi chaque seconde).
   const offerAt = trip?.offer?.deadline;
   useEffect(() => {
@@ -86,7 +88,6 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
   const offerLeft = offer ? Math.max(0, Math.ceil((offer.deadline - Date.now()) / 1000)) : 0;
   const lowCharger = trip.lowSoc !== null && !trip.via.length ? trip.chargers.find((c) => c.alongM > trip.along + 300) ?? null : null;
   const lanes = next && next.inM < 1500 ? next.step.lanes : undefined;
-  const over = isOverSpeed(trip.speedKmh, trip.limitKmh);
   const remainingS = trip.remainingS || trip.route.durationS;
   const remainingM = trip.remainingM || trip.route.distanceM;
   // Avec une étape de recharge, la batterie utile est celle en arrivant à la borne.
@@ -224,17 +225,7 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
 
       {!trip.arrived && !trip.arrivedAtVia ? (
         <View style={[styles.side, { bottom: 150 + insets.bottom }, side ? { left: side + 12, bottom: 12 + insets.bottom } : null]} pointerEvents="box-none">
-          <View style={styles.speedBox} accessible accessibilityLabel={t.guidance.speedA11y(trip.speedKmh === null ? null : `${speedValue(trip.speedKmh)} ${speedUnit()}`, trip.limitKmh ? `${speedValue(trip.limitKmh)} ${speedUnit()}` : null, over)}>
-            {trip.limitKmh ? (
-              <View style={styles.limit} testID="speed-limit">
-                <Text style={styles.limitText}>{speedValue(trip.limitKmh)}</Text>
-              </View>
-            ) : null}
-            <View style={[styles.speed, over && styles.speedOver]} testID="speed">
-              <Text style={[styles.speedText, over && { color: '#FFFFFF' }]}>{trip.speedKmh === null ? '–' : speedValue(trip.speedKmh)}</Text>
-              <Text style={[styles.speedUnit, over && { color: '#FFFFFF' }]}>{speedUnit()}</Text>
-            </View>
-          </View>
+          {speedo.show ? <Speedometer s={speedo} /> : <View />}
           <View style={styles.actions}>
             <RoundBtn label={muted ? t.guidance.voiceOn : t.guidance.voiceOff} pressed={muted} onPress={() => setMuted(!muted)}>
               <NavIcon name={muted ? 'voice-off' : 'voice-on'} size={26} color={muted ? colors.danger : colors.ink} />
@@ -335,6 +326,7 @@ export function Guidance({ nav, onRecharge }: { nav: TripApi; onRecharge: (s: St
           </View>
         </View>
       ) : null}
+      <SpeedEdge on={speedo.alert && !trip.arrived && !trip.arrivedAtVia} />
     </View>
   );
 }
@@ -401,13 +393,6 @@ const styles = StyleSheet.create({
   pillOk: { backgroundColor: colors.accentSoft, borderWidth: 2, borderColor: colors.accent },
   pillInfo: { backgroundColor: colors.surface },
   side: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
-  speedBox: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-  speed: { width: 76, height: 76, borderRadius: 38, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', ...shadow },
-  speedOver: { backgroundColor: colors.danger },
-  speedText: { fontFamily: fonts.display, fontSize: 30, lineHeight: 34, color: colors.ink },
-  speedUnit: { fontFamily: fonts.semibold, fontSize: 12, color: colors.inkMuted },
-  limit: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#FFFFFF', borderWidth: 7, borderColor: colors.danger, alignItems: 'center', justifyContent: 'center', ...shadow },
-  limitText: { fontFamily: fonts.display, fontSize: 22, color: colors.ink },
   actions: { gap: 10 },
   round: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', ...shadow },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingHorizontal: 18, paddingTop: 14, gap: 6, ...shadow },
