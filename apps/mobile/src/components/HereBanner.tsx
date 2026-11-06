@@ -16,7 +16,7 @@ import { applyFilters, displayName, distanceKm, loadAround, nearest, NO_FILTERS,
 import { autoFinish, departed } from '../lib/autoEnd';
 import { allDown, nearestFree } from '../lib/nearestFree';
 import { store, type DirectCharge } from '../lib/store';
-import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { colors, fonts, MIN_TOUCH, radius, mapColors } from '../theme';
 import { Button, Notice } from './ui';
 import { useT } from '../i18n';
 import { distText } from '../i18n/format';
@@ -228,8 +228,8 @@ export function HereBanner({ user, onPick, filters = NO_FILTERS, onAdvised }: { 
 const styles = StyleSheet.create({
   soft: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
   small: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17, color: colors.inkMuted },
-  cardDown: { backgroundColor: colors.dangerSoft, borderColor: colors.danger },
-  down: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 18, color: colors.danger, marginTop: 2 },
+  cardDown: { backgroundColor: colors.surfaceAlt, borderColor: mapColors.statusDown },
+  down: { fontFamily: fonts.bold, fontSize: 13, lineHeight: 18, color: mapColors.statusDown, marginTop: 2 },
   card: { backgroundColor: colors.accentSoft, borderRadius: radius.lg, padding: 14, gap: 10, borderWidth: 2, borderColor: colors.accent },
   row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   kicker: { fontFamily: fonts.semibold, fontSize: 12, color: colors.accentPressed, textTransform: 'uppercase', letterSpacing: 0.5 },

@@ -26,7 +26,7 @@ import { compatible, loadVehicle, saveVehicle, type Vehicle } from '../lib/vehic
 import { loadWallet, type Wallet } from '../lib/accounts';
 import { appOnly, badgeMentioned, badgeNames, nearestPayable, surelyPayable } from '../lib/methods';
 import { loadPortals, preauthMaxOf, type Portals } from '../lib/portals';
-import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { colors, fonts, mapColors, MIN_TOUCH, radius } from '../theme';
 import { Icon } from '../components/Icon';
 import { ScreenHeader } from '../components/Screen';
 import { useLocale, useT } from '../i18n';
@@ -296,7 +296,7 @@ export default function Recharger() {
           <Text style={styles.h2} accessibilityRole="header">{R.pickPoint}</Text>
           <Text style={styles.p}>{R.pickPointHelp}</Text>
           {usable.map((p) => (
-            <PointRow key={p.id} p={p} onPress={() => pick(p)} selected={p.id === pointId} status={avail[p.id]} />
+            <PointRow key={p.id} p={p} onPress={() => pick(p)} selected={p.id === pointId} status={avail[p.id]} large={large} />
           ))}
           {!usable.length ? <Notice tone="demo">{R.noCompatible(vehicle?.name ?? R.yourVehicle)}</Notice> : null}
           {incompatible.length ? (
@@ -306,7 +306,7 @@ export default function Recharger() {
                   {R.toggleIncompatible(showIncompatible, incompatible.length, vehicle?.name ?? R.yourVehicle)}
                 </Text>
               </Pressable>
-              {showIncompatible ? incompatible.map((p) => <PointRow key={p.id} p={p} disabled />) : null}
+              {showIncompatible ? incompatible.map((p) => <PointRow key={p.id} p={p} disabled large={large} />) : null}
             </>
           ) : null}
           {station.p > points.length ? <Text style={styles.small}>{R.otherPoints(station.p - points.length)}</Text> : null}
@@ -319,14 +319,14 @@ export default function Recharger() {
             onPress={() => {
               setChoosing(true);
             }}
-            style={styles.pointChip}
+            style={[styles.pointChip, large && styles.pointChipLarge]}
             disabled={points.length < 2}
           >
             <Text style={styles.pointShort}>…{point.short}</Text>
-            <Text style={[styles.p, { flex: 1 }]} numberOfLines={2}>
+            <Text style={[styles.p, !large && { flex: 1 }]}>
               {kw(point.kw)} · {point.plugs.map((p) => plugLabel(p)).join(', ')}
             </Text>
-            {points.length > 1 ? <Text style={styles.linkText}>{t.common.change}</Text> : null}
+            {points.length > 1 ? <Text style={[styles.linkText, large && { minHeight: MIN_TOUCH, lineHeight: MIN_TOUCH }]}>{t.common.change}</Text> : null}
           </Pressable>
 
           {/* Prix avant de payer */}
@@ -340,15 +340,15 @@ export default function Recharger() {
               <View style={[styles.estRow, large && { flexDirection: 'column' }]}>
                 <Big label={R.energy} value={withUnit(kwhText(est.kWhBilled))} large={large} />
                 <Big label={R.duration} value={withUnit(`≈${NBSP}${durationLabel(est.minutes)}`)} large={large} />
-                <Big label={R.cost} value={est.cost != null ? `≈${NBSP}${euros(Math.round(est.cost * 100))}` : R.unknown} large={large} />
+                <Big label={R.cost} value={est.cost != null ? `≈${NBSP}${euros(Math.round(est.cost * 100))}` : est.freeDoubtful ? R.toConfirm : R.unknown} large={large} />
               </View>
               <Text style={styles.small}>
                 {withUnit(R.powerNote(kw(est.powerKw), isDc(point.kw, point.plugs), kw(point.kw), est.assumedVehicle))}
                 {est.partial ? R.partial : ''}
-                {est.unknownPrice && (describeTariff(tariff).length || tariff.kind === 'link') ? R.unknownPriceNote : ''}
+                {est.unknownPrice && !est.freeDoubtful && (describeTariff(tariff).length || tariff.kind === 'link') ? R.unknownPriceNote : ''}
               </Text>
-              <View style={styles.socRow}>
-                <Text style={[styles.p, { flex: 1 }]}>{R.socNow(soc == null)}</Text>
+              <View style={[styles.socRow, large && styles.socRowLarge]}>
+                <Text style={[styles.p, !large && { flex: 1 }, large && { width: '100%' }]}>{R.socNow(soc == null)}</Text>
                 <Pressable accessibilityRole="button" accessibilityLabel={R.socMinus} onPress={() => changeSoc(-5)} style={styles.step}>
                   <Text style={styles.stepText}>−</Text>
                 </Pressable>
@@ -472,9 +472,7 @@ export default function Recharger() {
               >
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={styles.altTitle}>{o.label}</Text>
-                  <Text style={styles.small} numberOfLines={3}>
-                    {o.why}
-                  </Text>
+                  <Text style={styles.small}>{o.why}</Text>
                 </View>
                 {!o.available ? (
                   <Tag>{t.common.unavailable}</Tag>
@@ -510,7 +508,7 @@ export default function Recharger() {
   );
 }
 
-function PointRow({ p, onPress, selected, disabled, status }: { p: ChargePoint; onPress?: () => void; selected?: boolean; disabled?: boolean; status?: AvailItem }) {
+function PointRow({ p, onPress, selected, disabled, status, large }: { p: ChargePoint; onPress?: () => void; selected?: boolean; disabled?: boolean; status?: AvailItem; large?: boolean }) {
   const R = useT().recharger;
   const dc = isDc(p.kw, p.plugs);
   return (
@@ -520,24 +518,28 @@ function PointRow({ p, onPress, selected, disabled, status }: { p: ChargePoint; 
       accessibilityState={{ disabled: !!disabled, selected: !!selected }}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.point, selected && styles.pointOn, disabled && styles.altOff, pressed && { backgroundColor: colors.surfaceAlt }]}
+      style={({ pressed }) => [styles.point, large && styles.pointLarge, selected && styles.pointOn, disabled && styles.altOff, pressed && { backgroundColor: colors.surfaceAlt }]}
     >
       <View style={[styles.label, selected && styles.labelOn]}>
         <Text style={[styles.labelSmall, selected && { color: '#FFFFFF' }]}>{p.id.length > 4 ? '…' : ''}</Text>
         <Text style={[styles.labelBig, selected && { color: '#FFFFFF' }]}>{p.short}</Text>
       </View>
-      <View style={{ flex: 1, gap: 2 }}>
+      <View style={large ? { gap: 2, alignSelf: 'stretch' } : { flex: 1, gap: 2 }}>
         <Text style={styles.altTitle}>
           {kw(p.kw)} · {dc ? R.fast : R.normal}
         </Text>
-        <Text style={styles.small} numberOfLines={2}>
+        <Text style={styles.small}>
           {p.plugs.map((x) => plugLabel(x)).join(', ') || R.plugUnknown}
-          {p.exact ? '' : R.stationPlugs} · {p.id}
+          {p.exact ? '' : R.stationPlugs}
+        </Text>
+        {/* Identifiant complet sur sa propre ligne (coupé n'importe où plutôt que tronqué) */}
+        <Text style={[styles.small, styles.pointId]} selectable>
+          {p.id}
         </Text>
       </View>
       {status && status.status !== 'inconnu' ? (
         <View style={[styles.pill, status.status === 'libre' ? styles.pillFree : status.status === 'occupe' ? styles.pillBusy : styles.pillDown]}>
-          <Text style={[styles.pillText, status.status === 'libre' ? { color: colors.accentPressed } : status.status === 'occupe' ? { color: colors.warnText } : { color: colors.danger }]}>{availLabel(status.status)}</Text>
+          <Text style={[styles.pillText, status.status === 'libre' ? { color: colors.accentPressed } : status.status === 'occupe' ? { color: colors.warnText } : { color: mapColors.statusDown }]}>{availLabel(status.status)}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -549,7 +551,8 @@ function Big({ label, value, large }: { label: string; value: string; large?: bo
     <View style={styles.big}>
       <Text style={styles.bigLabel}>{label}</Text>
       {/* Texte agrandi : jamais tronqué ni réduit sur une ligne */}
-      <Text style={styles.bigValue} numberOfLines={large ? undefined : 1} adjustsFontSizeToFit={!large}>
+      {/* Mot (« Inconnu », « Unbekannt ») : police réduite et retour à la ligne permis, jamais tronqué */}
+      <Text style={[styles.bigValue, !/\d/.test(value) && value.length > 6 && styles.bigValueLong]} numberOfLines={large || !/\d/.test(value) ? undefined : 1}>
         {value}
       </Text>
     </View>
@@ -578,6 +581,9 @@ const styles = StyleSheet.create({
   methodCard: { borderWidth: 2, borderColor: colors.accent },
   cardTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.ink },
   point: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, minHeight: 72, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  // Texte agrandi : pastille, puissance et statut empilés (aucun défilement horizontal)
+  pointLarge: { flexDirection: 'column', alignItems: 'flex-start', gap: 8 },
+  pointId: { fontFamily: fonts.medium, wordBreak: 'break-all' } as object,
   pointOn: { borderColor: colors.accent, borderWidth: 2 },
   label: { minWidth: 82, paddingVertical: 6, paddingHorizontal: 8, borderRadius: radius.sm, backgroundColor: colors.accentSoft, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
   labelOn: { backgroundColor: colors.accent },
@@ -586,9 +592,10 @@ const styles = StyleSheet.create({
   pill: { borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 8 },
   pillFree: { backgroundColor: colors.accentSoft },
   pillBusy: { backgroundColor: colors.warnSoft },
-  pillDown: { backgroundColor: colors.dangerSoft },
+  pillDown: { backgroundColor: colors.surfaceAlt },
   pillText: { fontFamily: fonts.bold, fontSize: 12 },
   pointChip: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, paddingHorizontal: 12, borderRadius: radius.md, backgroundColor: colors.accentSoft },
+  pointChipLarge: { flexDirection: 'column', alignItems: 'flex-start', gap: 2, paddingVertical: 8 },
   pointShort: { fontFamily: fonts.display, fontSize: 20, color: colors.accentPressed, letterSpacing: 1 },
   estimate: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 12, gap: 8 },
   estLabel: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink },
@@ -596,7 +603,9 @@ const styles = StyleSheet.create({
   big: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.sm, paddingVertical: 8, paddingHorizontal: 8, gap: 2 },
   bigLabel: { fontFamily: fonts.semibold, fontSize: 11, color: colors.inkMuted },
   bigValue: { fontFamily: fonts.display, fontSize: 17, color: colors.ink },
+  bigValueLong: { fontSize: 14, lineHeight: 20 },
   socRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  socRowLarge: { flexWrap: 'wrap', justifyContent: 'flex-start' },
   step: { width: MIN_TOUCH, height: MIN_TOUCH, borderRadius: 22, backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   stepText: { fontFamily: fonts.bold, fontSize: 22, color: colors.accentPressed },
   socValue: { fontFamily: fonts.display, fontSize: 18, color: colors.accentPressed, minWidth: 54, textAlign: 'center' },

@@ -12,7 +12,7 @@ import { Guidance, guidanceSide } from '../components/Guidance';
 import { SearchBar } from '../components/SearchBar';
 import { useRechargeHere } from '../lib/useRechargeHere';
 import { Button, Chip, Notice } from '../components/ui';
-import { getAvailability, stationStatus, stationSummary, type StationStatus } from '../lib/availability';
+import { availabilityDown, getAvailability, stationStatus, stationSummary, type StationStatus } from '../lib/availability';
 import { groupColocated } from '../lib/colocated';
 import { apiEnabled, getConfigWithRetry, type ApiConfig } from '../lib/api';
 import { DEFAULT_CENTER } from '../lib/config';
@@ -30,7 +30,7 @@ import { MapControls, useMapControls } from '../components/MapControls';
 import { AppMenu, chargeState, MenuButton, type ChargeState } from '../components/AppMenu';
 import { Icon } from '../components/Icon';
 import { useT } from '../i18n';
-import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { colors, fonts, mapColors, MIN_TOUCH, radius } from '../theme';
 import { useLargeText } from '../lib/useLargeText';
 
 type Pos = { lat: number; lon: number };
@@ -70,6 +70,7 @@ export default function MapScreen() {
   const [sheetH, setSheetH] = useState(0);
   const [advisedId, setAdvisedId] = useState<string | null>(null);
   const [status, setStatus] = useState<Record<string, StationStatus>>({});
+  const [availDown, setAvailDown] = useState(false);
   const large = useLargeText();
   // Panneau : remis en haut à chaque fiche ouverte (titre et « Recharger ici » visibles sans défiler).
   const sheetScroll = useRef<ScrollViewInstance>(null);
@@ -178,6 +179,7 @@ export default function MapScreen() {
     const list = statusKey.split(',').map((id) => byId.get(id)).filter((s): s is Station => !!s);
     getAvailability(list.flatMap((s) => (s.pdc ?? []).map(([id]) => id))).then((items) => {
       if (!alive) return;
+      setAvailDown(availabilityDown());
       // Pas de réponse (chargement, échec) : aucune mention ; « inconnu » seulement si l'API renvoie ce statut.
       const next: Record<string, StationStatus> = {};
       for (const s of list) {
@@ -224,9 +226,9 @@ export default function MapScreen() {
   // Synchronisation carte
   useEffect(() => {
     if (!mapReady) return;
-    // Bornes au même endroit (≤ 5 m) : une pastille « 3 bornes ici » qui se déploie en éventail au toucher.
+    // Bornes au même endroit (≤ 15 m, même parking) : une pastille « 3 bornes ici » qui se déploie en éventail au toucher.
     const gOf = new Map<string, string>();
-    const groups = groupColocated(visible)
+    const groups = groupColocated(visible, 15)
       .filter((g) => g.length > 1)
       .map((g) => {
         const key = g.map((s) => s.id).sort()[0];
@@ -299,6 +301,14 @@ export default function MapScreen() {
     if (user) map.current?.post({ type: 'fly', ...user, zoom: 14, offsetY: -height * 0.18 });
   }
 
+  // Squelette : chargement de la zone qui dure (> 300 ms) après un déplacement de la carte.
+  const [skeleton, setSkeleton] = useState(false);
+  useEffect(() => {
+    if (!loading || (!panned && user)) return setSkeleton(false);
+    const timer = setTimeout(() => setSkeleton(true), 300);
+    return () => clearTimeout(timer);
+  }, [loading, panned, !!user]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const toggle = (k: keyof Filters) => setFilters((f) => ({ ...f, [k]: !f[k] }));
   const availText = (st: StationStatus) => (st === 'free' ? t.avail.libre : st === 'busy' ? t.avail.occupe : st === 'down' ? t.avail.hors_service : t.avail.inconnu);
 
@@ -356,7 +366,7 @@ export default function MapScreen() {
       <View
         style={[
           styles.sheet,
-          wide ? [styles.sheetWide, { top: topH, width: PANEL }] : { maxHeight: sheetMax },
+          wide ? [styles.sheetWide, { top: topH, width: PANEL, maxHeight: height - topH - 16 }] : { maxHeight: sheetMax },
           { paddingBottom: insets.bottom + 12 },
           trip?.guiding ? { display: 'none' } : null,
         ]}
@@ -425,10 +435,21 @@ export default function MapScreen() {
                   />
                 </View>
               ) : null}
-              {loading && !closest.length ? (
-                <View style={styles.loading}>
-                  <ActivityIndicator color={colors.accent} />
-                  <Text style={styles.muted}>{loc === 'pending' ? t.map.locating : t.map.loading}</Text>
+              {availDown && !dataError && closest.length && !skeleton ? (
+                <Text style={styles.small} testID="avail-down">{t.avail.offline}</Text>
+              ) : null}
+              {(loading && !closest.length) || skeleton ? (
+                <View style={{ gap: 12 }} testID="list-skeleton">
+                  <View style={styles.loading} accessibilityLiveRegion="polite">
+                    <ActivityIndicator color={colors.accent} />
+                    <Text style={styles.muted}>{loc === 'pending' ? t.map.locating : t.map.loading}</Text>
+                  </View>
+                  {[0, 1, 2].map((k) => (
+                    <View key={k} style={styles.skel} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                      <View style={[styles.skelBar, { width: '70%', height: 16 }]} />
+                      <View style={[styles.skelBar, { width: '45%' }]} />
+                    </View>
+                  ))}
                 </View>
               ) : null}
               {!loading && !dataError && !closest.length ? (
@@ -441,7 +462,7 @@ export default function MapScreen() {
                   ) : null}
                 </View>
               ) : null}
-              {closest.map(({ s }, i) => {
+              {(skeleton ? [] : closest).map(({ s }, i) => {
                 // Distance seulement depuis la position réelle (jamais depuis le centre de la carte).
                 const d = user ? distanceKm(user, s) : null;
                 const st = status[s.id];
@@ -464,7 +485,7 @@ export default function MapScreen() {
                     {/* Statut temps réel par ligne ; rien tant que l'API n'a pas répondu ; « inconnu » renvoyé : mention discrète, sans pastille. */}
                     {st ? (
                       <View style={[styles.pill, st === 'free' ? styles.pillFree : st === 'busy' ? styles.pillBusy : st === 'down' ? styles.pillDown : styles.pillUnknown]} accessibilityElementsHidden importantForAccessibility="no">
-                        <Text style={[styles.pillText, { color: st === 'free' ? colors.accentPressed : st === 'busy' ? colors.warnText : st === 'down' ? colors.danger : colors.inkMuted }, st === 'unknown' && styles.pillTextUnknown]}>{stLabel}</Text>
+                        <Text style={[styles.pillText, { color: st === 'free' ? colors.accentPressed : st === 'busy' ? colors.warnText : st === 'down' ? mapColors.statusDown : colors.inkMuted }, st === 'unknown' && styles.pillTextUnknown]}>{stLabel}</Text>
                       </View>
                     ) : null}
                   </View>
@@ -531,7 +552,7 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   // Large (>= 768 px) : panneau latéral pleine hauteur sous la recherche, sans poignée.
-  sheetWide: { right: undefined, left: 16, bottom: 16, borderRadius: radius.xl, paddingTop: 16 },
+  sheetWide: { right: undefined, left: 16, bottom: undefined, borderRadius: radius.xl, paddingTop: 16 },
   grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong, marginBottom: 10 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   infoBtn: { width: MIN_TOUCH, height: MIN_TOUCH, borderRadius: 22, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
@@ -542,6 +563,8 @@ const styles = StyleSheet.create({
   staleBody: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.warnText },
   h1: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   loading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
+  skel: { gap: 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: 12, minHeight: 64, justifyContent: 'center' },
+  skelBar: { height: 12, borderRadius: 6, backgroundColor: colors.surfaceAlt },
   muted: { fontFamily: fonts.medium, fontSize: 14, color: colors.inkMuted },
   item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, minHeight: 64 },
   itemFirst: { borderColor: colors.accent, borderWidth: 2 },
@@ -549,7 +572,7 @@ const styles = StyleSheet.create({
   pill: { alignSelf: 'flex-start', borderRadius: radius.sm, paddingVertical: 2, paddingHorizontal: 8, marginTop: 2 },
   pillFree: { backgroundColor: colors.accentSoft },
   pillBusy: { backgroundColor: colors.warnSoft },
-  pillDown: { backgroundColor: colors.dangerSoft },
+  pillDown: { backgroundColor: colors.surfaceAlt },
   pillUnknown: { paddingHorizontal: 0, paddingVertical: 0 },
   pillText: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
   pillTextUnknown: { fontFamily: fonts.medium },

@@ -70,7 +70,7 @@ export const nl: Dict = {
     account: 'Gekoppeld exploitantaccount',
     badge: 'Laadpas',
   },
-  avail: { libre: 'Vrij', occupe: 'Bezet', hors_service: 'Buiten gebruik', inconnu: 'Status onbekend' },
+  avail: { libre: 'Vrij', occupe: 'Bezet', hors_service: 'Buiten gebruik', inconnu: 'Status onbekend', offline: 'Realtime beschikbaarheid niet beschikbaar' },
   incident: {
     accident: 'Ongeval',
     travaux: 'Wegwerkzaamheden',
@@ -174,7 +174,7 @@ export const nl: Dict = {
     zoomIn: 'Inzoomen',
     zoomOut: 'Uitzoomen',
     locPending: 'Locatie bepalen…',
-    locDenied: 'Locatie geweigerd. Sta deze toe in de instellingen van je browser of telefoon en tik dan op „Mijn locatie”.',
+    locDenied: 'Locatie geweigerd. Sta deze toe in de instellingen van je browser of telefoon en tik dan op „Opnieuw proberen”.',
     locUnavailable: 'Locatie nu niet beschikbaar (zwak gps-signaal of dienst uitgeschakeld).',
     retry: 'Opnieuw proberen',
     compassUnavailable: 'Kompas niet beschikbaar op dit apparaat: de kaart draait mee met je rijrichting.',
@@ -244,7 +244,7 @@ export const nl: Dict = {
   },
   tariff: {
     free: 'Gratis volgens de exploitant.',
-    freeDoubtful: 'Als gratis opgegeven in de nationale database, te controleren.',
+    freeDoubtful: 'Gratis volgens de nationale database, te bevestigen bij de laadpaal.',
     energyRange: (a: string, b: string) => `Energie: ${a} tot ${b} afhankelijk van het tijdstip`,
     energy: (a: string, guessed: boolean) => `Energie: ${a}${guessed ? ' (eenheid niet vermeld, per kWh aangenomen)' : ''}`,
     time: (x: string) => `Laadtijd: ${x}`,
@@ -449,6 +449,7 @@ export const nl: Dict = {
   },
   search: {
     placeholder: 'Waar naartoe? Adres, plaats…',
+    placeholderShort: 'Waarheen?',
     a11y: 'Adres of plaats zoeken',
     clear: 'Zoekopdracht wissen',
     recents: 'Recent (op dit apparaat)',
@@ -489,6 +490,7 @@ export const nl: Dict = {
     duration: 'Duur',
     cost: 'Kosten',
     unknown: 'Onbekend',
+    toConfirm: 'Te bevestigen',
     powerNote: (p: string, dc: boolean, point: string, avg: boolean) =>
       `Vermogen ${p} (${dc ? 'gelijkstroom, vertraagt boven 50%' : 'wisselstroom'}): het minimum van laadpunt (${point}) en ${avg ? 'een gemiddelde auto' : 'je auto'}. Laadverliezen inbegrepen.`,
     partial: ' Slechts een deel van het tarief is gepubliceerd.',
@@ -654,7 +656,7 @@ export const nl: Dict = {
     scanHint: 'Opent de camera om de QR-code op de paal te lezen',
     camDenied: 'Camera geweigerd: sta hem toe in de instellingen, of voer de code hieronder in.',
     manualLabel: 'Of voer de link of code in die op de paal staat',
-    manualPh: 'bijv. FR*ABC*E1234 of https://…',
+    manualPh: 'FR*ABC*E1234 of link',
     manualA11y: 'Link of code van de paal',
     verify: 'Controleren',
     tone: {

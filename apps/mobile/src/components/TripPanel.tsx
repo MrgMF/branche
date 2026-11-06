@@ -52,7 +52,10 @@ export function TripPanel({ nav }: { nav: TripApi }) {
       ) : null}
       {trip.error ? (
         <>
-          <Notice tone="error">{trip.error}</Notice>
+          <View accessibilityLiveRegion="polite" role="alert">
+            <Notice tone="error">{trip.error}</Notice>
+          </View>
+          <Button label={t.mapCtl.retry} variant="secondary" onPress={nav.retry} loading={trip.loading} />
           <Text style={styles.muted}>{t.trip.launchWith}</Text>
           <View style={styles.row}>
             {navigationLinks(trip.dest).map((l) => (

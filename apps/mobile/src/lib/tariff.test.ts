@@ -155,7 +155,7 @@ describe('gratuité déclarée : crédible seulement < 50 kW et sans moyen de pa
     const t = parseTariff(ctx.free ? '' : 'Gratuit', ctx);
     expect(t.kind).not.toBe('free');
     expect(t.freeDoubtful).toBe(true);
-    expect(describeTariff(t)).toEqual(['Déclarée gratuite dans la base nationale, à vérifier.']);
+    expect(describeTariff(t)).toEqual(['Gratuit selon la base nationale, à confirmer sur la borne.']);
   });
   it('22 kW, badge seul ou rien : gratuit crédible', () => {
     expect(parseTariff('', { free: true, kw: 22, pay: ['badge'] }).kind).toBe('free');

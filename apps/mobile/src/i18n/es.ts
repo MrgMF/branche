@@ -73,7 +73,7 @@ export const es: Dict = {
     account: 'Cuenta del operador conectada',
     badge: 'Tarjeta de recarga',
   },
-  avail: { libre: 'Libre', occupe: 'Ocupado', hors_service: 'Fuera de servicio', inconnu: 'Estado desconocido' },
+  avail: { libre: 'Libre', occupe: 'Ocupado', hors_service: 'Fuera de servicio', inconnu: 'Estado desconocido', offline: 'Disponibilidad en tiempo real no disponible' },
   incident: {
     accident: 'Accidente',
     travaux: 'Obras',
@@ -177,7 +177,7 @@ export const es: Dict = {
     zoomIn: 'Acercar',
     zoomOut: 'Alejar',
     locPending: 'Buscando tu ubicación…',
-    locDenied: 'Ubicación denegada. Permítela en los ajustes del navegador o del teléfono y toca «Mi ubicación».',
+    locDenied: 'Ubicación denegada. Permítela en los ajustes del navegador o del teléfono y toca «Reintentar».',
     locUnavailable: 'Ubicación no disponible por ahora (GPS débil o servicio desactivado).',
     retry: 'Reintentar',
     compassUnavailable: 'Brújula no disponible en este dispositivo: el mapa se orientará según tu desplazamiento.',
@@ -247,7 +247,7 @@ export const es: Dict = {
   },
   tariff: {
     free: 'Gratis según el operador.',
-    freeDoubtful: 'Declarado gratuito en la base nacional, por verificar.',
+    freeDoubtful: 'Gratuito según la base nacional, a confirmar en el cargador.',
     energyRange: (a: string, b: string) => `Energía: de ${a} a ${b} según la hora`,
     energy: (a: string, guessed: boolean) => `Energía: ${a}${guessed ? ' (unidad no indicada, se supone por kWh)' : ''}`,
     time: (x: string) => `Tiempo de carga: ${x}`,
@@ -452,6 +452,7 @@ export const es: Dict = {
   },
   search: {
     placeholder: '¿Adónde vas? Dirección, lugar…',
+    placeholderShort: '¿Adónde vas?',
     a11y: 'Buscar una dirección o un lugar',
     clear: 'Borrar la búsqueda',
     recents: 'Recientes (en este dispositivo)',
@@ -492,6 +493,7 @@ export const es: Dict = {
     duration: 'Tiempo',
     cost: 'Coste',
     unknown: 'Desconocido',
+    toConfirm: 'Por confirmar',
     powerNote: (p: string, dc: boolean, point: string, avg: boolean) =>
       `Potencia ${p} (${dc ? 'corriente continua, baja a partir del 50 %' : 'corriente alterna'}): el mínimo entre el punto (${point}) y ${avg ? 'un vehículo medio' : 'tu vehículo'}. Pérdidas de carga incluidas.`,
     partial: ' Solo se publica una parte de la tarifa.',
@@ -657,7 +659,7 @@ export const es: Dict = {
     scanHint: 'Abre la cámara para leer el código QR del cargador',
     camDenied: 'Cámara denegada: permítela en los ajustes o introduce el código abajo.',
     manualLabel: 'O introduce el enlace o el identificador del cargador',
-    manualPh: 'p. ej. FR*ABC*E1234 o https://…',
+    manualPh: 'FR*ABC*E1234 o enlace',
     manualA11y: 'Enlace o identificador del cargador',
     verify: 'Verificar',
     tone: {

@@ -206,6 +206,10 @@ const followOffset = () => {
   return followOffsetFor(width, height);
 };
 
+/** Marges du cadrage d'aperçu : sous la recherche et au-dessus de la feuille (mobile), à droite du panneau (large). */
+const previewPad = (sheetH: number) =>
+  Dimensions.get('window').width >= 768 ? { top: 90, bottom: 60, left: 16 + 440 + 40, right: 100 } : { top: 150, bottom: sheetH + 30 };
+
 export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null, sheetH: number) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const tripRef = useRef<Trip | null>(null);
@@ -365,7 +369,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
         let routes = routeOptions(res);
         if (mode === 'reroute') routes = routes.slice(0, 1);
         const all = routes.flatMap((r) => r.geometry);
-        if (mode === 'preview') map.current?.post({ type: 'fit', bounds: bboxOf(all, 0.002), top: 150, bottom: sheetH + 30 });
+        if (mode === 'preview') map.current?.post({ type: 'fit', bounds: bboxOf(all, 0.002), ...previewPad(sheetH) });
         const [f, zones] = await Promise.all([
           getIncidents(bboxOf(all)).catch(() => ({ incidents: [] as Incident[], feedOk: false, updatedAt: null })),
           loadDangerZones(),
@@ -414,6 +418,13 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
       } catch (e) {
         if (id !== reqId.current) return;
         const msg = e instanceof Error ? e.message : tr().trip.unavailable;
+        // Aperçu sans itinéraire : destination marquée et cadrée avec la position (le conducteur voit où il va).
+        if (mode === 'preview') {
+          map.current?.post({ type: 'route', coords: [] });
+          map.current?.post({ type: 'pins', items: [] });
+          map.current?.post({ type: 'dest', lat: base.dest.lat, lon: base.dest.lon });
+          map.current?.post({ type: 'fit', bounds: bboxOf([[from.lon, from.lat], [base.dest.lon, base.dest.lat]], 0.004), ...previewPad(sheetH), maxZoom: 15 });
+        }
         // En guidage, on garde l'ancien tracé : un recalcul raté n'interrompt pas la conduite.
         // Hors itinéraire, l'état « recalcul » reste affiché (sans flèche ni manœuvre périmée) jusqu'au prochain essai réussi.
         setTrip((t) =>
@@ -440,12 +451,27 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
       const base = blank(dest, { options: prev?.options ?? { avoidTolls: set.avoidTolls, avoidMotorways: set.avoidMotorways }, routes: prev?.dest.id === dest.id ? prev.routes : [] });
       if (!user) {
         setTrip({ ...base, error: tr().trip.noPosition, gps: 'unavailable' });
+        // Sans position : destination marquée et centrée
+        map.current?.post({ type: 'route', coords: [] });
+        map.current?.post({ type: 'dest', lat: dest.lat, lon: dest.lon });
+        map.current?.post({ type: 'fly', lat: dest.lat, lon: dest.lon, zoom: 15, offsetY: Dimensions.get('window').width >= 768 ? 0 : -sheetH * 0.4 });
         return;
       }
       void compute(base, user, 'preview');
     },
-    [user, compute],
+    [user, compute, map, sheetH],
   );
+
+  /** Échec du calcul : nouvel essai vers la même destination (mêmes options). */
+  const retry = useCallback(() => {
+    const t = tripRef.current;
+    if (!t || t.guiding) return;
+    if (!user) {
+      setTrip({ ...t, error: tr().trip.noPosition, gps: 'unavailable' });
+      return;
+    }
+    void compute({ ...t, error: null }, user, 'preview');
+  }, [user, compute]);
 
   const setOption = useCallback(
     (k: keyof RouteOptions, v: boolean) => {
@@ -920,6 +946,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
   return {
     trip,
     plan,
+    retry,
     start,
     clear,
     setOption,

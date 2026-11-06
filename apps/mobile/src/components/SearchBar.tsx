@@ -1,6 +1,6 @@
 // Recherche d'adresse ou de lieu (TomTom Search, repli Photon), avec destinations récentes stockées sur l'appareil.
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { distanceKm } from '../lib/stations';
 import { km } from '../lib/format';
 import { searchPlaces, type Place } from '../lib/navigation';
@@ -17,6 +17,10 @@ export function SearchBar(props: { near: { lat: number; lon: number } | null; on
   const [recents, setRecents] = useState<Place[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // « Aucun résultat » : information (couleur neutre) ; service indisponible : erreur (danger).
+  const [noResult, setNoResult] = useState(false);
+  // Écran étroit (320 px) : invite courte, jamais coupée au milieu d'un mot
+  const narrow = useWindowDimensions().width < 360;
   const [attribution, setAttribution] = useState('');
   const input = useRef<{ blur: () => void } | null>(null);
   const nearRef = useRef(props.near);
@@ -29,6 +33,7 @@ export function SearchBar(props: { near: { lat: number; lon: number } | null; on
   useEffect(() => {
     const text = q.trim();
     setError(null);
+    setNoResult(false);
     if (text.length < 3) {
       setResults([]);
       setBusy(false);
@@ -41,7 +46,10 @@ export function SearchBar(props: { near: { lat: number; lon: number } | null; on
         .then((r) => {
           setResults(r.results);
           setAttribution(r.attribution);
-          if (!r.results.length) setError(t.search.none);
+          if (!r.results.length) {
+            setError(t.search.none);
+            setNoResult(true);
+          }
         })
         .catch((e) => {
           if (!(e instanceof Error && e.name === 'AbortError')) setError(e instanceof Error ? e.message : t.search.unavailable);
@@ -82,7 +90,7 @@ export function SearchBar(props: { near: { lat: number; lon: number } | null; on
           onChangeText={setQ}
           onFocus={() => focus(true)}
           onBlur={() => setTimeout(() => focus(false), Platform.OS === 'web' ? 200 : 0)}
-          placeholder={t.search.placeholder}
+          placeholder={narrow ? t.search.placeholderShort : t.search.placeholder}
           placeholderTextColor={colors.inkMuted}
           accessibilityLabel={t.search.a11y}
           returnKeyType="search"
@@ -137,7 +145,7 @@ export function SearchBar(props: { near: { lat: number; lon: number } | null; on
               {props.near ? <Text style={styles.sub}>{km(distanceKm(props.near, p))}</Text> : null}
             </Pressable>
           ))}
-          {error && !showRecents ? <Text style={styles.error}>{error}</Text> : null}
+          {error && !showRecents ? <Text style={[styles.error, noResult && styles.info]}>{error}</Text> : null}
           {!showRecents && results.length ? <Text style={styles.attr}>{t.search.attribution(attribution)}</Text> : null}
         </View>
       ) : null}
@@ -184,5 +192,6 @@ const styles = StyleSheet.create({
   label: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
   sub: { fontFamily: fonts.medium, fontSize: 13, color: colors.inkMuted },
   error: { fontFamily: fonts.medium, fontSize: 14, color: colors.danger, paddingHorizontal: 14, paddingVertical: 10 },
+  info: { color: colors.inkMuted },
   attr: { fontFamily: fonts.body, fontSize: 11, color: colors.inkMuted, paddingHorizontal: 14, paddingTop: 4, paddingBottom: 6 },
 });

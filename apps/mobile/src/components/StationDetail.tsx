@@ -4,11 +4,11 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ApiConfig } from '../lib/api';
 import { navigationLinks, startCharge } from '../lib/charge';
 import { euros, km, kw, minutes, payLabel, plugLabel } from '../lib/format';
-import { getAvailability, stationSummary, type AvailItem } from '../lib/availability';
+import { availabilityDown, getAvailability, stationSummary, type AvailItem } from '../lib/availability';
 import { getCommunity, type Community } from '../lib/community';
 import { displayName, type Station } from '../lib/stations';
 import { store } from '../lib/store';
-import { colors, fonts, MIN_TOUCH, radius } from '../theme';
+import { colors, fonts, mapColors, MIN_TOUCH, radius } from '../theme';
 import { TariffLines } from './Pricing';
 import { freeCredible } from '../lib/tariff';
 import { allDown, nearestFree } from '../lib/nearestFree';
@@ -100,7 +100,10 @@ export function StationDetail(props: {
       {/* Action principale juste sous les chiffres clés : visible sans défiler, même en 320 px. */}
       {down ? (
         <View style={styles.cta} testID="station-down">
-          <Notice tone="error">{t.station.allDown}</Notice>
+          {/* Hors service : même jeton neutre que la carte et la liste (statusDown), pas le rouge « danger » */}
+          <View style={styles.down} accessibilityRole="alert">
+            <Text style={styles.downText}>{t.station.allDown}</Text>
+          </View>
           {alt ? (
             <Button
               label={t.station.nearestFree}
@@ -136,6 +139,8 @@ export function StationDetail(props: {
         </Text>
       ) : !live.known && live.reported ? (
         <Text style={[styles.live, styles.liveUnknown]} testID="station-unknown">{t.avail.inconnu}</Text>
+      ) : live.offline ? (
+        <Text style={styles.small} testID="station-avail-down">{t.avail.offline}</Text>
       ) : null}
 
       <View style={styles.tags}>
@@ -180,15 +185,21 @@ export function StationDetail(props: {
 /** Disponibilité temps réel des points de la station (cache 60 s partagé : la fiche et l'action collante ne refont pas la requête). */
 function useLive(s: Station) {
   const [avail, setAvail] = useState<Record<string, AvailItem>>({});
+  const [offline, setOffline] = useState(false);
   useEffect(() => {
     let alive = true;
     setAvail({});
-    getAvailability((s.pdc ?? []).map(([id]) => id)).then((a) => alive && setAvail(a));
+    setOffline(false);
+    getAvailability((s.pdc ?? []).map(([id]) => id)).then((a) => {
+      if (!alive) return;
+      setAvail(a);
+      setOffline(availabilityDown());
+    });
     return () => {
       alive = false;
     };
   }, [s.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  return stationSummary(s, avail);
+  return { ...stationSummary(s, avail), offline };
 }
 
 function MainButton({ s, near, down }: { s: Station; near: boolean; down: boolean }) {
@@ -242,6 +253,8 @@ const styles = StyleSheet.create({
   cta: { gap: 2 },
   payCard: { borderWidth: 2, borderColor: colors.accent, borderRadius: radius.lg, padding: 14, gap: 10 },
   live: { fontFamily: fonts.bold, fontSize: 14 },
+  down: { borderRadius: radius.md, borderWidth: 1, borderColor: mapColors.statusDown, backgroundColor: colors.surfaceAlt, paddingVertical: 10, paddingHorizontal: 12 },
+  downText: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20, color: colors.ink },
   liveUnknown: { fontFamily: fonts.medium, color: colors.inkMuted },
   sticky: { paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface },
   payTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.ink },

@@ -72,7 +72,7 @@ export const pt: Dict = {
     account: 'Conta do operador ligada',
     badge: 'Cartão de carregamento',
   },
-  avail: { libre: 'Livre', occupe: 'Ocupado', hors_service: 'Fora de serviço', inconnu: 'Estado desconhecido' },
+  avail: { libre: 'Livre', occupe: 'Ocupado', hors_service: 'Fora de serviço', inconnu: 'Estado desconhecido', offline: 'Disponibilidade em tempo real indisponível' },
   incident: {
     accident: 'Acidente',
     travaux: 'Obras',
@@ -176,7 +176,7 @@ export const pt: Dict = {
     zoomIn: 'Aproximar',
     zoomOut: 'Afastar',
     locPending: 'A obter a localização…',
-    locDenied: 'Localização recusada. Permita-a nas definições do navegador ou do telemóvel e toque em «A minha localização».',
+    locDenied: 'Localização recusada. Permita-a nas definições do navegador ou do telemóvel e toque em «Tentar novamente».',
     locUnavailable: 'Localização indisponível de momento (GPS fraco ou serviço desativado).',
     retry: 'Tentar novamente',
     compassUnavailable: 'Bússola indisponível neste dispositivo: o mapa orienta-se pela sua deslocação.',
@@ -246,7 +246,7 @@ export const pt: Dict = {
   },
   tariff: {
     free: 'Gratuito segundo o operador.',
-    freeDoubtful: 'Declarado gratuito na base nacional, a verificar.',
+    freeDoubtful: 'Gratuito segundo a base nacional, a confirmar no posto.',
     energyRange: (a: string, b: string) => `Energia: ${a} a ${b} consoante a hora`,
     energy: (a: string, guessed: boolean) => `Energia: ${a}${guessed ? ' (unidade não indicada, assumida por kWh)' : ''}`,
     time: (x: string) => `Tempo de carregamento: ${x}`,
@@ -451,6 +451,7 @@ export const pt: Dict = {
   },
   search: {
     placeholder: 'Para onde vai? Morada, local…',
+    placeholderShort: 'Para onde vai?',
     a11y: 'Pesquisar uma morada ou um local',
     clear: 'Limpar a pesquisa',
     recents: 'Recentes (neste dispositivo)',
@@ -491,6 +492,7 @@ export const pt: Dict = {
     duration: 'Duração',
     cost: 'Custo',
     unknown: 'Desconhecido',
+    toConfirm: 'A confirmar',
     powerNote: (p: string, dc: boolean, point: string, avg: boolean) =>
       `Potência ${p} (${dc ? 'corrente contínua, abranda após 50 %' : 'corrente alterna'}): o mínimo entre o ponto (${point}) e ${avg ? 'um veículo médio' : 'o seu veículo'}. Perdas de carregamento incluídas.`,
     partial: ' Só parte da tarifa está publicada.',
@@ -656,7 +658,7 @@ export const pt: Dict = {
     scanHint: 'Abre a câmara para ler o código QR colado no posto',
     camDenied: 'Câmara recusada: permita-a nas definições ou introduza o código abaixo.',
     manualLabel: 'Ou introduza o link ou o identificador inscrito no posto',
-    manualPh: 'por ex. FR*ABC*E1234 ou https://…',
+    manualPh: 'FR*ABC*E1234 ou link',
     manualA11y: 'Link ou identificador do posto',
     verify: 'Verificar',
     tone: {

@@ -12,6 +12,11 @@ export const availLabel = (s: AvailStatus): string => tr().avail[s];
 
 const TTL = 60_000;
 const cache = new Map<string, { t: number; v: AvailItem | null }>();
+// Dernière requête : réussie ou non (API configurée mais injoignable → mention discrète « temps réel indisponible »).
+let lastOk = 0;
+let lastFail = 0;
+/** Vrai si la dernière requête de disponibilité a échoué (API hors ligne, délai dépassé). */
+export const availabilityDown = (): boolean => !!API_URL && lastFail > lastOk;
 
 /** Statuts connus pour ces points ({} si l'API est absente ou injoignable). */
 export async function getAvailability(ids: string[]): Promise<Record<string, AvailItem>> {
@@ -31,8 +36,10 @@ export async function getAvailability(ids: string[]): Promise<Record<string, Ava
       if (!r.ok) throw new Error(String(r.status));
       const j = (await r.json()) as { items?: Record<string, AvailItem> };
       for (const id of chunk) cache.set(id, { t: now, v: j.items?.[id] ?? null });
+      lastOk = Date.now();
     } catch {
       for (const id of chunk) cache.set(id, { t: now - TTL + 15_000, v: null }); // réessai dans 15 s
+      lastFail = Date.now();
     }
   }
   for (const id of ids) {

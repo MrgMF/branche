@@ -74,7 +74,7 @@ export const fr = {
     account: 'Compte opérateur connecté',
     badge: 'Badge de recharge',
   },
-  avail: { libre: 'Libre', occupe: 'Occupé', hors_service: 'Hors service', inconnu: 'État inconnu' },
+  avail: { libre: 'Libre', occupe: 'Occupé', hors_service: 'Hors service', inconnu: 'État inconnu', offline: 'Disponibilité en temps réel indisponible' },
   incident: {
     accident: 'Accident',
     travaux: 'Travaux',
@@ -178,7 +178,7 @@ export const fr = {
     zoomIn: 'Zoomer',
     zoomOut: 'Dézoomer',
     locPending: 'Recherche de votre position…',
-    locDenied: 'Localisation refusée. Autorisez-la dans les réglages de votre navigateur ou de votre téléphone, puis touchez « Ma position ».',
+    locDenied: 'Localisation refusée. Autorisez-la dans les réglages de votre navigateur ou de votre téléphone, puis touchez « Réessayer ».',
     locUnavailable: 'Position indisponible pour le moment (signal GPS faible ou service désactivé).',
     retry: 'Réessayer',
     compassUnavailable: 'Boussole indisponible sur cet appareil : la carte s’orientera selon votre déplacement.',
@@ -248,7 +248,7 @@ export const fr = {
   },
   tariff: {
     free: 'Gratuit selon l’opérateur.',
-    freeDoubtful: 'Déclarée gratuite dans la base nationale, à vérifier.',
+    freeDoubtful: 'Gratuit selon la base nationale, à confirmer sur la borne.',
     energyRange: (a: string, b: string) => `Énergie : ${a} à ${b} selon l’heure`,
     energy: (a: string, guessed: boolean) => `Énergie : ${a}${guessed ? ' (unité non précisée, supposée au kWh)' : ''}`,
     time: (x: string) => `Temps de charge : ${x}`,
@@ -455,6 +455,7 @@ export const fr = {
   },
   search: {
     placeholder: 'Où allez-vous ? Adresse, lieu…',
+    placeholderShort: 'Où allez-vous ?',
     a11y: 'Rechercher une adresse ou un lieu',
     clear: 'Effacer la recherche',
     recents: 'Récents (sur cet appareil)',
@@ -496,6 +497,7 @@ export const fr = {
     duration: 'Durée',
     cost: 'Coût',
     unknown: 'Inconnu',
+    toConfirm: 'À confirmer',
     powerNote: (p: string, dc: boolean, point: string, avg: boolean) =>
       `Puissance ${p} (${dc ? 'courant continu, ralentit après 50 %' : 'courant alternatif'}) : le minimum entre le point (${point}) et ${avg ? 'un véhicule moyen' : 'votre véhicule'}. Pertes de charge incluses.`,
     partial: ' Seule une partie du tarif est publiée.',
@@ -667,7 +669,7 @@ export const fr = {
     scanHint: 'Ouvre l’appareil photo pour lire le QR code collé sur la borne',
     camDenied: 'Appareil photo refusé : autorisez-le dans les réglages, ou saisissez le code ci-dessous.',
     manualLabel: 'Ou saisissez le lien ou l’identifiant inscrit sur la borne',
-    manualPh: 'ex. FR*ABC*E1234 ou https://…',
+    manualPh: 'FR*ABC*E1234 ou lien',
     manualA11y: 'Lien ou identifiant de la borne',
     verify: 'Vérifier',
     tone: {

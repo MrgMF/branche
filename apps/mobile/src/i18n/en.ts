@@ -71,7 +71,7 @@ export const en: Dict = {
     account: 'Connected operator account',
     badge: 'Charging card',
   },
-  avail: { libre: 'Available', occupe: 'In use', hors_service: 'Out of order', inconnu: 'Status unknown' },
+  avail: { libre: 'Available', occupe: 'In use', hors_service: 'Out of order', inconnu: 'Status unknown', offline: 'Real-time availability unavailable' },
   incident: {
     accident: 'Accident',
     travaux: 'Roadworks',
@@ -175,7 +175,7 @@ export const en: Dict = {
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
     locPending: 'Finding your location…',
-    locDenied: 'Location denied. Allow it in your browser or phone settings, then tap “My location”.',
+    locDenied: 'Location denied. Allow it in your browser or phone settings, then tap “Try again”.',
     locUnavailable: 'Location unavailable right now (weak GPS signal or service off).',
     retry: 'Try again',
     compassUnavailable: 'Compass unavailable on this device: the map will follow your direction of travel.',
@@ -245,7 +245,7 @@ export const en: Dict = {
   },
   tariff: {
     free: 'Free according to the operator.',
-    freeDoubtful: 'Declared free in the national database, to be checked.',
+    freeDoubtful: 'Free according to the national database, to be confirmed at the charger.',
     energyRange: (a: string, b: string) => `Energy: ${a} to ${b} depending on the time`,
     energy: (a: string, guessed: boolean) => `Energy: ${a}${guessed ? ' (unit not stated, assumed per kWh)' : ''}`,
     time: (x: string) => `Charging time: ${x}`,
@@ -451,6 +451,7 @@ export const en: Dict = {
   },
   search: {
     placeholder: 'Where to? Address, place…',
+    placeholderShort: 'Where to?',
     a11y: 'Search for an address or place',
     clear: 'Clear search',
     recents: 'Recent (on this device)',
@@ -491,6 +492,7 @@ export const en: Dict = {
     duration: 'Time',
     cost: 'Cost',
     unknown: 'Unknown',
+    toConfirm: 'To confirm',
     powerNote: (p: string, dc: boolean, point: string, avg: boolean) =>
       `Power ${p} (${dc ? 'DC, slows down after 50%' : 'AC'}): the lower of the point (${point}) and ${avg ? 'an average vehicle' : 'your vehicle'}. Charging losses included.`,
     partial: ' Only part of the price is published.',
@@ -656,7 +658,7 @@ export const en: Dict = {
     scanHint: 'Opens the camera to read the QR code on the charger',
     camDenied: 'Camera denied: allow it in settings, or enter the code below.',
     manualLabel: 'Or enter the link or ID printed on the charger',
-    manualPh: 'e.g. FR*ABC*E1234 or https://…',
+    manualPh: 'FR*ABC*E1234 or link',
     manualA11y: 'Charger link or ID',
     verify: 'Check',
     tone: {

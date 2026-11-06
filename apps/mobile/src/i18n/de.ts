@@ -72,7 +72,7 @@ export const de: Dict = {
     account: 'Verbundenes Betreiberkonto',
     badge: 'Ladekarte',
   },
-  avail: { libre: 'Verfügbar', occupe: 'Belegt', hors_service: 'Außer Betrieb', inconnu: 'Status unbekannt' },
+  avail: { libre: 'Verfügbar', occupe: 'Belegt', hors_service: 'Außer Betrieb', inconnu: 'Status unbekannt', offline: 'Echtzeit-Verfügbarkeit nicht verfügbar' },
   incident: {
     accident: 'Unfall',
     travaux: 'Baustelle',
@@ -176,7 +176,7 @@ export const de: Dict = {
     zoomIn: 'Vergrößern',
     zoomOut: 'Verkleinern',
     locPending: 'Standort wird ermittelt…',
-    locDenied: 'Standort verweigert. Erlauben Sie ihn in den Browser- oder Telefoneinstellungen und tippen Sie dann auf „Mein Standort“.',
+    locDenied: 'Standort verweigert. Erlauben Sie ihn in den Browser- oder Telefoneinstellungen und tippen Sie dann auf „Erneut versuchen“.',
     locUnavailable: 'Standort derzeit nicht verfügbar (schwaches GPS oder Dienst deaktiviert).',
     retry: 'Erneut versuchen',
     compassUnavailable: 'Kompass auf diesem Gerät nicht verfügbar: Die Karte richtet sich nach Ihrer Fahrtrichtung aus.',
@@ -246,7 +246,7 @@ export const de: Dict = {
   },
   tariff: {
     free: 'Laut Betreiber kostenlos.',
-    freeDoubtful: 'In der nationalen Datenbank als kostenlos angegeben, bitte prüfen.',
+    freeDoubtful: 'Laut nationaler Datenbank kostenlos, an der Säule zu bestätigen.',
     energyRange: (a: string, b: string) => `Energie: ${a} bis ${b} je nach Uhrzeit`,
     energy: (a: string, guessed: boolean) => `Energie: ${a}${guessed ? ' (Einheit nicht angegeben, pro kWh angenommen)' : ''}`,
     time: (x: string) => `Ladezeit: ${x}`,
@@ -451,6 +451,7 @@ export const de: Dict = {
   },
   search: {
     placeholder: 'Wohin? Adresse, Ort…',
+    placeholderShort: 'Wohin?',
     a11y: 'Adresse oder Ort suchen',
     clear: 'Suche löschen',
     recents: 'Zuletzt (auf diesem Gerät)',
@@ -491,6 +492,7 @@ export const de: Dict = {
     duration: 'Dauer',
     cost: 'Kosten',
     unknown: 'Unbekannt',
+    toConfirm: 'Zu prüfen',
     powerNote: (p: string, dc: boolean, point: string, avg: boolean) =>
       `Leistung ${p} (${dc ? 'Gleichstrom, wird ab 50 % langsamer' : 'Wechselstrom'}): das Minimum aus Ladepunkt (${point}) und ${avg ? 'einem Durchschnittsfahrzeug' : 'Ihrem Fahrzeug'}. Ladeverluste inklusive.`,
     partial: ' Nur ein Teil des Tarifs ist veröffentlicht.',
@@ -656,7 +658,7 @@ export const de: Dict = {
     scanHint: 'Öffnet die Kamera, um den QR-Code an der Säule zu lesen',
     camDenied: 'Kamera verweigert: in den Einstellungen erlauben oder den Code unten eingeben.',
     manualLabel: 'Oder geben Sie den Link oder die Kennung von der Säule ein',
-    manualPh: 'z. B. FR*ABC*E1234 oder https://…',
+    manualPh: 'FR*ABC*E1234 oder Link',
     manualA11y: 'Link oder Kennung der Säule',
     verify: 'Prüfen',
     tone: {

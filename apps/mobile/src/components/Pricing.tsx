@@ -81,7 +81,7 @@ export function PriceSummary({
   const tariff = stationTariff(station);
   const fresh = vehicle && Date.now() - vehicle.socUpdatedAt < 3 * 3600_000 ? vehicle.socPercent : null;
   const est = estimateCharge({ vehicle, socPercent: fresh, pointKw: point.kw, plugs: point.plugs, tariff });
-  const cost = est.cost != null ? `≈ ${euros(Math.round(est.cost * 100))}` : R.unknown;
+  const cost = est.cost != null ? `≈ ${euros(Math.round(est.cost * 100))}` : est.freeDoubtful ? R.toConfirm : R.unknown;
   return (
     <View style={styles.summary} accessibilityRole="summary">
       <Text style={styles.summaryTitle} accessibilityRole="header">
@@ -93,7 +93,7 @@ export function PriceSummary({
         {withUnit(`${R.energy} ${kwhText(est.kWhBilled)} · ${R.duration} ≈ ${durationLabel(est.minutes)} · ${R.cost} ${cost}`)}
       </Text>
       {/* Tarif non publié : le conseil « vérifiez l'écran » est déjà affiché au-dessus */}
-      {est.unknownPrice && (describeTariff(tariff).length || tariff.kind === 'link') ? <Text style={styles.src}>{R.unknownPriceNote.trim()}</Text> : null}
+      {est.unknownPrice && !est.freeDoubtful && (describeTariff(tariff).length || tariff.kind === 'link') ? <Text style={styles.src}>{R.unknownPriceNote.trim()}</Text> : null}
       <Text style={styles.line}>{preauthMax != null ? `${R.preauth} · ${eur(preauthMax, 0)}` : R.preauthGeneric}</Text>
     </View>
   );
