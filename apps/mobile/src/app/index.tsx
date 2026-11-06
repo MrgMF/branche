@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   // Large (>= 768 px) : panneau latéral pleine hauteur sous la recherche, sans poignée.
-  sheetWide: { right: undefined, left: 16, bottom: undefined, borderRadius: radius.xl, paddingTop: 16 },
+  sheetWide: { right: 'auto', left: 16, bottom: 'auto', borderRadius: radius.xl, paddingTop: 16 },
   grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong, marginBottom: 10 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   infoBtn: { width: MIN_TOUCH, height: MIN_TOUCH, borderRadius: 22, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },

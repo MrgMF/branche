@@ -349,12 +349,20 @@ export default function Recharger() {
               </Text>
               <View style={[styles.socRow, large && styles.socRowLarge]}>
                 <Text style={[styles.p, !large && { flex: 1 }, large && { width: '100%' }]}>{R.socNow(soc == null)}</Text>
+                {/* Texte agrandi : valeur sur sa ligne, puis − et + côte à côte (tient dans 195 px) */}
+                {large ? (
+                  <Text style={[styles.socValue, { width: '100%', textAlign: 'left' }]} accessibilityLabel={R.socA11y(soc ?? 20)}>
+                    {withUnit(soc ?? 20, '%')}
+                  </Text>
+                ) : null}
                 <Pressable accessibilityRole="button" accessibilityLabel={R.socMinus} onPress={() => changeSoc(-5)} style={styles.step}>
                   <Text style={styles.stepText}>−</Text>
                 </Pressable>
-                <Text style={styles.socValue} accessibilityLabel={R.socA11y(soc ?? 20)}>
-                  {withUnit(soc ?? 20, '%')}
-                </Text>
+                {large ? null : (
+                  <Text style={styles.socValue} accessibilityLabel={R.socA11y(soc ?? 20)}>
+                    {withUnit(soc ?? 20, '%')}
+                  </Text>
+                )}
                 <Pressable accessibilityRole="button" accessibilityLabel={R.socPlus} onPress={() => changeSoc(5)} style={styles.step}>
                   <Text style={styles.stepText}>+</Text>
                 </Pressable>

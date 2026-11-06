@@ -37,8 +37,11 @@ export interface QrResult {
    */
   source?: 'irve' | 'portal' | 'site';
   reasons: string[];
-  /** Lien bloqué alors qu'une voie officielle existe pour cette borne : la proposer à la place. */
-  alternative?: 'page' | 'reader';
+  /**
+   * Voie proposée à la place d'un lien bloqué : page officielle connue, lecteur CB déclaré, ou (lien entre
+   * particuliers sans voie officielle connue ici) la borne payable la plus proche.
+   */
+  alternative?: 'page' | 'reader' | 'nearest';
 }
 
 export interface VerifyOptions {
@@ -54,7 +57,20 @@ export interface VerifyOptions {
 const SHORTENERS = new Set([
   'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly', 'rebrand.ly', 'cutt.ly', 'shorturl.at', 'qrco.de',
   'qr-code-generator.com', 'me-qr.com', 'linktr.ee', 'tiny.cc', 'rb.gy', 'v.gd', 's.id', 'u.to',
+  // Liens de partage et de redirection : la destination réelle est masquée comme avec un raccourcisseur
+  't.me', 'lnkd.in', 't.ly', 'bit.do', 'surl.li', 'urlz.fr', 'cutt.us', 'tr.ee', 'urldefense.com',
 ]);
+/** Redirecteurs hébergés sur un grand domaine (hôte exact ou suffixe) : traités comme des raccourcisseurs. */
+const REDIRECT_HOSTS = ['l.facebook.com', 'lm.facebook.com', 'l.instagram.com', 'l.messenger.com', 'l.wl.co', 'out.reddit.com', 'safelinks.protection.outlook.com', 'urldefense.proofpoint.com'];
+/** Redirecteur masqué : raccourcisseur, hôte de redirection, ou chemin de redirection (google.xx/url, youtube.com/redirect). */
+export function isRedirector(host: string, path: string): boolean {
+  const h = host.toLowerCase().replace(/\.$/, '');
+  const d = registrableDomain(h);
+  if (SHORTENERS.has(d) || SHORTENERS.has(h)) return true;
+  if (REDIRECT_HOSTS.some((x) => h === x || h.endsWith(`.${x}`))) return true;
+  if (/^(www\.)?google\.[a-z]{2,3}(\.[a-z]{2})?$/.test(h) && /^\/url\/?$/i.test(path)) return true;
+  return /(^|\.)youtube\.com$/.test(h) && /^\/redirect\/?$/i.test(path);
+}
 
 // Plateformes de paiement en ligne reconnues, utilisées par certains opérateurs pour leur paiement ad hoc.
 export const PAYMENT_PLATFORMS: Record<string, string> = {
@@ -73,7 +89,16 @@ export const PAYMENT_PLATFORMS: Record<string, string> = {
  * Liens de paiement entre particuliers : aucun opérateur de recharge n'encaisse ainsi (argent envoyé à une personne,
  * sans recours) → toujours bloqués. Domaines entiers, hôtes précis, et chemins PayPal.me hébergés sur paypal.com.
  */
-const P2P_DOMAINS: Record<string, string> = { 'paypal.me': 'PayPal.me', 'lydia-app.com': 'Lydia', 'revolut.me': 'Revolut', 'sumup.me': 'SumUp (lien personnel)' };
+const P2P_DOMAINS: Record<string, string> = {
+  'paypal.me': 'PayPal.me',
+  'lydia-app.com': 'Lydia',
+  // pay.lydia.me, lien.lydia.me : liens de paiement Lydia (particuliers)
+  'lydia.me': 'Lydia',
+  'revolut.me': 'Revolut',
+  'sumup.me': 'SumUp (lien personnel)',
+  'sumup.link': 'SumUp (lien de paiement)',
+  'mollie.me': 'Mollie (lien de paiement)',
+};
 const P2P_HOSTS: Record<string, string> = { 'checkout.revolut.com': 'Revolut' };
 export function p2pPlatform(host: string, path: string): string | null {
   const h = host.toLowerCase().replace(/^www\./, '');
@@ -168,13 +193,20 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
   if (u.username || u.password) reasons.push(tr().qr.creds);
   if (/(^|\.)xn--/.test(host)) reasons.push(tr().qr.punycode);
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith('[')) reasons.push(tr().qr.ip);
-  if (SHORTENERS.has(domain) || SHORTENERS.has(host)) reasons.push(tr().qr.shortener);
+  if (isRedirector(host, u.pathname)) reasons.push(tr().qr.shortener);
   if (reasons.length) return { ...base, verdict: 'dangerous' };
 
-  const p2p = p2pPlatform(host, u.pathname);
-  if (p2p) return { ...base, verdict: 'dangerous', reasons: [tr().qr.p2p(p2p)] };
-
   const stationOp = stationOperatorKey ? operators.find((o) => o.key === stationOperatorKey) : undefined;
+  // Voies officielles de la borne : page de paiement connue (gabarit ou page sourcée de son opérateur), lecteur CB déclaré
+  const officialPage = !!opts.official?.page || !!stationOp?.payUrl || !!stationOp?.payDomains?.length;
+  const officialReader = !!opts.official?.reader;
+
+  // Lien entre particuliers : toujours bloqué, avec la voie officielle de la borne (ou la borne payable la plus proche)
+  const p2p = p2pPlatform(host, u.pathname);
+  if (p2p) {
+    const alternative = officialPage ? 'page' : officialReader ? 'reader' : 'nearest';
+    return { ...base, verdict: 'dangerous', alternative, reasons: [tr().qr.p2p(p2p, stationOp?.names[0] ?? null, alternative)] };
+  }
   const hostKey = isDevHost ? u.host.toLowerCase() : host;
 
   // 1. Page de paiement officielle sourcée (payDomains) : celle de l'opérateur de la borne d'abord
@@ -246,8 +278,8 @@ export function verifyQr(raw: string, stationOperatorKey: string | null, operato
   const platform = PAYMENT_PLATFORMS[domain];
   if (platform && SELF_SERVE_LINKS.has(domain)) {
     // Page officielle connue (gabarit ou page sourcée de l'opérateur de la borne) ou lecteur CB déclaré : lien bloqué
-    const page = !!opts.official?.page || !!stationOp?.payUrl || !!stationOp?.payDomains?.length;
-    const reader = !!opts.official?.reader;
+    const page = officialPage;
+    const reader = officialReader;
     if (page || reader) {
       return {
         ...base,

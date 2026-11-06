@@ -9,6 +9,9 @@ const ptOf = (c: MethodCtx) => (c.short ? `el punto …⁠${c.short}` : 'el punt
 const delPt = (c: MethodCtx) => `del ${ptOf(c).slice(3)}`;
 const alPt = (c: MethodCtx) => `al ${ptOf(c).slice(3)}`;
 const digitsEs = (d: [number, number] | null) => (d ? (d[0] === d[1] ? ` de ${d[0]} cifras` : ` de ${d[0]} a ${d[1]} cifras`) : '');
+/** Contracción con el nombre por defecto: « del operador », « al operador » (de/a + el). */
+const deOp = (op: string) => (op.startsWith('el ') ? `del ${op.slice(3)}` : `de ${op}`);
+const aOp = (op: string) => (op.startsWith('el ') ? `al ${op.slice(3)}` : `a ${op}`);
 const cableOf = (c: MethodCtx) => (c.stationCable ? `el cable ${c.plugs || 'del cargador'} del cargador` : 'tu cable Tipo 2');
 const onto = (p: InstrParts) => (p.street ? ` por ${p.street}` : '');
 const toward = (p: InstrParts) => (p.towards ? ` hacia ${p.towards}` : '');
@@ -46,7 +49,8 @@ export const es: Dict = {
     deleteTicketsYes: (n: number) => `Borrar ${n} foto${s(n)}`,
     ticketsDeleted: (n: number) => `${n} foto${s(n)} borrada${s(n)}: vuelve a intentarlo.`,
     noTickets: 'No hay fotos de tiques en este teléfono.',
-    noNetwork: 'Sin red: paga en el lector de tarjetas o vuelve a intentarlo',
+    noNetwork: 'Sin red: vuelve a intentarlo cuando vuelva la conexión',
+    noNetworkReader: 'Sin red: paga en el lector de tarjetas o vuelve a intentarlo',
     errorTitle: 'Se ha producido un problema',
     errorBody: 'Esta pantalla no se ha podido mostrar (conexión cortada o error). Tu recarga en curso se conserva.',
     notProvided: 'No indicado',
@@ -72,6 +76,7 @@ export const es: Dict = {
     'operator-link': 'Página del operador (enlace conocido)',
     account: 'Cuenta del operador conectada',
     badge: 'Tarjeta de recarga',
+    unverified: 'Enlace no verificado, confirmado por ti',
   },
   avail: { libre: 'Libre', occupe: 'Ocupado', hors_service: 'Fuera de servicio', inconnu: 'Estado desconocido', offline: 'Disponibilidad en tiempo real no disponible' },
   incident: {
@@ -185,8 +190,8 @@ export const es: Dict = {
   here: {
     ready: 'Todo listo',
     payNow: 'Pagar ahora',
-    payHint: (op: string) => `Pago en el cargador, directamente a ${op}`,
-    payNote: (op: string) => `Pagas directamente a ${op}: no se ha cobrado nada por adelantado.`,
+    payHint: (op: string) => `Pago en el cargador, directamente ${aOp(op)}`,
+    payNote: (op: string) => `Pagas directamente ${aOp(op)}: no se ha cobrado nada por adelantado.`,
     youAreAt: 'Estás en',
     youAreAtA11y: (name: string, d: string) => `Estás en ${name}, a ${d}`,
     hide: 'Ocultar',
@@ -201,7 +206,7 @@ export const es: Dict = {
     see: 'Ver el cargador',
     seeHint: 'Ficha del cargador: ruta y recarga',
     ended: 'Recarga terminada',
-    endedBody: 'Salida detectada: el recibo ya está en tu historial.',
+    endedBody: 'Recarga terminada automáticamente: el recibo ya está en tu historial.',
     notePrice: 'Anotar el precio (2 segundos)',
   },
   station: {
@@ -224,7 +229,7 @@ export const es: Dict = {
     nearestFree: 'Ver el cargador libre más cercano',
     nearestFreeHint: 'Abre el cargador disponible más cercano',
     noFreeNearby: 'Ningún cargador libre indicado cerca.',
-    payText: (op: string) => `Sin cuenta ni app: elige el punto, ve el precio para tu coche y paga directamente a ${op} (tarjeta en el cargador o página oficial verificada).`,
+    payText: (op: string) => `Sin cuenta ni app: elige el punto, ve el precio para tu coche y paga directamente ${aOp(op)} (tarjeta en el cargador o página oficial verificada).`,
     prepare: 'Preparar mi recarga',
     hintHere: 'Elección del punto, precio antes de pagar e instrucciones',
     hintPrepare: 'Punto, método y precio elegidos ahora; al llegar, un solo gesto para pagar',
@@ -255,6 +260,7 @@ export const es: Dict = {
     session: (x: string) => `Tarifa por sesión: ${x}`,
     idle: (x: string, after: number) => `Ocupación tras la carga: ${x}${after ? ` tras ${after} min de tolerancia` : ', desde el fin de la carga'}`,
     ht: 'Precios sin impuestos: más un 20 % de IVA (incluido en la estimación).',
+    htLikely: (raw: string, ttc: string) => `Publicado probablemente sin IVA (${raw}, es decir ≈ ${ttc} con IVA): 20 % de IVA añadido aquí y en la estimación.`,
     varies: 'La tarifa varía según la hora: estimación con la tarifa más alta.',
     notePartialFree: 'Gratis solo para algunos usuarios, según el operador.',
     noteKwh: 'Facturado por kWh (importe no publicado).',
@@ -473,7 +479,7 @@ export const es: Dict = {
     scanQr: 'Escanear el código QR del cargador',
     ready: 'Todo listo',
     readyBody: (name: string, reader: boolean) => `Al llegar a ${name}, Branché mostrará «Pagar ahora»: un solo gesto para ${reader ? 'ver las instrucciones del lector de tarjetas' : 'abrir la página de pago correcta'}.`,
-    readyNotice: (op: string) => `No se cobra nada ahora: al llegar, pagas a ${op} directamente desde Branché, en un gesto.`,
+    readyNotice: (op: string) => `No se cobra nada ahora: al llegar, pagas ${aOp(op)} directamente desde Branché, en un gesto.`,
     prepKicker: 'Preparación · ',
     step1: 'Paso 1 de 2',
     step2: 'Paso 2 de 2',
@@ -534,8 +540,8 @@ export const es: Dict = {
     hintQr: 'Branché verifica el código QR antes de abrir la página del operador',
     otherMethods: 'Otros métodos',
     unavailableSuffix: ', no disponible',
-    callDoubt: (op: string) => `¿Dudas? Llamar a ${op}`,
-    neverSee: (op: string) => `Branché nunca ve tu tarjeta ni cobra nada: pagas directamente a ${op}.`,
+    callDoubt: (op: string) => `¿Dudas? Llamar ${aOp(op)}`,
+    neverSee: (op: string) => `Branché nunca ve tu tarjeta ni cobra nada: pagas directamente ${aOp(op)}.`,
     pointRowA11y: (spelled: string, kw: string, plugs: string, incompatible: boolean, status: string | null) =>
       `Punto terminado en ${spelled}, ${kw}, ${plugs}${incompatible ? ', incompatible' : ''}${status ? `, ${status}` : ''}`,
     fast: 'rápida (CC)',
@@ -554,9 +560,9 @@ export const es: Dict = {
           : `${c.op} exige una cuenta. Créala o inicia sesión una sola vez en su web oficial, dentro de Branché; después Branché la reutiliza automáticamente.`,
         steps: connected
           ? c.dc
-            ? [`Conecta ${cable} a tu coche.`, `En la página oficial de ${c.op}, comprueba ${pt} e inicia la carga.`, 'Vuelve a Branché: empieza el seguimiento.']
-            : [`En la página oficial de ${c.op}, comprueba ${pt} e inicia la carga.`, `Conecta ${cable}.`, 'Vuelve a Branché: empieza el seguimiento.']
-          : [`En la web oficial de ${c.op}, abierta en Branché, crea tu cuenta o inicia sesión.`, `Inicia la carga en ${pt}${c.dc ? ' tras conectar el cable' : ' y luego conecta'}.`, 'Vuelve a Branché: empieza el seguimiento y la cuenta se reutilizará la próxima vez.'],
+            ? [`Conecta ${cable} a tu coche.`, `En la página oficial ${deOp(c.op)}, comprueba ${pt} e inicia la carga.`, 'Vuelve a Branché: empieza el seguimiento.']
+            : [`En la página oficial ${deOp(c.op)}, comprueba ${pt} e inicia la carga.`, `Conecta ${cable}.`, 'Vuelve a Branché: empieza el seguimiento.']
+          : [`En la web oficial ${deOp(c.op)}, abierta en Branché, crea tu cuenta o inicia sesión.`, `Inicia la carga en ${pt}${c.dc ? ' tras conectar el cable' : ' y luego conecta'}.`, 'Vuelve a Branché: empieza el seguimiento y la cuenta se reutilizará la próxima vez.'],
         cta: connected ? `Iniciar con mi cuenta ${connected}` : `Añadir mi cuenta ${c.op}`,
       };
     },
@@ -566,11 +572,11 @@ export const es: Dict = {
       return {
         label: 'Código QR del cargador, verificado por Branché',
         why: declared
-          ? `Pago puntual sin cuenta declarado por el operador: Branché verifica que el código QR lleva a la web de ${c.op}.`
-          : `Si hay un código QR de pago pegado en el cargador. Branché verifica que lleva a la web de ${c.op}.`,
+          ? `Pago puntual sin cuenta declarado por el operador: Branché verifica que el código QR lleva a la web ${deOp(c.op)}.`
+          : `Si hay un código QR de pago pegado en el cargador. Branché verifica que lleva a la web ${deOp(c.op)}.`,
         steps: c.dc
-          ? [`Conecta ${cable} a tu coche.`, `Escanea el código QR junto ${alPt(c)}: Branché verifica la dirección.`, `Paga en la página oficial de ${c.op} (tarjeta) y vuelve aquí.`]
-          : [`Escanea el código QR junto ${alPt(c)}: Branché verifica la dirección.`, `Paga en la página oficial de ${c.op} y vuelve aquí.`, `Conecta ${cable}: la carga empieza tras la validación.`],
+          ? [`Conecta ${cable} a tu coche.`, `Escanea el código QR junto ${alPt(c)}: Branché verifica la dirección.`, `Paga en la página oficial ${deOp(c.op)} (tarjeta) y vuelve aquí.`]
+          : [`Escanea el código QR junto ${alPt(c)}: Branché verifica la dirección.`, `Paga en la página oficial ${deOp(c.op)} y vuelve aquí.`, `Conecta ${cable}: la carga empieza tras la validación.`],
         cta: 'Escanear el código QR',
       };
     },
@@ -579,17 +585,17 @@ export const es: Dict = {
       const cable = cableOf(c);
       const idStep =
         id?.entry === 'printed'
-          ? `En la página de pago de ${c.op}, escribe el número${digitsEs(id.digits)} inscrito en el cargador, junto ${alPt(c)} (no es el identificador que muestra Branché).`
+          ? `En la página de pago ${deOp(c.op)}, escribe el número${digitsEs(id.digits)} inscrito en el cargador, junto ${alPt(c)} (no es el identificador que muestra Branché).`
           : id?.entry === 'select'
-            ? `En la página de pago de ${c.op}, elige ${pt} en la lista (o escanea su código QR).`
-            : `En la página de pago de ${c.op}, pega el identificador ${delPt(c)} (copiado por Branché).`;
+            ? `En la página de pago ${deOp(c.op)}, elige ${pt} en la lista (o escanea su código QR).`
+            : `En la página de pago ${deOp(c.op)}, pega el identificador ${delPt(c)} (copiado por Branché).`;
       return {
-        label: `Página de pago de ${c.op}`,
+        label: `Página de pago ${deOp(c.op)}`,
         why: known ? 'Dirección oficial de pago sin cuenta conocida para este operador.' : 'No se conoce enlace de pago directo para este operador.',
         steps: c.dc
           ? [`Conecta ${cable} a tu coche.`, idStep, 'Paga y vuelve a Branché.']
           : [idStep, 'Paga y vuelve a Branché.', `Conecta ${cable}: la carga empieza.`],
-        cta: `Abrir la página de ${c.op}`,
+        cta: `Abrir la página ${deOp(c.op)}`,
       };
     },
     reader: (c: MethodCtx, r: ReaderInfo): MethodTexts => {
@@ -612,7 +618,7 @@ export const es: Dict = {
       return {
         label: b.name ? `Mi tarjeta ${b.name}` : 'Mi tarjeta de recarga',
         why: b.accepted.length
-          ? `${b.accepted.join(', ')} aceptada${s(b.accepted.length)} en los cargadores de ${c.op} (según el operador).`
+          ? `${b.accepted.join(', ')} aceptada${s(b.accepted.length)} en los cargadores ${deOp(c.op)} (según el operador).`
           : b.maybe
             ? 'Tarjetas de itinerancia aceptadas según la base IRVE, sin precisar redes: tu tarjeta puede funcionar.'
             : 'Ninguna de tus tarjetas figura como aceptada aquí.',
@@ -644,7 +650,8 @@ export const es: Dict = {
     unknownDomain: 'Dominio ausente de la base de operadores.',
     officialPay: (n: string) => `Dirección de pago oficial publicada por ${n}.`,
     officialSite: (n: string) => `Dominio del sitio oficial de ${n} (fuentes verificadas por Branché).`,
-    p2p: (p: string) => `Enlace de pago entre particulares (${p}): el dinero iría a una persona, no al operador del cargador.`,
+    p2p: (p: string, op: string | null, way: 'page' | 'reader' | 'nearest') =>
+      `Enlace de pago entre particulares (${p}): el dinero iría a una persona, no al operador del cargador. ${way === 'page' ? `Usa mejor la página oficial ${op ? deOp(op) : 'del operador'}.` : way === 'reader' ? 'Paga mejor con tarjeta en el lector del cargador.' : 'No se conoce ninguna vía oficial aquí: ve mejor al cargador con pago más cercano.'}`,
     siteUnsourced: (n: string, d: string) => `Dirección en el dominio de ${n} (${d}), pero fuera de las páginas con fuente de Branché: compruébala antes de pagar.`,
     platformBlocked: (p: string, op: string | null, way: 'page' | 'reader') =>
       `Enlace de ${p} que cualquiera puede crear, mientras que ${op ?? 'el operador de este cargador'} ${way === 'page' ? 'tiene una página de pago oficial conocida' : 'acepta tarjeta en el lector del cargador'}: usa mejor esa vía.`,
@@ -652,8 +659,8 @@ export const es: Dict = {
     evseUnknown: 'Identificador ausente de la base nacional de cargadores (o sin conexión).',
   },
   payer: {
-    intro: (op: string) => `Pagas directamente a ${op} en su página de pago, abierta en Branché y verificada con la base nacional IRVE: sin cuenta ni descargar su app. Branché no ve tu tarjeta.`,
-    openPay: (op: string) => `Abrir el pago de ${op}`,
+    intro: (op: string) => `Pagas directamente ${aOp(op)} en su página de pago, abierta en Branché y verificada con la base nacional IRVE: sin cuenta ni descargar su app. Branché no ve tu tarjeta.`,
+    openPay: (op: string) => `Abrir el pago ${deOp(op)}`,
     openPayHint: 'Página de pago oficial del operador',
     stopScan: 'Detener el escaneo',
     scanHint: 'Abre la cámara para leer el código QR del cargador',
@@ -678,7 +685,7 @@ export const es: Dict = {
     confirm: 'He comprobado el cargador y quiero continuar',
     continue: 'Continuar a este sitio',
     unknownSite: 'sitio desconocido',
-    dangerous: (reader: string | null) => `No introduzcas tu tarjeta en este enlace. ${reader ? `Paga mejor en el lector del cargador (${reader}).` : 'Paga mejor en el lector del cargador o avisa al operador.'}`,
+    dangerous: (reader: string | null) => `No introduzcas tu tarjeta en este enlace. ${reader ? `Paga mejor en el lector del cargador (${reader}).` : 'Avisa al operador (número en el cargador) o usa otro cargador.'}`,
     evseNoLink: 'Un identificador no contiene enlace de pago: escanea el código QR de pago del cargador o paga en su lector de tarjetas.',
     reportFake: 'Avisar de un código QR falso en este cargador',
     reportOk: 'Gracias: el QR sospechoso queda señalado a los demás usuarios.',
@@ -691,7 +698,7 @@ export const es: Dict = {
     toneOfficialPay: 'Página de pago oficial del operador',
     toneOfficialSite: 'Sitio oficial del operador',
     toneSiteUnverified: 'Web del operador, página sin fuente: compruébala',
-    useOfficialPage: (op: string) => `Abrir la página oficial de ${op}`,
+    useOfficialPage: (op: string) => `Abrir la página oficial ${deOp(op)}`,
     useReader: 'Pagar con tarjeta en el cargador',
     toneKnownPay: 'Página oficial de otro operador',
     otherPoint: (scanned: string, chosen: string) => `Este código QR corresponde al punto …${scanned}, no al punto …${chosen} que elegiste.`,
@@ -700,7 +707,7 @@ export const es: Dict = {
     usePoint: (short: string) => `Recargar en el punto …${short}`,
     useStation: (name: string) => `Cambiar a ${name}`,
     keepChoice: 'Mantener mi elección y escanear de nuevo',
-    call: (op: string) => `¿Problema? Llamar a ${op}`,
+    call: (op: string) => `¿Problema? Llamar ${aOp(op)}`,
     webTab: 'En un ordenador, la página del operador se abre en una pestaña nueva.',
   },
   recharge: {
@@ -734,21 +741,21 @@ export const es: Dict = {
     stateBadge: 'Pasa tu tarjeta por el cargador',
     stateAccount: (op: string) => `Inicio con tu cuenta ${op}`,
     stateReader: 'Paga en el lector del cargador',
-    statePage: (op: string) => `Pago a ${op}`,
+    statePage: (op: string) => `Pago ${aOp(op)}`,
     bodyBadge: 'Pasa tu tarjeta por el lector, sigue la pantalla si la hay y conecta. Branché sigue la recarga aquí.',
-    bodyAccount: (op: string) => `Inicia la carga en la página de ${op}, conecta si aún no lo has hecho y vuelve aquí.`,
+    bodyAccount: (op: string) => `Inicia la carga en la página ${deOp(op)}, conecta si aún no lo has hecho y vuelve aquí.`,
     bodyReader: (short: string | null) => `Paga con tarjeta en el lector${short ? ` (punto …${short}, en la etiqueta o la pantalla)` : ''} y conecta. Branché sigue la recarga aquí.`,
-    bodyPage: (op: string) => `Finaliza el pago en la página de ${op}, conecta si aún no lo has hecho y vuelve aquí.`,
+    bodyPage: (op: string) => `Finaliza el pago en la página ${deOp(op)}, conecta si aún no lo has hecho y vuelve aquí.`,
     started: 'La carga ha empezado',
     startedHint: 'Inicia el seguimiento en directo y los avisos de fin de carga',
     notStarting: 'No arranca',
     notStartingHint: 'Otro punto, otro método, llamar al operador',
-    reopen: (op: string) => `Reabrir la página de ${op}`,
+    reopen: (op: string) => `Reabrir la página ${deOp(op)}`,
     helpTitle: 'La carga no arranca',
     helpBody: 'Comprueba que el cable está bien encajado en ambos extremos y que el coche está desbloqueado. Si pagaste y la carga no empezó, el operador reembolsa o libera la preautorización: guarda el recibo.',
     otherPoint: 'Probar otro punto',
     otherMethod: 'Probar otro método',
-    call: (op: string) => `Llamar a ${op}`,
+    call: (op: string) => `Llamar ${aOp(op)}`,
     reportDown: 'Avisar de cargador fuera de servicio',
     reportDownHint: 'Avisa a otros conductores, sin identificarte',
     startedAfterAll: 'Al final, la carga ha empezado',
@@ -757,15 +764,18 @@ export const es: Dict = {
     charging: (p: number, clock: string) => `Cargando · ${p} % hacia las ${clock}`,
     costEst: 'Coste estimado',
     elapsed: 'Transcurrido',
-    estimateNote: (v: string | null, from: number, kw: string, op: string) => `Estimación ${v ? `para ${v}` : 'para un vehículo medio'} desde el ${from} %, a ${kw}. El importe real es el de ${op}.`,
+    estimateNote: (v: string | null, from: number, kw: string, op: string) => `Estimación ${v ? `para ${v}` : 'para un vehículo medio'} desde el ${from} %, a ${kw}. El importe real es el ${deOp(op)}.`,
     unplug: (p: number, idle: boolean) => `Tu batería debería estar al ${p} %: desconecta para liberar la plaza${idle ? ' y evitar gastos de ocupación' : ''}.`,
     idleNotice: (clock: string, rate: string) => `Ocupación facturada a partir de las ${clock} aprox. (${rate}). Aviso 5 min antes.`,
     freeSpot: 'Recuerda liberar la plaza al terminar la carga.',
     reminder: (idle: boolean) => `Aviso programado al final de la carga${idle ? ' y antes de los gastos de ocupación' : ''}.`,
     done: 'He terminado mi recarga',
-    problemCall: (op: string) => `¿Problema? Llamar a ${op}`,
+    problemCall: (op: string) => `¿Problema? Llamar ${aOp(op)}`,
     endedTitle: 'Recarga terminada',
     autoEnded: (clock: string) => `Salida del cargador detectada: recarga terminada automáticamente a las ${clock}. El recibo ya está en tu historial; añade el precio si quieres.`,
+    autoEndedStale: (when: string) => `Recarga sin terminar desde hace más de 24 h: terminada automáticamente (fin estimado: ${when}). El recibo ya está en tu historial; añade el precio si quieres.`,
+    idPrinted: (d: [number, number] | null) => `En la página de pago, introduce el número${digitsEs(d)} indicado en el cargador (no el identificador de la base nacional).`,
+    idSelect: (short: string | null) => `En la página de pago, elige ${short ? `el punto …⁠${short}` : 'tu punto'} en la lista.`,
     energyEstimated: 'Energía estimada',
     worked: '¿Ha funcionado?',
     workedNote: 'Tu respuesta ayuda a otros conductores (fiabilidad del cargador). Se envía sin identificador, solo si respondes.',
@@ -964,7 +974,7 @@ export const es: Dict = {
   },
   maRecharge: {
     activeKicker: 'En curso',
-    activeBody: (op: string) => `Pagada directamente a ${op}. Seguimiento, avisos y recibo.`,
+    activeBody: (op: string) => `Pagada directamente ${aOp(op)}. Seguimiento, avisos y recibo.`,
     open: 'Abrir el seguimiento',
     preparedKicker: 'Preparada',
     preparedBody: (method: string, cost: string | null) => `${method}${cost ? ` · ≈ ${cost}` : ''}. Al llegar, un solo gesto para pagar.`,

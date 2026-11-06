@@ -1,6 +1,6 @@
 // Choix du véhicule et du % de batterie — facultatif, jamais bloquant, enregistré sur l'appareil seulement.
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Notice } from '../components/ui';
 import { detectBrandApps } from '../lib/detectBrand';
@@ -76,6 +76,19 @@ export default function VehiculeScreen() {
     done();
   }
 
+  // 7 cibles ≥ 44 px + espaces : une ligne seulement si la largeur le permet (≥ 376 px), sinon deux lignes
+  const twoRows = useWindowDimensions().width < 376;
+  const minus = (
+    <Pressable key="minus" accessibilityRole="button" accessibilityLabel={V.minus} onPress={() => setSoc((x) => Math.max(0, x - 5))} style={styles.chip}>
+      <Text style={styles.chipText}>−</Text>
+    </Pressable>
+  );
+  const plus = (
+    <Pressable key="plus" accessibilityRole="button" accessibilityLabel={V.plus} onPress={() => setSoc((x) => Math.min(100, x + 5))} style={styles.chip}>
+      <Text style={styles.chipText}>+</Text>
+    </Pressable>
+  );
+
   return (
     <View style={[styles.root, { paddingTop: insets.top + 12 }]}>
       <ScreenHeader title={t.titles.vehicule} right={<Button label={t.common.skip} variant="ghost" onPress={done} style={styles.skip} hint={V.skipHint} />} />
@@ -121,19 +134,22 @@ export default function VehiculeScreen() {
         <Text style={styles.label} nativeID="soc-label">
           {V.socLabel(soc)}
         </Text>
-        <View style={styles.presets} accessibilityLabelledBy="soc-label">
-          <Pressable accessibilityRole="button" accessibilityLabel={V.minus} onPress={() => setSoc((x) => Math.max(0, x - 5))} style={styles.chip}>
-            <Text style={styles.chipText}>−</Text>
-          </Pressable>
+        {/* 7 cibles de 44 px ne tiennent pas sur une ligne étroite : préréglages, puis − et + sur une 2e ligne */}
+        <View style={[styles.presets, twoRows && styles.presetsWrap]} accessibilityLabelledBy="soc-label">
+          {twoRows ? null : minus}
           {PRESETS.map((p) => (
-            <Pressable key={p} role="radio" aria-checked={soc === p} accessibilityState={{ checked: soc === p }} accessibilityLabel={`${p} %`} onPress={() => setSoc(p)} style={[styles.chip, soc === p && styles.chipOn]}>
+            <Pressable key={p} role="radio" aria-checked={soc === p} accessibilityState={{ checked: soc === p }} accessibilityLabel={`${p} %`} onPress={() => setSoc(p)} style={[styles.chip, twoRows && styles.presetWide, soc === p && styles.chipOn]}>
               <Text style={[styles.chipText, soc === p && { color: colors.onAccent }]}>{p}</Text>
             </Pressable>
           ))}
-          <Pressable accessibilityRole="button" accessibilityLabel={V.plus} onPress={() => setSoc((x) => Math.min(100, x + 5))} style={styles.chip}>
-            <Text style={styles.chipText}>+</Text>
-          </Pressable>
+          {twoRows ? null : plus}
         </View>
+        {twoRows ? (
+          <View style={styles.presets}>
+            {minus}
+            {plus}
+          </View>
+        ) : null}
         <Button label={sel ? V.save(sel.name) : V.pickModel} onPress={save} disabled={!sel} />
       </View>
     </View>
@@ -158,7 +174,10 @@ const styles = StyleSheet.create({
   footer: { gap: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
   label: { fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
   presets: { flexDirection: 'row', gap: 6, justifyContent: 'space-between' },
-  chip: { flex: 1, minHeight: MIN_TOUCH, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.inputBorder, alignItems: 'center', justifyContent: 'center' },
+  chip: { flex: 1, minHeight: MIN_TOUCH, minWidth: MIN_TOUCH, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.inputBorder, alignItems: 'center', justifyContent: 'center' },
+  // Deux lignes (écran étroit) : 5 préréglages, puis − et + côte à côte
+  presetsWrap: {},
+  presetWide: { flexBasis: 0, flexGrow: 1 },
   chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipText: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
 });

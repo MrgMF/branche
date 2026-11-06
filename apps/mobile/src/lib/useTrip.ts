@@ -298,7 +298,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
               .filter(({ i }) => i !== t.selected)
               .map(({ x }) => ({ id: x.id, coords: x.geometry, label: best ? (x.id === best.id ? tr().guidance.fastestLabel : deltaText(x.durationS - best.durationS)) : '' })),
       });
-      map.current?.post({ type: 'dest', lat: t.dest.lat, lon: t.dest.lon });
+      map.current?.post({ type: 'dest', lat: t.dest.lat, lon: t.dest.lon, label: t.dest.name });
       const pins = t.guiding ? t.via : t.chargers.map((c) => ({ id: c.station.id, name: `${Math.round(c.station.kw)} kW`, lat: c.station.lat, lon: c.station.lon }));
       map.current?.post({ type: 'pins', items: [...pins, ...(t.guiding ? [] : t.via)].map((p) => ({ id: p.id, lat: p.lat, lon: p.lon, label: p.name })) });
       map.current?.post({
@@ -422,7 +422,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
         if (mode === 'preview') {
           map.current?.post({ type: 'route', coords: [] });
           map.current?.post({ type: 'pins', items: [] });
-          map.current?.post({ type: 'dest', lat: base.dest.lat, lon: base.dest.lon });
+          map.current?.post({ type: 'dest', lat: base.dest.lat, lon: base.dest.lon, label: base.dest.name });
           map.current?.post({ type: 'fit', bounds: bboxOf([[from.lon, from.lat], [base.dest.lon, base.dest.lat]], 0.004), ...previewPad(sheetH), maxZoom: 15 });
         }
         // En guidage, on garde l'ancien tracé : un recalcul raté n'interrompt pas la conduite.
@@ -453,7 +453,7 @@ export function useTrip(map: React.RefObject<MapHandle | null>, user: Pos | null
         setTrip({ ...base, error: tr().trip.noPosition, gps: 'unavailable' });
         // Sans position : destination marquée et centrée
         map.current?.post({ type: 'route', coords: [] });
-        map.current?.post({ type: 'dest', lat: dest.lat, lon: dest.lon });
+        map.current?.post({ type: 'dest', lat: dest.lat, lon: dest.lon, label: dest.name });
         map.current?.post({ type: 'fly', lat: dest.lat, lon: dest.lon, zoom: 15, offsetY: Dimensions.get('window').width >= 768 ? 0 : -sheetH * 0.4 });
         return;
       }

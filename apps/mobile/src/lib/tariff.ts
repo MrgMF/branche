@@ -21,6 +21,11 @@ export interface Tariff {
   idle?: { perMin: number; afterMin: number };
   /** Prix annoncés hors taxes (TVA 20 % en plus). */
   ht: boolean;
+  /**
+   * Prix publiés probablement hors taxes sans le dire : chaque montant à 4 décimales ou plus est un prix rond divisé
+   * par 1,2 (0,33334 = 0,40 / 1,2 ; 6,6667 = 8 / 1,2). Affichés ≈ ×1,2 et estimés TTC, avec la mention.
+   */
+  htLikely?: true;
   /** Tarif différent selon l'heure de la journée. */
   varies: boolean;
   /** Montant sans unité (« 0,45 ») interprété comme €/kWh. */
@@ -57,6 +62,8 @@ export function freeCredible(c: Pick<FreeContext, 'kw' | 'pay'>): boolean {
 type Kind = 'kwh' | 'min' | 'hour' | 'session' | 'none';
 interface Amount {
   v: number;
+  /** Nombre de décimales écrites (zéros finaux exclus). */
+  dec: number;
   kind: Kind;
   idle: boolean;
   session: boolean;
@@ -84,6 +91,24 @@ const CLAUSE = /[,;|+(]|\. | puis | lorsque | quand | co[uû]t de /;
 
 const toMin = (n: number, unit: string) => (/^h/.test(unit) ? n * 60 : n);
 
+/** Décimales écrites d'un nombre (« 0.33334 » → 5, « 6.0 » → 0). */
+const decimals = (x: string) => (x.split('.')[1] ?? '').replace(/0+$/, '').length;
+/** TVA 20 % : un prix HT publié vaut le prix TTC rond (au centime) divisé par 1,2, à 1e-3 près. */
+const VAT = 1.2;
+export function htRound(v: number): boolean {
+  const ttc = v * VAT;
+  return v > 0 && Math.abs(ttc - Math.round(ttc * 100) / 100) <= 1e-3 + 1e-9;
+}
+/**
+ * Montants publiés probablement HT : au moins un montant à 4 décimales ou plus, et tous ceux-là sont des prix ronds
+ * divisés par 1,2. Jamais si le texte dit TTC (HT annoncé : déjà traité par `ht`).
+ */
+function likelyHt(values: { v: number; dec: number }[], text: string): boolean {
+  if (/ttc/.test(text)) return false;
+  const long = values.filter((a) => a.v > 0 && a.dec >= 4);
+  return long.length > 0 && long.every((a) => htRound(a.v));
+}
+
 export function parseTariff(raw: string | null | undefined, opts: FreeContext = {}): Tariff {
   const src = (raw ?? '').trim();
   const out: Tariff = { kind: 'unknown', ht: false, varies: false, guessedUnit: false, notes: [], raw: src };
@@ -101,6 +126,9 @@ export function parseTariff(raw: string | null | undefined, opts: FreeContext = 
     if (Number.isFinite(f) && f > 0 && f <= 30) out.session = f;
     if (osf && Number(osf[1]) > 0) out.idle = { perMin: Number(osf[1]), afterMin: Math.round(Number(osf[2]) / 60) };
     if (out.perKwh !== undefined || out.session !== undefined || out.idle) out.kind = 'priced';
+    const raw = (k: string) => t.match(new RegExp(`"${k}"\\s*:\\s*([\\d.]+)`))?.[1] ?? '';
+    const vals = [raw('energyprice'), raw('fixedprice'), osf?.[1] ?? ''].filter(Boolean).map((x) => ({ v: Number(x), dec: decimals(x) }));
+    if (out.kind === 'priced' && likelyHt(vals, t.replace(/"[a-z]+"/g, ''))) out.htLikely = true;
     return out;
   }
 
@@ -165,7 +193,7 @@ export function parseTariff(raw: string | null | undefined, opts: FreeContext = 
     const isSession = kind === 'session' || (kind === 'none' && SESSION.test(ctx)) || (kind !== 'kwh' && SESSION.test(before) && !/\/|par /.test(u[0]));
     // « 2 € + 0,59 €/kWh » : montant en euros sans unité suivi d'un prix au kWh → frais de session
     const plusNext = kind === 'none' && !!u[2] && /^\s*\+/.test(afterFull) && /kwh|kw\b/.test(t.slice(nextStart, nextStart + 20));
-    amounts.push({ v, kind: isSession || plusNext ? 'session' : kind, idle: IDLE.test(ctx) || !!th?.grace, session: isSession || plusNext, threshold: th });
+    amounts.push({ v, dec: decimals(m[1]), kind: isSession || plusNext ? 'session' : kind, idle: IDLE.test(ctx) || !!th?.grace, session: isSession || plusNext, threshold: th });
   });
 
   if (/ht(?![a-z])/.test(t) && !/ttc/.test(t)) out.ht = true;
@@ -209,6 +237,7 @@ export function parseTariff(raw: string | null | undefined, opts: FreeContext = 
   const priced = out.perKwh !== undefined || out.perMin !== undefined || out.session !== undefined || !!out.idle;
   if (priced) {
     out.kind = 'priced';
+    if (!out.ht && likelyHt(amounts, t)) out.htLikely = true;
     const kinds = [kwh, charging.map(perMinOf), sessions];
     out.varies = bands > 0 && (kinds.some((k) => new Set(k).size > 1) || amounts.some((a) => a.kind === 'session') && bands > 1);
     return out;
@@ -233,22 +262,37 @@ const eur = (x: number, digits = 2) => `${num(x, digits, digits)} €`;
 const perKwhText = perKwhFmt;
 const perMinText = perMinFmt;
 
-export function describeTariff(t: Tariff): string[] {
+export interface DescribeOptions {
+  /**
+   * Réseau payant selon ses sources (portalPaid) : une gratuité déclarée mais non crédible devient « tarif non publié
+   * dans la base nationale » plutôt que « gratuit, à vérifier ».
+   */
+  paidNetwork?: boolean;
+}
+
+export function describeTariff(t: Tariff, opts: DescribeOptions = {}): string[] {
   const T = tr().tariff;
   if (t.kind === 'free') return [T.free];
-  if (t.freeDoubtful) return [T.freeDoubtful];
+  if (t.freeDoubtful) return [opts.paidNetwork ? tr().pricing.unpublished : T.freeDoubtful];
   if (t.kind !== 'priced') return [];
   const lines: string[] = [];
+  // Publié probablement HT : montants affichés TTC (≈ ×1,2), comme dans l'estimation
+  const f = t.htLikely ? VAT : 1;
+  const ap = (x: string) => (t.htLikely ? `≈ ${x}` : x);
+  const kwhT = (x: number) => ap(perKwhText(x * f));
+  const minT = (x: number) => ap(perMinText(x * f));
   if (t.perKwh !== undefined) {
-    lines.push(
-      t.perKwhMin !== undefined ? T.energyRange(perKwhText(t.perKwhMin), perKwhText(t.perKwh)) : T.energy(perKwhText(t.perKwh), t.guessedUnit),
-    );
+    lines.push(t.perKwhMin !== undefined ? T.energyRange(kwhT(t.perKwhMin), kwhT(t.perKwh)) : T.energy(kwhT(t.perKwh), t.guessedUnit));
   }
-  if (t.perMin) lines.push(T.time(perMinText(t.perMin)));
-  if (t.perMinLater) lines.push(T.later(t.perMinLater.afterMin, perMinText(t.perMinLater.perMin)));
-  if (t.session) lines.push(T.session(eur(t.session)));
-  if (t.idle) lines.push(T.idle(perMinText(t.idle.perMin), t.idle.afterMin));
+  if (t.perMin) lines.push(T.time(minT(t.perMin)));
+  if (t.perMinLater) lines.push(T.later(t.perMinLater.afterMin, minT(t.perMinLater.perMin)));
+  if (t.session) lines.push(T.session(ap(eur(t.session * f))));
+  if (t.idle) lines.push(T.idle(minT(t.idle.perMin), t.idle.afterMin));
   if (t.ht) lines.push(T.ht);
+  if (t.htLikely) {
+    const [v, unit] = t.perKwh !== undefined ? [t.perKwh, '€/kWh'] : t.session ? [t.session, '€'] : [t.perMin ?? t.idle?.perMin ?? 0, '€/min'];
+    lines.push(T.htLikely(`${num(v, 5, 2)} ${unit}`, `${num(v * VAT, 3, 2)} ${unit}`));
+  }
   if (t.varies) lines.push(T.varies);
   return lines;
 }
@@ -261,8 +305,8 @@ export const stationTariff = (s: { prix?: string | null; free?: boolean; kw?: nu
 export const planTariff = (p: { tariffRaw?: string; free?: boolean; stationKw?: number; pointKw?: number; pay?: readonly string[] } | null | undefined) =>
   parseTariff(p?.tariffRaw, { free: p?.free, kw: p?.stationKw ?? p?.pointKw, pay: p?.pay });
 
-/** Multiplicateur TTC (les prix HT sont majorés de la TVA à 20 %). */
-export const ttcFactor = (t: Pick<Tariff, 'ht'>) => (t.ht ? 1.2 : 1);
+/** Multiplicateur TTC (les prix HT, annoncés ou probables, sont majorés de la TVA à 20 %). */
+export const ttcFactor = (t: Pick<Tariff, 'ht' | 'htLikely'>) => (t.ht || t.htLikely ? VAT : 1);
 
 /**
  * Lien de tarif IRVE sûr à ouvrir : https seulement, et passé par le vérificateur de QR (mêmes règles anti-sosie,

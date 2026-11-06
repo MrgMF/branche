@@ -5,7 +5,8 @@ import { removeTicket } from './ticket';
 import { tr } from '../i18n';
 import { decimalSep, monthYear } from '../i18n/format';
 
-export type MethodId = 'account' | 'scan' | 'operator-link' | 'reader' | 'badge';
+/** `unverified` : lien non vérifié par Branché (domaine inconnu, autre opérateur, plateforme), ouvert après confirmation explicite. */
+export type MethodId = 'account' | 'scan' | 'operator-link' | 'reader' | 'badge' | 'unverified';
 
 export const methodLabel = (m: MethodId): string => tr().methodLabel[m] ?? m;
 
@@ -75,6 +76,11 @@ export async function addRecord(r: ChargeRecord): Promise<ChargeRecord[]> {
   return next;
 }
 
+/** Reçu déjà archivé (même identifiant) ? */
+export async function hasRecord(id: string): Promise<boolean> {
+  return (await loadHistory()).some((r) => r.id === id);
+}
+
 export async function removeRecord(id: string): Promise<ChargeRecord[]> {
   const next = (await loadHistory()).filter((r) => r.id !== id);
   await save(next);
@@ -128,7 +134,8 @@ export function totals(all: ChargeRecord[]) {
   const list = all.filter((r) => !r.notStarted);
   const paid = list.filter((r) => r.pricePaid != null);
   const total = paid.reduce((t, r) => t + (r.pricePaid ?? 0), 0);
-  const both = paid.filter((r) => r.kWh && r.kWh > 0);
+  // Prix moyen : montants > 0 € seulement (une saisie « 0 » ou une recharge gratuite fausserait le prix du kWh payé)
+  const both = paid.filter((r) => (r.pricePaid ?? 0) > 0 && r.kWh && r.kWh > 0);
   const kWh = both.reduce((t, r) => t + (r.kWh ?? 0), 0);
   return {
     count: list.length,

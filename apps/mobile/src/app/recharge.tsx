@@ -17,18 +17,20 @@ import { sendCheckin } from '../lib/community';
 import { estimateCharge, progressAt, type EstimateInput } from '../lib/estimate';
 import { parseEuros, invalidAmount } from '../lib/amount';
 import { durationShort, euros, withUnit } from '../lib/format';
-import { autoFinish, departed, distanceToStation, recordOf, AUTO_END_M } from '../lib/autoEnd';
+import { abandonUnconfirmed, autoFinish, departed, distanceToStation, recordOf, AUTO_END_M } from '../lib/autoEnd';
 import { addRecord, methodLabel, updateRecord, type ChargeRecord } from '../lib/history';
 import { saveTicket } from '../lib/ticket';
 import { takeTicketPhoto } from '../lib/ticketPhoto';
 import { postReport } from '../lib/navigation';
 import { cancelAlerts, scheduleAlerts, type Alert } from '../lib/notify';
 import { store, type DirectCharge } from '../lib/store';
-import { planTariff } from '../lib/tariff';
+import { trackedPointEntry } from '../lib/methods';
+import { idEntryOf, loadPortals, type Portal, type Portals } from '../lib/portals';
+import { planTariff, ttcFactor } from '../lib/tariff';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { ScreenHeader } from '../components/Screen';
 import { tr, useT } from '../i18n';
-import { clock as clockFmt, kwhText, num } from '../i18n/format';
+import { clock as clockFmt, dateNum, kwhText, num } from '../i18n/format';
 
 const clock = clockFmt;
 /** Saisie facultative : vide = OK ; hors de la forme `^\d{1,4}([.,]\d{1,2})?$` = erreur affichée, rien n'est enregistré. */
@@ -67,6 +69,11 @@ export default function Recharge() {
   const [saveErr, setSaveErr] = useState(false);
   const [persistErr, setPersistErr] = useState(store.directPersistFailed());
   useEffect(() => store.onDirectPersistError(() => setPersistErr(true)), []);
+  // Saisie du point propre à l'opérateur (identifiant IRVE à coller, numéro inscrit, choix dans la liste)
+  const [portals, setPortals] = useState<Portals | null>(null);
+  useEffect(() => {
+    loadPortals().then(setPortals);
+  }, []);
 
   useEffect(() => {
     if (d === undefined) store.loadDirect().then(setD);
@@ -172,6 +179,18 @@ export default function Recharge() {
       store.setDirect(withIds);
       setD(withIds);
     }
+  }
+
+  /** « Abandonner » : archivé « non démarré » (comme après 6 h sans confirmation), jamais effacé en silence. */
+  async function abandon() {
+    if (!d) return;
+    setSaveErr(false);
+    if (!(await abandonUnconfirmed(d))) {
+      setSaveErr(true);
+      return;
+    }
+    update(null);
+    router.replace('/');
   }
 
   function finish() {
@@ -297,6 +316,10 @@ export default function Recharge() {
   const span = Math.max(1, est.toSoc - est.fromSoc);
   const pct = Math.min(1, Math.max(0, (prog.soc - est.fromSoc) / span));
   const pointText = d.plan?.pdcId ? C.pointSuffix(d.plan.pdcId.slice(-4)) : '';
+  // Même règle que le parcours « Recharger » (payOptions.copyId) : rien à copier chez Virta (numéro inscrit) ou Ionity (liste)
+  const portal: Portal | undefined = portals ? (d.station.ok ? portals[d.station.ok] : Object.values(portals).find((p) => p.name === d.operatorName)) : undefined;
+  const entry = portals && !reader ? trackedPointEntry(d.method ?? d.plan?.method, d.url, d.plan?.pdcId, idEntryOf(portal)) : {};
+  const ttc = tariff ? ttcFactor(tariff) : 1;
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={[styles.body, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
@@ -328,7 +351,10 @@ export default function Recharge() {
                     : C.bodyPage(d.operatorName)}
             </Text>
           </View>
-          {!reader && d.plan?.pdcId && (d.plan.method === 'operator-link' || d.plan.method === 'account') ? <CopyId id={d.plan.pdcId} dark /> : null}
+          {entry.copyId ? <CopyId id={entry.copyId} dark /> : null}
+          {entry.entry ? (
+            <Notice dark>{entry.entry === 'printed' ? C.idPrinted(entry.digits ?? null) : C.idSelect(d.plan?.pdcId ? d.plan.pdcId.slice(-4) : null)}</Notice>
+          ) : null}
           <Button label={C.started} onPress={started} hint={C.startedHint} />
           <Button label={C.notStarting} variant="light" onPress={() => setHelp(true)} hint={C.notStartingHint} />
           {!reader ? <Button label={C.reopen(d.operatorName)} variant="ghost" onPress={reopen} /> : null}
@@ -347,15 +373,8 @@ export default function Recharge() {
           <Button label={C.reportDown} variant="light" onPress={reportDown} hint={C.reportDownHint} />
           {msg ? <Notice dark>{msg}</Notice> : null}
           <Button label={C.startedAfterAll} variant="ghost" onPress={started} />
-          <Button
-            label={C.abandon}
-            variant="ghost"
-            onPress={() => {
-              cancelAlerts(d.alertIds);
-              update(null);
-              router.replace('/');
-            }}
-          />
+          {saveErr ? <SaveFailed dark /> : null}
+          <Button label={C.abandon} variant="ghost" onPress={abandon} />
         </>
       ) : null}
 
@@ -379,7 +398,7 @@ export default function Recharge() {
           {prog.done ? <Notice tone="demo">{C.unplug(est.toSoc, !!idleAt)}</Notice> : null}
           {idleAt ? (
             <Notice tone="demo">
-              {C.idleNotice(clock(idleAt), withUnit(num(tariff!.idle!.perMin, 3), '€/min'))}
+              {C.idleNotice(clock(idleAt), withUnit(num(tariff!.idle!.perMin * ttc, 3), '€/min'))}
             </Notice>
           ) : (
             <Notice dark>{C.freeSpot}</Notice>
@@ -395,7 +414,9 @@ export default function Recharge() {
         <>
           <View style={styles.card}>
             <Text style={styles.cardTitle} accessibilityRole="header">{C.endedTitle}</Text>
-            {d.autoEnded ? <Text style={styles.mutedLeft}>{C.autoEnded(clock(d.endedAt))}</Text> : null}
+            {d.autoEnded ? (
+              <Text style={styles.mutedLeft}>{d.autoReason === 'stale' ? C.autoEndedStale(`${dateNum(d.endedAt)} ${clock(d.endedAt)}`) : C.autoEnded(clock(d.endedAt))}</Text>
+            ) : null}
             <Row k={C.duration} v={durationShort(elapsedMs)} />
             <Row k={C.energyEstimated} v={withUnit(kwhText(prog.kWhBilled))} />
             <Row k={C.costEst} v={prog.cost != null ? euros(Math.round(prog.cost * 100)) : t.recharger.unknown} />

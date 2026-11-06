@@ -74,10 +74,11 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
   inner: { flex: 1, paddingHorizontal: 20, maxWidth: 600, width: '100%', alignSelf: 'center' },
-  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  brand: { fontFamily: fonts.display, fontSize: 22, color: colors.accent },
-  skip: { minHeight: MIN_TOUCH, paddingHorizontal: 16 },
-  scroll: { flexGrow: 1, justifyContent: 'center', paddingVertical: 16 },
+  // Texte agrandi : « Passer » passe sous la marque plutôt que de la toucher
+  top: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: 16, rowGap: 4 },
+  brand: { fontFamily: fonts.display, fontSize: 22, color: colors.accent, flexShrink: 1 },
+  skip: { minHeight: MIN_TOUCH, paddingHorizontal: 16, marginLeft: 'auto' },
+  scroll: { flexGrow: 1, justifyContent: 'flex-start', paddingTop: 24, paddingBottom: 16 },
   content: { gap: 16 },
   dots: { flexDirection: 'row', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border },

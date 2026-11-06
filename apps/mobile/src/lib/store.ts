@@ -1,6 +1,7 @@
 // État partagé entre écrans ; la recharge en cours est persistée (l'app peut être fermée pendant
 // que la page de paiement est ouverte ou pendant la charge) et reprise à la réouverture.
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { settleStale } from './autoEnd';
 import type { MethodId } from './history';
 import type { PayMethod, Plug, Station } from './stations';
 
@@ -23,7 +24,8 @@ export interface ChargePlan {
 }
 
 export interface DirectCharge {
-  station: { id: string; name: string; operator?: string; tel?: string; lat?: number; lon?: number };
+  /** `ok` : clé de l'opérateur (operator-portals.json), pour relire sa saisie du point (idEntry) dans le suivi. */
+  station: { id: string; name: string; operator?: string; ok?: string; tel?: string; lat?: number; lon?: number };
   operatorName: string;
   /** Page de paiement de l'opérateur ('' pour un paiement par carte au lecteur). */
   url: string;
@@ -35,8 +37,12 @@ export interface DirectCharge {
   alertIds?: string[];
   /** Dernière position connue à la borne (heure de départ estimée en cas de fin automatique). */
   lastNearAt?: number;
-  /** Fin détectée automatiquement (départ de la borne). */
+  /** Fin détectée automatiquement (départ de la borne, ou recharge jamais terminée depuis plus de 24 h). */
   autoEnded?: boolean;
+  /** Origine de la fin automatique : départ constaté, ou recharge restée ouverte plus de 24 h (fin estimée). */
+  autoReason?: 'departed' | 'stale';
+  /** Méthode réellement utilisée au moment du paiement (reprise par le reçu, prioritaire sur celle du plan). */
+  method?: MethodId;
   /** Compte opérateur ouvert pour démarrer : à confirmer par l'utilisateur au retour (jamais supposé connecté). */
   accountAsk?: { key: string; name: string };
   /** Le reçu (fin automatique) n'a pas pu être écrit dans l'historique : affiché, « Enregistrer » réessaie. */
@@ -52,12 +58,22 @@ export function staleUnconfirmed(d: DirectCharge | null, now = Date.now()): d is
 }
 
 const KEY = 'branche.direct.v1';
+/** Borne sélectionnée et parcours « Recharger » en cours : persistés pour survivre à un rechargement de la page. */
+const CTX_KEY = 'branche.context.v1';
+/** Contexte trop ancien : ignoré au rechargement (jamais de paiement sur un choix de la veille). */
+export const CONTEXT_TTL_MS = 12 * 3600_000;
 let stations: Station[] = [];
 let current: Station | null = null;
 let direct: DirectCharge | null = null;
 let plan: ChargePlan | null = null;
 let persistFailed = false;
 const persistListeners = new Set<() => void>();
+let hydrated: Promise<{ current: Station | null; plan: ChargePlan | null }> | null = null;
+
+function saveContext() {
+  const v = current || plan ? JSON.stringify({ at: Date.now(), current, plan }) : null;
+  (v ? AsyncStorage.setItem(CTX_KEY, v) : AsyncStorage.removeItem(CTX_KEY)).catch(() => undefined);
+}
 
 export const store = {
   setStations: (list: Station[]) => {
@@ -66,13 +82,33 @@ export const store = {
   stations: () => stations,
   setCurrent: (s: Station | null) => {
     current = s;
+    saveContext();
   },
   current: () => current,
-  /** Choix en cours dans le parcours de recharge (mémoire seulement, recopié dans DirectCharge au paiement). */
+  /** Choix en cours dans le parcours de recharge (persisté avec la borne, recopié dans DirectCharge au paiement). */
   setPlan: (p: ChargePlan | null) => {
     plan = p;
+    saveContext();
   },
   plan: () => plan,
+  /**
+   * Après un rechargement (mémoire vide) : borne et plan relus sur l'appareil, s'ils datent de moins de 12 h.
+   * Ne remplace jamais un choix déjà en mémoire.
+   */
+  hydrate(): Promise<{ current: Station | null; plan: ChargePlan | null }> {
+    if (!hydrated) {
+      hydrated = AsyncStorage.getItem(CTX_KEY)
+        .then((raw) => {
+          const v = raw ? (JSON.parse(raw) as { at?: number; current?: Station | null; plan?: ChargePlan | null }) : null;
+          const fresh = !!v && typeof v.at === 'number' && Date.now() - v.at < CONTEXT_TTL_MS;
+          if (fresh && !current && v.current?.id) current = v.current;
+          if (fresh && !plan && v.plan?.stationId) plan = v.plan;
+        })
+        .catch(() => undefined)
+        .then(() => ({ current, plan }));
+    }
+    return hydrated;
+  },
   setDirect: (d: DirectCharge | null) => {
     direct = d;
     persistFailed = false;
@@ -97,9 +133,22 @@ export const store = {
     } catch {
       direct = null;
     }
-    // Une recharge démarrée puis abandonnée depuis plus de 24 h n'est plus proposée. Un paiement jamais confirmé n'est
-    // jamais effacé en silence : l'accueil demande « Abandonner ce paiement ? » (archivé « non démarré » si oui).
-    if (direct && direct.chargeStartedAt && Date.now() - direct.openedAt > 24 * 3600 * 1000) store.setDirect(null);
+    // Rien n'est effacé en silence : une recharge démarrée jamais terminée depuis plus de 24 h est terminée (fin estimée)
+    // et archivée avec son reçu ; une recharge terminée depuis plus de 24 h n'est retirée qu'une fois son reçu archivé.
+    // Un paiement jamais confirmé : l'accueil demande « Abandonner ce paiement ? » (archivé « non démarré » si oui).
+    if (direct) {
+      const before = direct;
+      const next = await settleStale(before);
+      if (next !== before && direct === before) store.setDirect(next);
+    }
     return direct;
+  },
+  /** Tests : simule un rechargement de l'app (mémoire vidée, stockage de l'appareil conservé). */
+  _resetMemory() {
+    stations = [];
+    current = null;
+    direct = null;
+    plan = null;
+    hydrated = null;
   },
 };

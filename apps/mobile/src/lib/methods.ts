@@ -8,7 +8,7 @@ import type { Station } from './stations';
 import { acceptedBadges, type Wallet } from './accounts';
 import { idEntryOf, webStartUrl, type Portals } from './portals';
 import { tr } from '../i18n';
-import type { MethodCtx } from '../i18n/types';
+import type { IdEntryInfo, MethodCtx } from '../i18n/types';
 
 export function operatorOf(s: Station | null, ops: Operator[]): Operator | undefined {
   return s?.ok ? ops.find((o) => o.key === s.ok) : undefined;
@@ -102,6 +102,7 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
   const accepted = acceptedBadges(myBadges, portal?.roamingBadgesAccepted);
   const badgeMaybe = !accepted.length && !portal?.roamingBadgesAccepted?.length && s.pay.includes('badge') && myBadges.length > 0;
 
+  const idEntry = idEntryOf(portal);
   // Règle produit : sans compte d'abord. Un compte n'est proposé que si l'opérateur l'impose (aucune voie sans compte).
   const noAccountWay = declaredAdHoc || !!link || reader;
   // Compte seulement si son site permet de démarrer une charge (un simple portail de connexion ne sert à rien à la borne)
@@ -116,7 +117,7 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
         available: true,
         order,
         url: accountUrl,
-        copyId: accountUrl && !accountUrl.includes(encodeURIComponent(pointId ?? '¤')) ? pointId : undefined,
+        copyId: copyIdFor(accountUrl, pointId, idEntry),
       },
     });
   }
@@ -132,8 +133,6 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
   });
   // Saisie du point sur la page (notes sourcées) : identifiant IRVE à coller (défaut), numéro inscrit sur la borne
   // (Virta), ou choix dans la liste (Ionity). Seul l'identifiant IRVE est copié : ailleurs, le copier tromperait.
-  const idEntry = idEntryOf(portal);
-  const copyIrveId = idEntry.entry === null || idEntry.entry === 'emi3';
   ranked.push({
     rank: 1.5,
     o: {
@@ -142,7 +141,7 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
       available: !!link,
       order,
       url: link ?? undefined,
-      copyId: link && copyIrveId && !link.includes(encodeURIComponent(pointId ?? '¤')) ? pointId : undefined,
+      copyId: copyIdFor(link, pointId, idEntry),
     },
   });
   ranked.push({
@@ -170,6 +169,33 @@ export function payOptions(s: Station, point: ChargePoint | null, ops: Operator[
   }
   ranked.sort((a, b) => a.rank - b.rank);
   return [...ranked.filter((r) => r.o.available), ...ranked.filter((r) => !r.o.available)].map((r) => r.o);
+}
+
+/**
+ * Identifiant IRVE à copier pour la page ouverte : seulement si l'opérateur fait saisir cet identifiant (emi3, ou
+ * saisie non documentée) et que l'adresse ne le contient pas déjà. Numéro inscrit sur la borne (Virta) ou choix dans
+ * une liste (Ionity) : rien à copier, le copier tromperait.
+ */
+export function copyIdFor(url: string | null | undefined, pointId: string | null | undefined, idEntry: IdEntryInfo): string | undefined {
+  if (!url || !pointId) return undefined;
+  if (idEntry.entry !== null && idEntry.entry !== 'emi3') return undefined;
+  return url.includes(encodeURIComponent(pointId)) ? undefined : pointId;
+}
+
+/**
+ * Suivi d'une recharge (recharge.tsx) : même règle que payOptions pour la page déjà ouverte. `copyId` si l'identifiant
+ * est à coller ; sinon `entry` rappelle la saisie propre à l'opérateur (numéro inscrit, choix dans la liste).
+ */
+export function trackedPointEntry(
+  method: MethodId | undefined,
+  url: string,
+  pointId: string | undefined,
+  idEntry: IdEntryInfo,
+): { copyId?: string; entry?: 'printed' | 'select'; digits?: [number, number] | null } {
+  if (!url || !pointId || (method !== 'operator-link' && method !== 'account')) return {};
+  const copyId = copyIdFor(url, pointId, idEntry);
+  if (copyId) return { copyId };
+  return idEntry.entry === 'printed' || idEntry.entry === 'select' ? { entry: idEntry.entry, digits: idEntry.digits } : {};
 }
 
 /** L'IRVE déclare un badge pour cette borne : seule condition pour en parler (textes, « Mes badges »). */

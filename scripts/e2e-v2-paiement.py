@@ -5,7 +5,7 @@ Critique paiement : QR d'un autre point / d'une autre borne (confirmation explic
 (payDomains : ENGIE Vianeo, Virta), lecteur CB 2027 seulement ≥ 50 kW, Lidl « appli seule » → borne payable la plus
 proche + « Y aller », scan depuis l'accueil → résumé prix + estimation avant « Payer ».
 Critique paiement passe 2 : Tesla (appli seule) → « Pas de paiement possible dans Branché ici » + borne payable la plus
-proche ; TotalEnergies 300 kW « gratuite » IRVE → « à vérifier », coût inconnu, lecteur CB « certains sites » ; QR
+proche ; TotalEnergies 300 kW « gratuite » IRVE → « à confirmer sur la borne », coût « À confirmer », lecteur CB « certains sites » ; QR
 pay.alizecharge.com sur une borne Bouygues → site officiel (pas un sosie), pré-autorisation 75 € avant « Payer » ;
 bannière d'accueil « Paiement en attente » tant que le démarrage n'est pas confirmé.
 Critique paiement passe 3 : hors ligne (« Pas de réseau : payez au lecteur CB ou réessayez »), paiement jamais confirmé
@@ -563,9 +563,11 @@ try:
 
         page.goto(f'{BASE}/app/recharger?evse=FRHPCENF080017001', wait_until='load')  # TotalEnergies Massy 300 kW, gratuit:true IRVE
         page.wait_for_selector('text=Prix avant de payer', timeout=20000)
-        page.wait_for_selector('text=Déclarée gratuite dans la base nationale, à vérifier')
-        assert 'Gratuit selon l’opérateur' not in page.inner_text('body')
-        page.get_by_text('Inconnu', exact=True).wait_for()
+        page.wait_for_selector('text=Gratuit selon la base nationale, à confirmer sur la borne')
+        body = page.inner_text('body')
+        assert 'Gratuit selon l’opérateur' not in body
+        page.get_by_text('À confirmer', exact=True).wait_for()  # tuile coût : même formule, pas « Inconnu » + « Prix inconnu »
+        assert 'Prix inconnu' not in body and 'Inconnu' not in body, 'une seule formule pour la gratuité non crédible'
         shot(page, 'h2-total-300kw-gratuit-a-verifier')
         page.get_by_text('Carte bancaire sur la borne (possible sur certains sites)').first.scroll_into_view_if_needed()
         shot(page, 'h2b-total-methodes')
@@ -574,7 +576,7 @@ try:
         page.wait_for_selector('text=obligatoire sur toutes les bornes rapides (≥ 50 kW) à partir de 2027')
         page.locator('text=Lecteur de carte signalé par >> visible=true').first.wait_for()  # « Autres moyens » du paiement
         shot(page, 'h3-total-payer-lecteur')
-        ok('TotalEnergies 300 kW gratuite IRVE : « Déclarée gratuite dans la base nationale, à vérifier », coût « Inconnu », lecteur CB « certains sites » sourcé')
+        ok('TotalEnergies 300 kW gratuite IRVE : « Gratuit selon la base nationale, à confirmer sur la borne », coût « À confirmer », lecteur CB « certains sites » sourcé')
 
         page.goto(f'{BASE}/app/payer', wait_until='load')  # scan sans borne choisie (accueil)
         page.wait_for_selector('text=Payer la borne', timeout=20000)

@@ -13,7 +13,7 @@ export type ConnectorId = 'scan' | 'operator-link' | 'account' | 'reader' | 'bad
 
 function stationRef(station: Station | null) {
   return station
-    ? { id: station.id, name: displayName(station), operator: station.o, tel: station.tel, lat: station.lat, lon: station.lon }
+    ? { id: station.id, name: displayName(station), operator: station.o, ...(station.ok ? { ok: station.ok } : {}), tel: station.tel, lat: station.lat, lon: station.lon }
     : { id: 'inconnue', name: tr().common.scannedStation };
 }
 

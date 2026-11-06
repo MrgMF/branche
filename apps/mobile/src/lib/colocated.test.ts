@@ -8,6 +8,10 @@ describe('groupColocated', () => {
     const g = groupColocated([at('a', 0), at('b', 2), at('c', 0, 3), at('d', 40), at('e', 41.5)]);
     expect(g.map((x) => x.map((p) => p.id))).toEqual([['a', 'b', 'c'], ['d', 'e']]);
   });
+  it('carte : seuil de 15 m (même parking), pas au-delà', () => {
+    expect(groupColocated([at('a', 0), at('b', 12), at('c', 0, 9)], 15)).toHaveLength(1);
+    expect(groupColocated([at('a', 0), at('b', 22)], 15)).toHaveLength(2);
+  });
   it('au-delà de 5 m : séparées', () => {
     expect(groupColocated([at('a', 0), at('b', 8)])).toHaveLength(2);
     expect(groupColocated([])).toEqual([]);

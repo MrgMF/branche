@@ -108,15 +108,17 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
       if(k==='free'){g.moveTo(12,21);g.lineTo(18,27);g.lineTo(28,14)}else if(k==='busy'){g.moveTo(20,11);g.lineTo(20,21);g.lineTo(27,25)}else{g.moveTo(13,13);g.lineTo(27,27);g.moveTo(27,13);g.lineTo(13,27)}
       g.stroke();map.addImage('st-'+k,g.getImageData(0,0,40,40),{pixelRatio:2})});
       map.addLayer({id:'pt-st',type:'symbol',source:'st',filter:['all',['!',['has','point_count']],['in',['get','st'],['literal',['free','busy','down']]]],minzoom:11,
-        layout:{'icon-image':['concat','st-',['get','st']],'icon-offset':[18,-18],'icon-allow-overlap':true,'icon-ignore-placement':true}});
+        layout:{'icon-image':['concat','st-',['get','st']],'icon-offset':[18,-18],'icon-allow-overlap':true,'icon-ignore-placement':false}});
     }catch(e){}
-    map.addLayer({id:'pt-l',type:'symbol',source:'st',filter:['all',['!',['has','point_count']],['!=',['get','grp'],1]],minzoom:13.5,layout:{'text-field':['get','label'],'text-size':12,'text-offset':[0,1.5],'text-anchor':'top','text-font':['Noto Sans Bold'],'text-allow-overlap':false},paint:{'text-color':'${C.ink}','text-halo-color':'#fff','text-halo-width':2}});
+    // Étiquettes : jamais superposées (collisions), placées sous le point ou à côté s'il manque la place ; priorité aux bornes rapides.
+    var LBL={'text-size':12,'text-font':['Noto Sans Bold'],'text-allow-overlap':false,'text-ignore-placement':false,'text-padding':3,'text-variable-anchor':['top','bottom','right','left']};
+    map.addLayer({id:'pt-l',type:'symbol',source:'st',filter:['all',['!',['has','point_count']],['!=',['get','grp'],1]],minzoom:13.5,layout:Object.assign({},LBL,{'text-field':['get','label'],'text-radial-offset':1.4,'symbol-sort-key':['case',FAST,1,2]}),paint:{'text-color':'${C.ink}','text-halo-color':'#fff','text-halo-width':2}});
     // Sélection : anneau d'accent autour d'un liseré blanc.
-    map.addLayer({id:'sel-halo',type:'circle',source:'st',filter:['==',['get','id'],'__none__'],paint:{'circle-color':'rgba(0,0,0,0)','circle-radius':21,'circle-stroke-width':4,'circle-stroke-color':'${M.selectionRing}'}});
+    map.addLayer({id:'sel-halo',type:'circle',source:'st',filter:['==',['get','id'],'__none__'],paint:{'circle-color':'rgba(0,0,0,0)','circle-radius':19,'circle-stroke-width':3.5,'circle-stroke-color':'${M.selectionRing}'}});
     map.addLayer({id:'sel',type:'circle',source:'st',filter:['==',['get','id'],'__none__'],paint:{'circle-color':fill,'circle-radius':15,'circle-stroke-width':3,'circle-stroke-color':'#FFFFFF'}});
     // Étiquettes au-dessus de l'anneau : borne sélectionnée (décalée sous l'anneau de 25 px) et groupes.
     map.addLayer({id:'sel-l',type:'symbol',source:'st',filter:['==',['get','id'],'__none__'],layout:{'text-field':['get','label'],'text-size':12,'text-offset':[0,2.4],'text-anchor':'top','text-font':['Noto Sans Bold'],'text-allow-overlap':true,'text-ignore-placement':true},paint:{'text-color':'${C.ink}','text-halo-color':'#fff','text-halo-width':2}});
-    map.addLayer({id:'grp-l',type:'symbol',source:'st',filter:['==',['get','grp'],1],minzoom:13.5,layout:{'text-field':['get','label'],'text-size':12,'text-offset':[0,2.4],'text-anchor':'top','text-font':['Noto Sans Bold'],'text-max-width':9},paint:{'text-color':'${C.ink}','text-halo-color':'#fff','text-halo-width':2}});
+    map.addLayer({id:'grp-l',type:'symbol',source:'st',filter:['==',['get','grp'],1],minzoom:13.5,layout:Object.assign({},LBL,{'text-field':['get','label'],'text-radial-offset':1.9,'text-max-width':9,'symbol-sort-key':0}),paint:{'text-color':'${C.ink}','text-halo-color':'#fff','text-halo-width':2}});
     map.on('click',function(e){var fs=map.queryRenderedFeatures(e.point,{layers:['hit','cl-hit']});if(!fs.length){if(openG)collapse();return}
       var f=nearestF(e,fs);var p=f.properties;
       if(p.cluster){map.getSource('st').getClusterExpansionZoom(p.cluster_id).then(function(z){map.easeTo({center:f.geometry.coordinates,zoom:z})});return}
@@ -128,6 +130,7 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
     map.on('click','pins',function(e){var f=e.features&&e.features[0];if(f)send({type:'tapPin',id:f.properties.id})});
     map.addLayer({id:'dest-halo',type:'circle',source:'dest',paint:{'circle-color':'#0F1A17','circle-opacity':0.15,'circle-radius':20}});
     map.addLayer({id:'dest',type:'circle',source:'dest',paint:{'circle-color':'#0F1A17','circle-radius':9,'circle-stroke-width':4,'circle-stroke-color':'#fff'}});
+    map.addLayer({id:'dest-l',type:'symbol',source:'dest',layout:{'text-field':['get','label'],'text-size':13,'text-offset':[0,1.5],'text-anchor':'top','text-font':['Noto Sans Bold'],'text-max-width':12,'text-allow-overlap':true},paint:{'text-color':'#0F1A17','text-halo-color':'#fff','text-halo-width':2.5}});
     map.addLayer({id:'me-halo',type:'circle',source:'me',paint:{'circle-color':'${C.position}','circle-opacity':0.12,'circle-stroke-color':'${C.position}','circle-stroke-opacity':0.35,'circle-stroke-width':1,'circle-radius':14,'circle-pitch-alignment':'map'}});
     try{var cc=document.createElement('canvas');cc.width=cc.height=120;var cg=cc.getContext('2d');var gr=cg.createRadialGradient(60,60,6,60,60,58);gr.addColorStop(0,'rgba(29,78,216,0.55)');gr.addColorStop(1,'rgba(29,78,216,0)');
       cg.fillStyle=gr;cg.beginPath();cg.moveTo(60,60);cg.arc(60,60,58,-Math.PI/2-0.55,-Math.PI/2+0.55);cg.closePath();cg.fill();
@@ -145,6 +148,13 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
     map.on('moveend',function(e){var c=map.getCenter();send({type:'moveend',lat:c.lat,lon:c.lng,zoom:map.getZoom(),user:!!e.originalEvent})});
     // Itinéraire et perturbations au-dessus des bornes (sinon les grappes masquent le tracé).
     ['zones-f','zones-l','alts-casing','alts','alts-hit','alts-l','route-casing','route','traffic','inc','inc-l'].forEach(function(l){if(map.getLayer(l))map.moveLayer(l,'pins')});
+    // Anneau de sélection sous les groupes (un groupe voisin reste visible) ; pictogrammes de statut placés avant les
+    // étiquettes (celles-ci les évitent) ; chiffres des grappes et des groupes au-dessus du point bleu.
+    ['sel-halo','sel'].forEach(function(l){map.moveLayer(l,'grp')});
+    if(map.getLayer('pt-st'))map.moveLayer('pt-st','zones-f');
+    // Destination (itinéraire, même sans tracé) au-dessus de tout, sauf la flèche de guidage.
+    ['cl-n','grp-n','dest-halo','dest','dest-l'].forEach(function(l){map.moveLayer(l)});
+    if(map.getLayer('me-arrow'))map.moveLayer('me-arrow');
     ready=true;applySel();pending.forEach(handle);pending=[];send({type:'ready'});
   });
   function line(c){return c&&c.length?{type:'Feature',geometry:{type:'LineString',coordinates:c},properties:{}}:empty}
@@ -170,7 +180,7 @@ export const mapHtml = (lang: string, label: string, offline: string) => `<!doct
     else if(m.type==='routes'){map.getSource('route').setData(line(m.main));
       map.getSource('traffic').setData({type:'FeatureCollection',features:(m.segments||[]).map(function(s){return{type:'Feature',geometry:{type:'LineString',coordinates:s.coords},properties:{level:s.level}}})});
       map.getSource('alts').setData({type:'FeatureCollection',features:(m.alts||[]).map(function(a){return{type:'Feature',geometry:{type:'LineString',coordinates:a.coords},properties:{id:a.id,label:a.label||''}}})})}
-    else if(m.type==='dest'){map.getSource('dest').setData(m.lat==null?empty:{type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Point',coordinates:[m.lon,m.lat]},properties:{}}]})}
+    else if(m.type==='dest'){map.getSource('dest').setData(m.lat==null?empty:{type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Point',coordinates:[m.lon,m.lat]},properties:{label:m.label||''}}]})}
     else if(m.type==='pins'){map.getSource('pins').setData({type:'FeatureCollection',features:m.items.map(function(i){return{type:'Feature',geometry:{type:'Point',coordinates:[i.lon,i.lat]},properties:{id:i.id,label:i.label}}})})}
     else if(m.type==='incidents'){map.getSource('inc').setData({type:'FeatureCollection',features:m.items.map(function(i){return{type:'Feature',geometry:{type:'Point',coordinates:[i.lon,i.lat]},properties:{id:i.id,t:i.type,title:i.title}}})})}
     else if(m.type==='zones'){map.getSource('zones').setData({type:'FeatureCollection',features:m.polys.map(function(r){return{type:'Feature',geometry:{type:'Polygon',coordinates:[r]},properties:{}}})})}
@@ -211,7 +221,7 @@ export type MapIn =
       segments: { coords: [number, number][]; level: 'slow' | 'jam' | 'closed' }[];
       alts: { id: string; coords: [number, number][]; label?: string }[];
     }
-  | { type: 'dest'; lat?: number; lon?: number }
+  | { type: 'dest'; lat?: number; lon?: number; label?: string }
   | { type: 'pins'; items: { id: string; lat: number; lon: number; label: string }[] }
   | { type: 'incidents'; items: { id: string; lon: number; lat: number; type: string; title: string }[] }
   | { type: 'zones'; polys: [number, number][][] }
