@@ -111,6 +111,7 @@ export const nl: Dict = {
     settings: 'Instellingen',
     about: 'Over en juridisch',
     active: 'Bezig',
+    ended: 'Beëindigd · prijs noteren',
     prepared: 'Voorbereid',
     noVehicle: 'Niet ingesteld',
     noCharge: 'Geen actieve sessie',
@@ -971,6 +972,7 @@ export const nl: Dict = {
   },
   maRecharge: {
     activeKicker: 'Bezig',
+    endedKicker: 'Beëindigd · prijs noteren',
     activeBody: (op: string) => `Rechtstreeks betaald aan ${op}. Volgen, herinneringen en bon.`,
     open: 'Volgen openen',
     preparedKicker: 'Voorbereid',

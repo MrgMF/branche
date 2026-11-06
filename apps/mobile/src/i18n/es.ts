@@ -117,6 +117,7 @@ export const es: Dict = {
     settings: 'Ajustes',
     about: 'Acerca de y aviso legal',
     active: 'En curso',
+    ended: 'Terminada · anota el precio',
     prepared: 'Preparada',
     noVehicle: 'Sin indicar',
     noCharge: 'Ninguna en curso',
@@ -977,6 +978,7 @@ export const es: Dict = {
   },
   maRecharge: {
     activeKicker: 'En curso',
+    endedKicker: 'Terminada · anota el precio',
     activeBody: (op: string) => `Pagada directamente ${aOp(op)}. Seguimiento, avisos y recibo.`,
     open: 'Abrir el seguimiento',
     preparedKicker: 'Preparada',

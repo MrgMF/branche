@@ -12,13 +12,13 @@ import { loadVehicle } from '../lib/vehicle';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
 import { Icon, type ShellIcon } from './Icon';
 
-export type ChargeState = 'active' | 'prepared' | null;
+export type ChargeState = 'active' | 'ended' | 'prepared' | null;
 
-/** État « Ma recharge » pour le badge : suivie en cours, sinon préparée. */
+/** État « Ma recharge » pour le badge : suivie en cours, terminée automatiquement (prix à noter), sinon préparée. */
 export async function chargeState(): Promise<ChargeState> {
   const d = await store.loadDirect();
   if (d && !d.endedAt) return 'active';
-  if (d?.endedAt && d.autoEnded) return 'active';
+  if (d?.endedAt && d.autoEnded) return 'ended';
   return (await loadPrepared()) ? 'prepared' : null;
 }
 
@@ -27,7 +27,7 @@ export function MenuButton({ onPress, badge }: { onPress: () => void; badge: Cha
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${t.menu.openA11y}${badge ? `. ${t.menu.myCharge} : ${badge === 'active' ? t.menu.active : t.menu.prepared}` : ''}`}
+      accessibilityLabel={`${t.menu.openA11y}${badge ? `. ${t.menu.myCharge} : ${badge === 'active' ? t.menu.active : badge === 'ended' ? t.menu.ended : t.menu.prepared}` : ''}`}
       testID="menu"
       onPress={onPress}
       style={({ pressed }) => [styles.menuBtn, pressed && { backgroundColor: colors.surfaceAlt }]}
@@ -88,8 +88,8 @@ export function AppMenu({ open, onClose }: { open: boolean; onClose: () => void 
       icon: 'bolt',
       label: t.menu.myCharge,
       sub: charge ? undefined : t.menu.noCharge,
-      badge: charge === 'active' ? t.menu.active : charge === 'prepared' ? t.menu.prepared : undefined,
-      to: charge === 'active' ? '/recharge' : '/ma-recharge',
+      badge: charge === 'active' ? t.menu.active : charge === 'ended' ? t.menu.ended : charge === 'prepared' ? t.menu.prepared : undefined,
+      to: charge === 'active' || charge === 'ended' ? '/recharge' : '/ma-recharge',
     },
     { key: 'history', icon: 'receipt', label: t.menu.history, sub: t.menu.charges(count), to: '/historique' },
     { key: 'vehicle', icon: 'car', label: t.menu.vehicle, sub: vehicle ?? t.menu.noVehicle, to: '/vehicule' },

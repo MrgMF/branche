@@ -117,6 +117,7 @@ export const de: Dict = {
     settings: 'Einstellungen',
     about: 'Über und Impressum',
     active: 'Läuft',
+    ended: 'Beendet · Preis notieren',
     prepared: 'Vorbereitet',
     noVehicle: 'Nicht angegeben',
     noCharge: 'Keiner aktiv',
@@ -977,6 +978,7 @@ export const de: Dict = {
   },
   maRecharge: {
     activeKicker: 'Läuft',
+    endedKicker: 'Beendet · Preis notieren',
     activeBody: (op: string) => `Direkt ${anOp(op)} bezahlt. Verfolgung, Erinnerungen und Beleg.`,
     open: 'Verfolgung öffnen',
     preparedKicker: 'Vorbereitet',

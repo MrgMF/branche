@@ -489,7 +489,8 @@ export default function Recharge() {
           </View>
           {saveErr ? <SaveFailed dark /> : null}
           <Button label={C.save} onPress={save} hint={C.saveHint} />
-          <Button label={C.resume} variant="ghost" onPress={() => update({ endedAt: null, autoEnded: false })} />
+          {/* Fin estimée d'une recharge ouverte depuis plus de 24 h : rien à reprendre */}
+          {d.autoReason === 'stale' ? null : <Button label={C.resume} variant="ghost" onPress={() => update({ endedAt: null, autoEnded: false })} />}
         </>
       ) : null}
     </ScrollView>

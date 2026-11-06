@@ -38,7 +38,8 @@ export default function MaRecharge() {
 
       {active ? (
         <View style={[styles.card, styles.on]} accessibilityRole="summary">
-          <Text style={styles.kicker}>{M.activeKicker}</Text>
+          {/* Fin automatique (départ ou > 24 h) : le reçu attend le prix réellement payé */}
+          <Text style={styles.kicker}>{active.endedAt && active.autoEnded ? M.endedKicker : M.activeKicker}</Text>
           <Text style={styles.title} numberOfLines={2}>
             {active.station.name}
           </Text>

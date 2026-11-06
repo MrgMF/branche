@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CopyId } from '../components/CopyId';
-import { TariffLines } from '../components/Pricing';
+import { costLabel, TariffLines } from '../components/Pricing';
 import { Button, Notice, Tag } from '../components/ui';
 import { getCommunity, preauthText, reliabilityText, type Community } from '../lib/community';
 import { operatorLabel, payOptions, runPlan, type PayOption } from '../lib/connectors';
@@ -15,7 +15,7 @@ import { availLabel, getAvailability, type AvailItem } from '../lib/availability
 import { clearPrepared, loadPrepared, savePrepared, type Prepared } from '../lib/prepared';
 import { durationLabel, estimateCharge, isDc } from '../lib/estimate';
 import { findStation, pointById, pointsOf, type ChargePoint } from '../lib/evse';
-import { euros, km, kw, NBSP, plugLabel, withUnit } from '../lib/format';
+import { km, kw, NBSP, plugLabel, withUnit } from '../lib/format';
 import { useLargeText } from '../lib/useLargeText';
 import type { MethodId } from '../lib/history';
 import type { Operator } from '../lib/qr';
@@ -25,7 +25,7 @@ import { describeTariff, stationTariff } from '../lib/tariff';
 import { compatible, loadVehicle, saveVehicle, type Vehicle } from '../lib/vehicle';
 import { loadWallet, type Wallet } from '../lib/accounts';
 import { appOnly, badgeMentioned, badgeNames, nearestPayable, surelyPayable } from '../lib/methods';
-import { loadPortals, preauthMaxOf, type Portals } from '../lib/portals';
+import { loadPortals, portalPaid, preauthMaxOf, type Portals } from '../lib/portals';
 import { colors, fonts, mapColors, MIN_TOUCH, radius } from '../theme';
 import { Icon } from '../components/Icon';
 import { ScreenHeader } from '../components/Screen';
@@ -70,6 +70,10 @@ export default function Recharger() {
   useEffect(() => {
     let alive = true;
     (async () => {
+      // Page rechargée (/recharger?station=…) : borne et plan relus sur l'appareil avant tout (sinon setCurrent écraserait
+      // le plan enregistré et le point choisi serait perdu)
+      await store.hydrate();
+      if (!alive) return;
       const id = params.evse || params.station || store.current()?.id || '';
       const cur = store.current();
       let found: { station: Station; pdcId: string | null } | null = null;
@@ -139,6 +143,8 @@ export default function Recharger() {
   const options = useMemo(() => (station ? payOptions(station, point, ops, { portals, wallet }) : []), [station, point, ops, portals, wallet, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const readerOk = options.some((o) => o.id === 'reader' && o.available && !o.speculative);
   const portal = station?.ok ? portals[station.ok] : undefined;
+  // Réseau payant notoire (sources) : une gratuité IRVE non crédible devient « tarif non publié », coût « Inconnu »
+  const paidNetwork = portalPaid(portal);
   const accountConnected = !!station?.ok && wallet.accounts.some((a) => a.operatorKey === station.ok);
   // Rien de payable ici depuis Branché : alternative la plus proche qui l'est (méthode déclarée, pas un QR « éventuel »).
   // `blocked` ne compte que les options disponibles ET non spéculatives ; `unconfirmed` : seulement du spéculatif
@@ -333,7 +339,7 @@ export default function Recharger() {
           {/* Prix avant de payer */}
           <View style={styles.card}>
             <Text style={styles.cardTitle} accessibilityRole="header">{R.priceBefore}</Text>
-            <TariffLines station={station} community={community} />
+            <TariffLines station={station} community={community} paidNetwork={paidNetwork} />
             <View style={styles.estimate} accessibilityRole="summary">
               <Text style={styles.estLabel}>
                 {withUnit(R.estimateFor(est.assumedVehicle ? R.avgVehicle55 : vehicle?.name ?? '', est.fromSoc, est.toSoc))}
@@ -341,7 +347,7 @@ export default function Recharger() {
               <View style={[styles.estRow, large && { flexDirection: 'column' }]}>
                 <Big label={R.energy} value={withUnit(kwhText(est.kWhBilled))} large={large} />
                 <Big label={R.duration} value={withUnit(`≈${NBSP}${durationLabel(est.minutes)}`)} large={large} />
-                <Big label={R.cost} value={est.cost != null ? `≈${NBSP}${euros(Math.round(est.cost * 100))}` : est.freeDoubtful ? R.toConfirm : R.unknown} large={large} />
+                <Big label={R.cost} value={costLabel(est, paidNetwork, `≈${NBSP}`)} large={large} />
               </View>
               <Text style={styles.small}>
                 {withUnit(R.powerNote(kw(est.powerKw), isDc(point.kw, point.plugs), kw(point.kw), est.assumedVehicle))}

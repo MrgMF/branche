@@ -115,6 +115,7 @@ export const fr = {
     settings: 'Réglages',
     about: 'À propos et mentions',
     active: 'En cours',
+    ended: 'Terminée · prix à noter',
     prepared: 'Préparée',
     noVehicle: 'Non renseigné',
     noCharge: 'Aucune en cours',
@@ -988,6 +989,7 @@ export const fr = {
   },
   maRecharge: {
     activeKicker: 'En cours',
+    endedKicker: 'Terminée · prix à noter',
     activeBody: (op: string) => `Payée directement à ${op}. Suivi, rappels et reçu.`,
     open: 'Ouvrir le suivi',
     preparedKicker: 'Préparée',

@@ -112,6 +112,7 @@ export const en: Dict = {
     settings: 'Settings',
     about: 'About and legal',
     active: 'In progress',
+    ended: 'Ended · note the price',
     prepared: 'Prepared',
     noVehicle: 'Not set',
     noCharge: 'None in progress',
@@ -973,6 +974,7 @@ export const en: Dict = {
   },
   maRecharge: {
     activeKicker: 'In progress',
+    endedKicker: 'Ended · note the price',
     activeBody: (op: string) => `Paid directly to ${op}. Tracking, reminders and receipt.`,
     open: 'Open tracking',
     preparedKicker: 'Prepared',

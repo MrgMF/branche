@@ -6,18 +6,45 @@ import type { ChargePoint } from '../lib/evse';
 import { durationLabel, estimateCharge } from '../lib/estimate';
 import { euros, withUnit } from '../lib/format';
 import type { Operator } from '../lib/qr';
+import { loadPortals, portalPaid } from '../lib/portals';
 import { loadOperators, type Station } from '../lib/stations';
 import { describeTariff, safeTariffUrl, stationTariff } from '../lib/tariff';
 import type { Vehicle } from '../lib/vehicle';
 import { eur, kwhText } from '../i18n/format';
 import { colors, fonts, MIN_TOUCH, radius } from '../theme';
-import { useT } from '../i18n';
+import { tr, useT } from '../i18n';
+
+/**
+ * Réseau payant notoire selon ses sources (portalPaid) pour l'opérateur de la borne : portails relus une fois (cache).
+ * Gratuité déclarée non crédible → « Tarif non publié dans la base nationale » et coût « Inconnu ».
+ */
+export function usePaidNetwork(operatorKey: string | null | undefined): boolean {
+  const [paid, setPaid] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setPaid(false);
+    if (operatorKey) loadPortals().then((p) => alive && setPaid(portalPaid(p[operatorKey])));
+    return () => {
+      alive = false;
+    };
+  }, [operatorKey]);
+  return paid;
+}
+
+/** Coût affiché : estimation, sinon « À confirmer » (gratuité douteuse) ou « Inconnu » (réseau payant, prix absent). */
+export function costLabel(est: { cost: number | null; freeDoubtful: boolean }, paidNetwork: boolean, approx = '≈ '): string {
+  const R = tr().recharger;
+  if (est.cost != null) return `${approx}${euros(Math.round(est.cost * 100))}`;
+  return est.freeDoubtful && !paidNetwork ? R.toConfirm : R.unknown;
+}
 
 /** Tarif publié (analysé) + fiabilité et prix constatés par la communauté. */
-export function TariffLines({ station, community, compact }: { station: Station; community: Community | null; compact?: boolean }) {
+export function TariffLines({ station, community, compact, paidNetwork }: { station: Station; community: Community | null; compact?: boolean; paidNetwork?: boolean }) {
   const T = useT();
   const t = stationTariff(station);
-  const lines = describeTariff(t);
+  // Valeur fournie par l'écran (portails déjà chargés), sinon relue ici
+  const paidHere = usePaidNetwork(paidNetwork === undefined ? station.ok : null);
+  const lines = describeTariff(t, { paidNetwork: paidNetwork ?? paidHere });
   const rel = reliabilityText(community);
   const last = lastPriceText(community);
   const rate = community?.successRate;
@@ -79,15 +106,16 @@ export function PriceSummary({
   const T = useT();
   const R = T.recharger;
   const tariff = stationTariff(station);
+  const paidNetwork = usePaidNetwork(station.ok);
   const fresh = vehicle && Date.now() - vehicle.socUpdatedAt < 3 * 3600_000 ? vehicle.socPercent : null;
   const est = estimateCharge({ vehicle, socPercent: fresh, pointKw: point.kw, plugs: point.plugs, tariff });
-  const cost = est.cost != null ? `≈ ${euros(Math.round(est.cost * 100))}` : est.freeDoubtful ? R.toConfirm : R.unknown;
+  const cost = costLabel(est, paidNetwork);
   return (
     <View style={styles.summary} accessibilityRole="summary">
       <Text style={styles.summaryTitle} accessibilityRole="header">
         {R.priceBefore}
       </Text>
-      <TariffLines station={station} community={community} compact />
+      <TariffLines station={station} community={community} compact paidNetwork={paidNetwork} />
       <Text style={styles.src}>{withUnit(R.estimateFor(est.assumedVehicle ? R.avgVehicle55 : vehicle?.name ?? '', est.fromSoc, est.toSoc))}</Text>
       <Text style={styles.line}>
         {withUnit(`${R.energy} ${kwhText(est.kWhBilled)} · ${R.duration} ≈ ${durationLabel(est.minutes)} · ${R.cost} ${cost}`)}

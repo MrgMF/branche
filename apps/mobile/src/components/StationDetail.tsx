@@ -6,7 +6,11 @@ import { navigationLinks, startCharge } from '../lib/charge';
 import { euros, km, kw, minutes, payLabel, plugLabel } from '../lib/format';
 import { availabilityDown, getAvailability, stationSummary, type AvailItem } from '../lib/availability';
 import { getCommunity, type Community } from '../lib/community';
-import { displayName, type Station } from '../lib/stations';
+import { loadWallet, type Wallet } from '../lib/accounts';
+import { appOnly, badgeMentioned, badgeNames, payOptions, surelyPayable } from '../lib/methods';
+import { loadPortals, type Portals } from '../lib/portals';
+import type { Operator } from '../lib/qr';
+import { displayName, loadOperators, type Station } from '../lib/stations';
 import { store } from '../lib/store';
 import { colors, fonts, mapColors, MIN_TOUCH, radius } from '../theme';
 import { TariffLines } from './Pricing';
@@ -14,7 +18,7 @@ import { freeCredible } from '../lib/tariff';
 import { allDown, nearestFree } from '../lib/nearestFree';
 import { useLargeText } from '../lib/useLargeText';
 import { Button, Notice, Stat, Tag } from './ui';
-import { useT } from '../i18n';
+import { tr, useT } from '../i18n';
 import { dateNum } from '../i18n/format';
 
 export function StationDetail(props: {
@@ -40,6 +44,17 @@ export function StationDetail(props: {
   const reserved = s.acc === 'reserve';
   const opName = props.operatorName;
   const [community, setCommunity] = useState<Community | null>(null);
+  // Registre, portails et badges : texte de paiement selon les méthodes réellement déclarées pour cette borne
+  const [payCtx, setPayCtx] = useState<{ ops: Operator[]; portals: Portals; wallet: Wallet } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    Promise.all([loadOperators(), loadPortals(), loadWallet()])
+      .then(([ops, portals, wallet]) => alive && setPayCtx({ ops, portals, wallet }))
+      .catch(() => alive && setPayCtx({ ops: [], portals: {}, wallet: { accounts: [], badges: [] } }));
+    return () => {
+      alive = false;
+    };
+  }, []);
   const live = useLive(s);
   const near = distance != null && distance < 0.3;
   const tel = s.tel ? phone(s.tel) : null;
@@ -157,7 +172,7 @@ export function StationDetail(props: {
 
       <View style={styles.payCard}>
         <Text style={styles.payTitle}>{t.station.payTitle}</Text>
-        <Text style={styles.payText}>{t.station.payText(opName)}</Text>
+        {payCtx ? <Text style={styles.payText} testID="station-pay-text">{payTextFor(s, opName, payCtx)}</Text> : null}
         <Text style={styles.boxTitle}>{t.station.priceTitle}</Text>
         <TariffLines station={s} community={community} compact />
         {payAtStation.length ? <Text style={styles.small}>{t.station.acceptedOnSite(payAtStation.join(' · '))}</Text> : null}
@@ -180,6 +195,19 @@ export function StationDetail(props: {
       <Text style={styles.small}>{t.station.source(s.maj ? dateNum(s.maj) : null)}</Text>
     </View>
   );
+}
+
+/**
+ * Texte du bloc paiement, comme « Recharger » : « paiement direct » seulement si une méthode déclarée le permet
+ * (surelyPayable) ; sinon « Non confirmé ici » (seulement du spéculatif) ou « Pas de paiement possible » (appli seule).
+ */
+function payTextFor(s: Station, op: string, ctx: { ops: Operator[]; portals: Portals; wallet: Wallet }): string {
+  const t = tr();
+  const options = payOptions(s, null, ctx.ops, { portals: ctx.portals, wallet: ctx.wallet });
+  if (surelyPayable(options)) return t.station.payText(op);
+  if (!appOnly(options)) return t.recharger.unconfirmedBody(op);
+  const portal = s.ok ? ctx.portals[s.ok] : undefined;
+  return t.recharger.blockedBody(op, badgeNames(portal?.roamingBadgesAccepted).join(', ') || null, badgeMentioned(s));
 }
 
 /** Disponibilité temps réel des points de la station (cache 60 s partagé : la fiche et l'action collante ne refont pas la requête). */

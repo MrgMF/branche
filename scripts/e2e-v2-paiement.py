@@ -5,7 +5,7 @@ Critique paiement : QR d'un autre point / d'une autre borne (confirmation explic
 (payDomains : ENGIE Vianeo, Virta), lecteur CB 2027 seulement ≥ 50 kW, Lidl « appli seule » → borne payable la plus
 proche + « Y aller », scan depuis l'accueil → résumé prix + estimation avant « Payer ».
 Critique paiement passe 2 : Tesla (appli seule) → « Pas de paiement possible dans Branché ici » + borne payable la plus
-proche ; TotalEnergies 300 kW « gratuite » IRVE → « à confirmer sur la borne », coût « À confirmer », lecteur CB « certains sites » ; QR
+proche ; TotalEnergies 300 kW « gratuite » IRVE (réseau payant sourcé) → « Tarif non publié dans la base nationale », coût « Inconnu », lecteur CB « certains sites » ; QR
 pay.alizecharge.com sur une borne Bouygues → site officiel (pas un sosie), pré-autorisation 75 € avant « Payer » ;
 bannière d'accueil « Paiement en attente » tant que le démarrage n'est pas confirmé.
 Critique paiement passe 3 : hors ligne (« Pas de réseau : réessayez… », lecteur CB seulement s'il est déclaré), paiement jamais confirmé
@@ -15,6 +15,9 @@ confirmation par case).
 Critique paiement passe 4 : lien non vérifié confirmé (méthode distincte au reçu), redirecteurs bloqués, lien entre
 particuliers → voie réelle de la borne (borne payable la plus proche ou page officielle), page « Payer » rechargée →
 retour à « Recharger », « Abandonner » → « Non démarré », recharge > 24 h → terminée et archivée, Virta sans copie.
+Critique paiement passe 5 : réseau payant notoire « gratuit » IRVE → « Tarif non publié » + « Inconnu » (cas 1), texte de paiement
+de la fiche selon les méthodes déclarées (cas 3), /recharger?station= rechargée → point repris (cas 5), recharge terminée
+automatiquement → « Terminée · prix à noter » (menu, Ma recharge) et pas de « Reprendre la recharge » après 24 h (cas 7, 8).
 
 Prérequis : un site assemblé (scripts/assemble-site.mjs + scripts/e2e-setup.mjs) avec une app exportée par
   EXPO_OFFLINE=1 BASE_URL=/branche/app DATA_URL=http://127.0.0.1:8080/branche/data SITE_URL=http://127.0.0.1:8080/branche \
@@ -569,12 +572,14 @@ try:
 
         page.goto(f'{BASE}/app/recharger?evse=FRHPCENF080017001', wait_until='load')  # TotalEnergies Massy 300 kW, gratuit:true IRVE
         page.wait_for_selector('text=Prix avant de payer', timeout=20000)
-        page.wait_for_selector('text=Gratuit selon la base nationale, à confirmer sur la borne')
+        # Cas 1 (passe 5) : réseau payant notoire (portail sourcé, lecteur CB) → jamais « gratuit, à vérifier »
+        page.wait_for_selector('text=Tarif non publié dans la base nationale')
+        page.get_by_text('Inconnu', exact=True).wait_for()  # tuile coût
         body = page.inner_text('body')
-        assert 'Gratuit selon l’opérateur' not in body
-        page.get_by_text('À confirmer', exact=True).wait_for()  # tuile coût : même formule, pas « Inconnu » + « Prix inconnu »
-        assert 'Prix inconnu' not in body and 'Inconnu' not in body, 'une seule formule pour la gratuité non crédible'
-        shot(page, 'h2-total-300kw-gratuit-a-verifier')
+        assert 'Gratuit selon' not in body, 'réseau payant : pas de « gratuit » affiché'
+        assert 'À confirmer' not in body, 'réseau payant : coût « Inconnu », pas « À confirmer »'
+        assert 'Prix inconnu' not in body, 'une seule formule (le tarif non publié dit déjà de vérifier l’écran)'
+        shot(page, 'h2-total-300kw-tarif-non-publie')
         page.get_by_text('Carte bancaire sur la borne (possible sur certains sites)').first.scroll_into_view_if_needed()
         shot(page, 'h2b-total-methodes')
         assert 'sur certains sites seulement (recherche Branché : services.totalenergies.fr, largus.fr)' in page.inner_text('body')
@@ -582,7 +587,7 @@ try:
         page.wait_for_selector('text=obligatoire sur toutes les bornes rapides (≥ 50 kW) à partir de 2027')
         page.locator('text=Lecteur de carte signalé par >> visible=true').first.wait_for()  # « Autres moyens » du paiement
         shot(page, 'h3-total-payer-lecteur')
-        ok('TotalEnergies 300 kW gratuite IRVE : « Gratuit selon la base nationale, à confirmer sur la borne », coût « À confirmer », lecteur CB « certains sites » sourcé')
+        ok('cas 1 — TotalEnergies 300 kW gratuite IRVE (réseau payant sourcé) : « Tarif non publié dans la base nationale », coût « Inconnu », lecteur CB « certains sites » sourcé')
 
         page.goto(f'{BASE}/app/payer', wait_until='load')  # scan sans borne choisie (accueil)
         page.wait_for_selector('text=Payer la borne', timeout=20000)
@@ -814,6 +819,20 @@ try:
         page.goto(f'{BASE}/app/recharge', wait_until='load')
         page.wait_for_selector('text=Recharge jamais terminée depuis plus de 24 h', timeout=15000)
         shot(page, 'j7-plus-24h-suivi')
+        # Cas 8 (passe 5) : fin estimée après 24 h → rien à reprendre
+        assert page.get_by_role('button', name='Reprendre la recharge').count() == 0, '« Reprendre la recharge » après une fin estimée (> 24 h)'
+        ok('cas 8 — recharge terminée après 24 h : pas de « Reprendre la recharge »')
+        # Cas 7 (passe 5) : terminée automatiquement → « Terminée · prix à noter » dans le menu et « Ma recharge »
+        page.goto(f'{BASE}/app/', wait_until='load')
+        page.get_by_test_id('menu').click()
+        page.get_by_test_id('app-menu').get_by_text('Terminée · prix à noter').wait_for(timeout=10000)
+        assert page.get_by_test_id('app-menu').get_by_text('En cours', exact=True).count() == 0, 'menu : pas « En cours » pour une recharge terminée'
+        shot(page, 'j7b-menu-terminee-prix-a-noter')
+        page.goto(f'{BASE}/app/ma-recharge', wait_until='load')
+        page.get_by_text('Terminée · prix à noter').wait_for(timeout=10000)
+        assert page.get_by_text('En cours', exact=True).count() == 0, 'Ma recharge : pas « En cours » pour une recharge terminée'
+        shot(page, 'j7c-ma-recharge-terminee')
+        ok('cas 7 — recharge terminée automatiquement : « Terminée · prix à noter » (menu et Ma recharge), plus « En cours »')
         page.goto(f'{BASE}/app/historique', wait_until='load')
         page.get_by_text('Borne de test (CPO local)').first.wait_for(timeout=15000)
         assert page.get_by_text('Non démarré', exact=False).count() == 1, 'la recharge de plus de 24 h n’est pas « non démarrée »'
@@ -834,6 +853,58 @@ try:
         assert 'Identifiant du point à saisir' not in page.inner_text('body'), 'Virta : rien à copier'
         shot(page, 'j9-suivi-virta-numero-inscrit')
         ok('suivi Virta : pas d’identifiant IRVE à copier, rappel « numéro de 4 à 5 chiffres inscrit sur la borne »')
+        assert not errors, errors
+        ctx.close()
+
+        # ---------- K. Critique paiement passe 5 : fiche (texte de paiement), /recharger rechargée ----------
+        # Cas 5 : point choisi puis page /recharger?station= rechargée → point repris (plan relu sur l'appareil)
+        ctx = new_ctx(b, TEST_POS)
+        page = ctx.new_page()
+        errors = []
+        page.on('pageerror', lambda e: errors.append(str(e)))
+        page.goto(f'{BASE}/app/recharger?station=FRTSTP0001', wait_until='load')
+        page.wait_for_selector('text=Choisissez votre point de charge', timeout=20000)
+        page.locator('[aria-label*="0 0 0 2"]').first.click()
+        page.wait_for_selector('text=Prix avant de payer')
+        page.get_by_role('button', name='Scanner le QR code').click()
+        page.get_by_placeholder(re.compile(r'FR\*ABC\*E1234')).wait_for(timeout=15000)
+        page.goto(f'{BASE}/app/recharger?station=FRTSTP0001', wait_until='load')
+        page.wait_for_selector('text=Prix avant de payer', timeout=20000)
+        page.get_by_text('…0002').first.wait_for(timeout=5000)
+        assert page.get_by_text('Choisissez votre point de charge').count() == 0, 'point perdu au rechargement'
+        shot(page, 'k1-recharger-recharge-point-repris')
+        ok('cas 5 — /recharger?station= rechargée : plan relu (store.hydrate), point …0002 repris')
+        assert not errors, errors
+        ctx.close()
+
+        # Cas 3 : texte de paiement de la fiche selon les méthodes déclarées (surelyPayable), sinon « non confirmé »
+        tile = json.load(open(os.path.join(SITE, 'data', 'tiles', '195_9.json')))
+        tile['s'].append({'id': 'FRTSTP0009', 'n': 'Borne test non confirmée', 'o': 'Zunder', 'ok': 'zunder', 'lat': 48.7505, 'lon': 2.2970,
+                          'p': 1, 'kw': 22, 'c': ['t2'], 'pay': ['badge'], 'pdc': [['FR*TST*E0009', 22, ['t2']]]})
+        ctx = new_ctx(b, {'latitude': 48.7520, 'longitude': 2.2980})
+        ctx.route('**/branche/data/tiles/195_9.json', lambda r: r.fulfill(status=200, content_type='application/json', body=json.dumps(tile)))
+        page = ctx.new_page()
+        errors = []
+        page.on('pageerror', lambda e: errors.append(str(e)))
+        page.goto(f'{BASE}/app/', wait_until='load')
+        page.get_by_text('Borne conseillée', exact=False).first.wait_for(timeout=20000)
+        page.wait_for_timeout(1500)  # bandeau stabilisé (temps réel, tri)
+        page.get_by_text('Borne test non confirmée').first.wait_for()  # borne conseillée (la plus proche)
+        page.get_by_role('button', name='Voir la borne', exact=False).first.click(timeout=10000)
+        txt = page.get_by_test_id('station-pay-text')
+        txt.wait_for(timeout=15000)
+        assert 'Aucun moyen de paiement déclaré pour cette borne' in txt.inner_text(), txt.inner_text()
+        assert 'Sans compte ni appli' not in txt.inner_text(), 'fiche : « paiement direct » annoncé sans méthode déclarée'
+        shot(page, 'k2-fiche-non-confirme')
+        page.goto(f'{BASE}/app/', wait_until='load')
+        page.get_by_text('Borne conseillée', exact=False).first.wait_for(timeout=20000)
+        page.wait_for_timeout(1500)
+        page.get_by_role('button', name='Borne de test (CPO local)', exact=False).first.click(timeout=20000)
+        txt = page.get_by_test_id('station-pay-text')
+        txt.wait_for(timeout=15000)
+        assert txt.inner_text().startswith('Sans compte ni appli'), txt.inner_text()
+        shot(page, 'k3-fiche-payable')
+        ok('cas 3 — fiche : « Sans compte ni appli… » seulement si une méthode déclarée le permet, sinon texte « non confirmé » de Recharger')
         assert not errors, errors
         ctx.close()
         b.close()
